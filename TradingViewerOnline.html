@@ -140,9 +140,11 @@
         <div class="util-btns">
             <button class="btn-util btn-cloud-down" onclick="loadFromCloud()" id="btn-pull"><span class="material-icons" style="font-size:16px;">cloud_download</span> Pull from Cloud</button>
             <button class="btn-util btn-cloud-up" onclick="saveToCloud()" id="btn-push"><span class="material-icons" style="font-size:16px;">cloud_upload</span> Push to Cloud</button> 
-            <button id="logoutBtn" class="btn-util btn-logout" style="margin-left: 10px;"><span class="material-icons" style="font-size:16px;">logout</span> Log Out</button>
+            
             <button class="btn-util" onclick="exportData()"><span class="material-icons" style="font-size:16px;">save_alt</span> Local Backup</button>
             <button class="btn-util" onclick="document.getElementById('importFile').click()"><span class="material-icons" style="font-size:16px;">folder_open</span></button>
+            
+            <button id="logoutBtn" class="btn-util btn-logout" style="margin-left: 10px;"><span class="material-icons" style="font-size:16px;">logout</span> Log Out</button>
             <input type="file" id="importFile" style="display:none;" accept=".json" onchange="importData(event)">
         </div>
     </div>
