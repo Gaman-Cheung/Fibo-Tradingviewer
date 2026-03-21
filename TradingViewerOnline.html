@@ -126,7 +126,8 @@
         </div>
         <div class="util-btns">
             <button class="btn-util btn-cloud-down" onclick="loadFromCloud()" id="btn-pull"><span class="material-icons" style="font-size:16px;">cloud_download</span> Pull from Cloud</button>
-            <button class="btn-util btn-cloud-up" onclick="saveToCloud()" id="btn-push"><span class="material-icons" style="font-size:16px;">cloud_upload</span> Push to Cloud</button>
+            <button class="btn-util btn-cloud-up" onclick="saveToCloud()" id="btn-push"><span class="material-icons" style="font-size:16px;">cloud_upload</span> Push to Cloud</button> 
+            <button id="logoutBtn" class="btn-secondary" style="margin-left: 10px;">Log Out</button>
 
             <button class="btn-util" onclick="exportData()"><span class="material-icons" style="font-size:16px;">save_alt</span> Local Backup</button>
             <button class="btn-util" onclick="document.getElementById('importFile').click()"><span class="material-icons" style="font-size:16px;">folder_open</span></button>
@@ -571,6 +572,19 @@
             const savedV7 = localStorage.getItem('tv_thenleap_data_v3');
             if (savedV7 && JSON.parse(savedV7).length > 0) JSON.parse(savedV7).forEach(d => addV7Row(d.n, d.h, d.l, d.c, d.t || 'sideways', d.r, d.m)); else addV7Row();
         };
+        // ================= 🆕 新增：登出逻辑 =================
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            // 同样复用已经声明好的 supabaseClient
+            const { error } = await supabaseClient.auth.signOut();
+    
+            if (error) {
+                alert('登出失败: ' + error.message);
+            } else {
+                alert('已安全登出！');
+                // 踢回登录页
+                window.location.replace('https://gaman-cheung.github.io/Fibo-Tradingviewer/FiboV4.html');
+            }
+        });
     </script>
 </body>
 </html>
