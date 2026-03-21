@@ -107,6 +107,30 @@
             th:first-child { background: #f1f3f4; z-index: 11; }
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        // 2. 初始化 Supabase
+        const SUPABASE_URL = 'https://azquoojnwadtekkhxhui.supabase.co';
+        const SUPABASE_ANON_KEY = '你的超长KEY'; // ⚠️ 这里记得填入你真实的 key
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // 3. 页面加载时立即检查登录状态 (路由守卫)
+        async function checkAuth() {
+            // 获取当前会话
+            const { data: { session } } = await supabaseClient.auth.getSession();
+        
+            // 如果没有 session (未登录)，立刻跳转回登录页
+            if (!session) {
+                alert('未授权访问！请先登录。');
+                // ⚠️ 下面的链接请替换为你实际的登录页 URL (比如 index.html)
+                window.location.replace('https://gaman-cheung.github.io/Fibo-Tradingviewer/FiboV4.html'); 
+            }
+        }
+    
+        // 执行检查
+        checkAuth();
+    </script>
 </head>
 <body>
 
