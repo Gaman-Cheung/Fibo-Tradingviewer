@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - TradingViewer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        /* ================= 基础重置 & 谷歌亮色主题 ================= */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #F8F9FA;
+            color: #202124;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* ================= 核心布局 ================= */
+        .container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            max-width: 1100px;
+            gap: 120px;
+            padding: 20px;
+        }
+
+        /* ================= 左侧：叙事式交易动效核心区域 ================= */
+        .hero-animation {
+            position: relative;
+            width: 450px;
+            height: 450px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Doge Logo 紧贴着动画容器左上角 */
+        .floating-logo {
+            position: absolute;
+            top: -20px;
+            left: -30px;
+            width: 130px;
+            animation: float 6s ease-in-out infinite;
+            z-index: 20;
+            filter: drop-shadow(0 10px 15px rgba(0,0,0,0.2));
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0px) rotate(-5deg); }
+            50% { transform: translateY(-15px) rotate(5deg); }
+            100% { transform: translateY(0px) rotate(-5deg); }
+        }
+
+        /* --- 叙事动效组 --- */
+        .narration-wrapper {
+            position: absolute;
+            width: 100%; height: 100%;
+            z-index: 10;
+        }
+
+        /* 1. 下跌：ABC浪线与箭头 */
+        .abc-wave {
+            position: absolute;
+            top: 60px; left: 80px;
+            width: 180px;
+        }
+        .abc-path {
+            stroke-dasharray: 400;
+            stroke-dashoffset: 400;
+            animation: traceLine 13s ease-in-out infinite 0.5s;
+        }
+        .abc-label {
+            opacity: 0;
+            animation: fadeText 13s infinite;
+        }
+        .label-a { animation-delay: 1.0s; }
+        .label-b { animation-delay: 1.8s; }
+        .label-c { animation-delay: 2.6s; }
+
+        /* 2. 上涨：12345浪线与箭头 */
+        .onetwothreefourfive-wave {
+            position: absolute;
+            bottom: 40px; right: -40px;
+            width: 280px;
+        }
+        .otf-path {
+            stroke-dasharray: 600;
+            stroke-dashoffset: 600;
+            animation: traceLine 13s ease-in-out infinite 3.5s;
+        }
+        .otf-label {
+            opacity: 0;
+            animation: fadeText 13s infinite;
+        }
+        .label-1 { animation-delay: 4.1s; }
+        .label-2 { animation-delay: 4.7s; }
+        .label-3 { animation-delay: 5.3s; }
+        .label-4 { animation-delay: 5.9s; }
+        .label-5 { animation-delay: 6.5s; }
+
+        @keyframes traceLine {
+            0%, 5% { stroke-dashoffset: 400; opacity: 0; }
+            8% { opacity: 1; }
+            40%, 85% { stroke-dashoffset: 0; opacity: 1; }
+            95%, 100% { stroke-dashoffset: 0; opacity: 0; }
+        }
+        @keyframes fadeText {
+            0%, 10% { opacity: 0; transform: translateY(5px); }
+            20%, 85% { opacity: 1; transform: translateY(0); }
+            95%, 100% { opacity: 0; }
+        }
+
+        /* --- 中央前景：主升浪 K 线与箭头 (绝对居中) --- */
+        .central-art {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            width: 250px;
+            height: 220px;
+        }
+
+        /* 突破水平线 (参考颈线) - 设定在底部往上 90px 处，K1在下方，K2突破 */
+        .central-dash-line {
+            position: absolute;
+            bottom: 90px;
+            left: 0px; right: 0px;
+            height: 1px;
+            border-top: 2px dashed rgba(66, 133, 244, 0.4);
+            opacity: 0;
+            transform: scaleX(0);
+            transform-origin: left;
+            animation: drawDashLine 13s ease-out infinite 7.0s;
+        }
+        @keyframes drawDashLine {
+            0%, 5% { opacity: 0; transform: scaleX(0); }
+            10%, 85% { opacity: 1; transform: scaleX(1); }
+            95%, 100% { opacity: 0; transform: scaleX(0); }
+        }
+
+        /* higher high 容器 */
+        .candle-breakout {
+            position: absolute;
+            bottom: 0; left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* K线通用设置：使用绝对定位精准控制起跳点 */
+        .main-candle {
+            width: 24px;
+            background-color: #0F9D58;
+            border-radius: 3px;
+            position: absolute; /* 绝对定位，脱离文档流 */
+            transform-origin: bottom; /* 动画原点为底部开盘价 */
+            box-shadow: 0 4px 10px rgba(15, 157, 88, 0.4);
+            opacity: 0;
+            transform: scaleY(0);
+        }
+
+        /* K线影线 */
+        .main-candle::before, .main-candle::after {
+            content: ''; position: absolute; left: 50%; transform: translateX(-50%);
+            width: 3px; background: #0F9D58; z-index: -1;
+        }
+
+        /* K线动画：只需要沿着原点(开盘价)垂直拉伸即可 */
+        @keyframes growKLine {
+            0%, 5% { transform: scaleY(0); opacity: 0; }
+            15%, 85% { transform: scaleY(1); opacity: 1; }
+            95%, 100% { transform: scaleY(0); opacity: 0; }
+        }
+
+        /* ✨ 严格阶梯逻辑：比例 1 : 1.2 : 1.7 ✨ */
+
+        /* K线 1：底座起步 (高度 50px) */
+        .breakout-1 {
+            bottom: 20px;       /* 起点(开盘) */
+            left: 40px;
+            height: 50px;       /* 终点(收盘) = 20 + 50 = 70px */
+            animation: growKLine 13s ease-out infinite 8.0s;
+        }
+        .breakout-1::before { top: -25px; height: 25px; } /* 上影线摸到 95px (试探颈线) */
+        .breakout-1::after { bottom: 0; height: 0; }
+
+        /* K线 2：开盘价等于 K1 收盘价 (高度 50 * 1.2 = 60px) */
+        .breakout-2 {
+            bottom: 70px;       /* 严格衔接 K1 收盘价 */
+            left: 100px;
+            height: 60px;       /* 终点(收盘) = 70 + 60 = 130px (成功突破颈线) */
+            animation: growKLine 13s ease-out infinite 8.8s;
+        }
+        .breakout-2::before { top: -20px; height: 20px; } /* 上影线 */
+        .breakout-2::after { bottom: -15px; height: 15px; } /* 下影线 (回踩) */
+
+        /* K线 3：开盘价等于 K2 收盘价 (高度 50 * 1.7 = 85px) */
+        .breakout-3 {
+            bottom: 130px;      /* 严格衔接 K2 收盘价 */
+            left: 160px;
+            height: 85px;       /* 终点(收盘) = 130 + 85 = 215px (直冲云霄) */
+            animation: growKLine 13s ease-out infinite 9.6s;
+        }
+        .breakout-3::before { top: -5px; height: 5px; }
+        .breakout-3::after { bottom: 0; height: 0; }
+
+        /* 5. 绿色弯曲箭头 - 配合新的K线坐标系系调整 */
+        .moon-arrow {
+            position: absolute;
+            top: 0; left: 0;
+            width: 250px;
+            height: 220px;
+            z-index: 15;
+            opacity: 0;
+            pointer-events: none;
+            animation: drawArrowAndMoon 13s ease-in-out infinite 9.0s;
+        }
+        .moon-arrow-path {
+            stroke-dasharray: 400;
+            stroke-dashoffset: 400;
+            animation: tracePath 13s ease-in-out infinite 9.0s;
+        }
+
+        @keyframes tracePath {
+            0%, 5% { stroke-dashoffset: 400; }
+            40%, 85% { stroke-dashoffset: 0; }
+            95%, 100% { stroke-dashoffset: 0; }
+        }
+        @keyframes drawArrowAndMoon {
+            0%, 10% { opacity: 0; transform: translate(-10px, 10px); }
+            20%, 85% { opacity: 1; transform: translate(0, 0); }
+            95%, 100% { opacity: 0; }
+        }
+
+        @keyframes drawDashLine, @keyframes growKLine, @keyframes traceLine, @keyframes tracePath, @keyframes fadeText, @keyframes drawArrowAndMoon {
+            85% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        /* ================= 右侧：Material 亮色登录卡片 ================= */
+        .login-card {
+            background-color: #FFFFFF;
+            border-radius: 16px;
+            padding: 50px 45px;
+            width: 400px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
+            border-top: 5px solid #1A73E8;
+            z-index: 10;
+        }
+
+        .login-card h1 {
+            font-size: 26px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: #202124;
+        }
+
+        .version-badge {
+            display: inline-block;
+            background: #E8F0FE;
+            color: #1A73E8;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 40px;
+            letter-spacing: 0.5px;
+        }
+
+        .input-group {
+            position: relative;
+            margin-bottom: 30px;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 10px 0;
+            font-size: 16px;
+            color: #202124;
+            border: none;
+            border-bottom: 1px solid #DADCE0;
+            outline: none;
+            background: transparent;
+            transition: 0.3s;
+        }
+        .input-group input:focus {
+            border-bottom: 2px solid #1A73E8;
+        }
+        .input-group label {
+            position: absolute;
+            top: 0;
+            left: 0;
+            padding: 10px 0;
+            font-size: 16px;
+            color: #5F6368;
+            pointer-events: none;
+            transition: 0.3s;
+        }
+        .input-group input:focus ~ label,
+        .input-group input:valid ~ label {
+            top: -20px;
+            font-size: 12px;
+            color: #1A73E8;
+            font-weight: 500;
+        }
+
+        .actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .btn {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .btn-primary {
+            background-color: #1A73E8;
+            color: white;
+            box-shadow: 0 2px 6px rgba(26, 115, 232, 0.3);
+        }
+        .btn-primary:hover {
+            background-color: #1557B0;
+            box-shadow: 0 4px 12px rgba(26, 115, 232, 0.4);
+        }
+        .btn-secondary {
+            background-color: transparent;
+            color: #5F6368;
+            border: 1px solid #DADCE0;
+        }
+        .btn-secondary:hover {
+            background-color: #F1F3F4;
+            color: #202124;
+        }
+
+        @media (max-width: 900px) {
+            .container { flex-direction: column; gap: 60px; }
+            .hero-animation { width: 300px; height: 300px; }
+            .floating-logo { top: -10px; left: -10px; width: 90px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="hero-animation">
+            <img class="floating-logo" src="logo.png" alt="Logo">
+
+            <div class="narration-wrapper">
+                <svg class="abc-wave" viewBox="0 0 200 150">
+                    <path class="abc-path" d="M 20 20 L 70 90 L 120 40 L 170 110" fill="none" stroke="#4285F4" stroke-width="3" stroke-linecap="round"/>
+                    <path d="M 160 100 L 170 110 L 160 115" fill="none" stroke="#4285F4" stroke-width="3"/>
+                    <text class="abc-label label-a" x="60" y="80" fill="#4285F4" font-size="12" font-family="sans-serif">A波</text>
+                    <text class="abc-label label-b" x="110" y="30" fill="#4285F4" font-size="12" font-family="sans-serif">B波</text>
+                    <text class="abc-label label-c" x="160" y="100" fill="#4285F4" font-size="12" font-family="sans-serif">C波</text>
+                </svg>
+
+                <svg class="onetwothreefourfive-wave" viewBox="0 0 280 180">
+                    <path class="otf-path" d="M 20 160 L 60 110 L 90 140 L 150 50 L 190 90 L 250 10" fill="none" stroke="#F4B400" stroke-width="3" stroke-linecap="round"/>
+                    <path d="M 240 15 L 250 10 L 255 20" fill="none" stroke="#F4B400" stroke-width="3"/>
+                    <text class="otf-label label-1" x="50" y="100" fill="#F4B400" font-size="12" font-family="sans-serif">1波</text>
+                    <text class="otf-label label-2" x="80" y="130" fill="#F4B400" font-size="12" font-family="sans-serif">2波</text>
+                    <text class="otf-label label-3" x="140" y="40" fill="#F4B400" font-size="12" font-family="sans-serif">3波</text>
+                    <text class="otf-label label-4" x="180" y="80" fill="#F4B400" font-size="12" font-family="sans-serif">4波</text>
+                    <text class="otf-label label-5" x="240" y="25" fill="#F4B400" font-size="12" font-family="sans-serif">5波</text>
+                </svg>
+
+                <div class="central-art">
+                    <div class="central-dash-line"></div>
+
+                    <div class="candle-breakout">
+                        <div class="main-candle breakout-1"></div>
+                        <div class="main-candle breakout-2"></div>
+                        <div class="main-candle breakout-3"></div>
+                    </div>
+
+                    <svg class="moon-arrow" viewBox="0 0 250 220">
+                        <path class="moon-arrow-path" d="M 20 200 Q 130 150, 190 20" fill="none" stroke="#0F9D58" stroke-width="10" stroke-linecap="round"/>
+                        <path d="M 170 30 L 190 20 L 185 45" fill="none" stroke="#0F9D58" stroke-width="10"/>
+                    </svg>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="login-card">
+            <h1>Fibo-TradingViewer</h1>
+            <div class="version-badge">V4 Version</div>
+
+            <form id="auth-form">
+                <div class="input-group">
+                    <input type="email" id="email" required>
+                    <label>Email Address</label>
+                </div>
+                <div class="input-group">
+                    <input type="password" id="password" required>
+                    <label>Password</label>
+                </div>
+                <div class="actions">
+                    <button type="button" class="btn btn-secondary">Sign Up</button>
+                    <button type="button" class="btn btn-primary">Log In</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+        <script>
+            // ====== 1. 初始化 Supabase (名字换成了 supabaseClient 避开冲突) ======
+            const SUPABASE_URL = 'https://azquoojnwadtekkhxhui.supabase.co';
+            const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6cXVvb2pud2FkdGVra2h4aHVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MjY5OTMsImV4cCI6MjA4OTIwMjk5M30.v3vm-f_ufTFKc5PjGpf3Av9kDO_rwrL89XTMyauhh3g'; // 请确保这串 key 是完整的
+
+            // 🚀 关键修改：变量名改成 supabaseClient
+            const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+            // ====== 2. 获取 DOM 元素 ======
+            const emailInput = document.getElementById('email');
+            const passwordInput = document.getElementById('password');
+            const loginBtn = document.querySelector('.btn-primary');
+            const signupBtn = document.querySelector('.btn-secondary');
+
+            // ====== 3. 注册逻辑 (Sign Up) ======
+            signupBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const email = emailInput.value;
+                const password = passwordInput.value;
+
+                if (!email || !password) return alert('请输入邮箱和密码！');
+
+                signupBtn.innerText = '注册中...';
+
+                // 🚀 这里也要用 supabaseClient
+                const { data, error } = await supabaseClient.auth.signUp({
+                    email: email,
+                    password: password,
+                });
+
+                if (error) {
+                    alert('注册失败: ' + error.message);
+                } else {
+                    alert('注册成功！现在可以直接点击 Log In 登录了！🚀');
+                }
+                signupBtn.innerText = 'Sign Up';
+            });
+
+            // ====== 4. 登录逻辑 (Log In) ======
+            loginBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const email = emailInput.value;
+                const password = passwordInput.value;
+
+                if (!email || !password) return alert('请输入邮箱和密码！');
+
+                loginBtn.innerText = '登录中...';
+
+                // 🚀 这里也要用 supabaseClient
+                const { data, error } = await supabaseClient.auth.signInWithPassword({
+                    email: email,
+                    password: password,
+                });
+
+                if (error) {
+                    alert('登录失败: ' + error.message);
+                    loginBtn.innerText = 'Log In';
+                } else {
+                    alert('TradingViewer 验证通过！即将为您接入交易终端... 🚀');
+                    // 登录成功后，跳转到线上终端
+                    window.location.href = 'https://gaman-cheung.github.io/Fibo-Tradingviewer/TradingViewerOnline.html';
+                }
+            });
+        </script>
+</body>
+</html>
