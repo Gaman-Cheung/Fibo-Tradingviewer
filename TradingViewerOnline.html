@@ -112,7 +112,7 @@
     <script>
         // 2. 初始化 Supabase
         const SUPABASE_URL = 'https://azquoojnwadtekkhxhui.supabase.co';
-        const SUPABASE_ANON_KEY = '你的超长KEY'; // ⚠️ 这里记得填入你真实的 key
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6cXVvb2pud2FkdGVra2h4aHVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MjY5OTMsImV4cCI6MjA4OTIwMjk5M30.v3vm-f_ufTFKc5PjGpf3Av9kDO_rwrL89XTMyauhh3g'; // ⚠️ 这里记得填入你真实的 key
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         // 3. 页面加载时立即检查登录状态 (路由守卫)
