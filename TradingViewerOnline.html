@@ -243,20 +243,33 @@
             }
             function hideLoader() { document.getElementById('loader').style.display = 'none'; }
 
-            // ================= 云端同步逻辑 =================
+            // ================= 全新多用户云端同步逻辑 =================
             async function saveToCloud() {
                 showLoader('Pushing to Cloud...');
                 const v6Data = JSON.parse(localStorage.getItem('tv_lookfirst_data_v3') || '[]');
                 const v7Data = JSON.parse(localStorage.getItem('tv_thenleap_data_v3') || '[]');
 
-                // 🚨 修复点 2：这里使用 supabaseClient
+                // 1. 动态获取当前正在操作的“打碟宇航员”是谁
+                const { data: { user } } = await supabaseClient.auth.getUser();
+            
+                if (!user) {
+                    hideLoader();
+                    return alert("未检测到登录状态，请刷新页面或重新登录！");
+                }
+
+                // 2. 将数据连同他的专属 user_id 一起推上云端
+                // (因为去掉了 id:1，现在直接根据 user_id 自动匹配他的专属行)
                 const { data, error } = await supabaseClient
                     .from('fibo_data')
-                    .upsert({ id: 1, v6_data: v6Data, v7_data: v7Data });
+                    .upsert({ 
+                        user_id: user.id, // 👈 核心改变：绑定当前用户的真实 ID
+                        v6_data: v6Data, 
+                        v7_data: v7Data 
+                    });
 
                 hideLoader();
                 if (error) {
-                    alert("❌ Cloud Sync Failed: " + error.message + "\n(Did you disable RLS on the table?)");
+                    alert("❌ Cloud Sync Failed: " + error.message);
                 } else {
                     const btn = document.getElementById('btn-push');
                     const orig = btn.innerHTML;
@@ -267,15 +280,18 @@
 
             async function loadFromCloud() {
                 showLoader('Pulling from Cloud...');
-                // 🚨 修复点 3：这里也使用 supabaseClient
+            
+                // 3. 直接请求！有了 RLS 的保护，这句代码在云端会自动被过滤，
+                // 保证只返回当前登录用户自己的那一行数据，绝对拿不到别人的。
                 const { data, error } = await supabaseClient
                     .from('fibo_data')
                     .select('*')
-                    .eq('id', 1)
-                    .single();
+                    .single(); 
 
                 hideLoader();
-                if (error && error.code !== 'PGRST116') {
+                // PGRST116 是 Supabase 的一个特定状态码，意思是"找不到数据"
+                // 这对新注册、还没点过 push 的用户是正常现象，我们予以放行
+                if (error && error.code !== 'PGRST116') { 
                     alert("❌ Load Failed: " + error.message);
                     return;
                 }
@@ -283,13 +299,13 @@
                 if (data) {
                     if (data.v6_data) localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify(data.v6_data));
                     if (data.v7_data) localStorage.setItem('tv_thenleap_data_v3', JSON.stringify(data.v7_data));
-
+                
                     const btn = document.getElementById('btn-pull');
                     const orig = btn.innerHTML;
                     btn.innerHTML = '<span class="material-icons" style="font-size:16px;">check</span> Up to Date';
                     setTimeout(() => { btn.innerHTML = orig; location.reload(); }, 1000);
                 } else {
-                    alert("No data found in cloud yet. Push your local data first!");
+                    alert("云端还没有你的数据记录哦！请先在页面上添加几行 K 线数据，然后点击 Push to Cloud ☁️。");
                 }
             }
 
