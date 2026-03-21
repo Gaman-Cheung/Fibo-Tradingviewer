@@ -47,6 +47,19 @@
         .btn-cloud-down { color: var(--g-blue); border-color: var(--g-blue); background: #e8f0fe;}
         .btn-cloud-down:hover { background: #d2e3fc; color: #174ea6;}
 
+        /* 退出按钮的基础样式（复用 btn-util） */
+        .btn-util.btn-logout {
+            margin-left: 10px; /* 保持你想要的间距 */
+            color: #5f6368;    /* 初始文字颜色 */
+        }
+
+        /* 退出按钮特有的悬停效果：变红 */
+        .btn-util.btn-logout:hover {
+            background: #fdf2f2;      /* 淡淡的红背景 */
+            border-color: #f5c2c7;    /* 浅红边框 */
+            color: #d32f2f;           /* 红色文字 */
+        }
+
         /* Table Styles */
         .tab-content { display: none; animation: fadeIn 0.3s ease; }
         .tab-content.active { display: block; }
@@ -127,8 +140,7 @@
         <div class="util-btns">
             <button class="btn-util btn-cloud-down" onclick="loadFromCloud()" id="btn-pull"><span class="material-icons" style="font-size:16px;">cloud_download</span> Pull from Cloud</button>
             <button class="btn-util btn-cloud-up" onclick="saveToCloud()" id="btn-push"><span class="material-icons" style="font-size:16px;">cloud_upload</span> Push to Cloud</button> 
-            <button id="logoutBtn" class="btn-secondary" style="margin-left: 10px;">Log Out</button>
-
+            <button id="logoutBtn" class="btn-util btn-logout" style="margin-left: 10px;"><span class="material-icons" style="font-size:16px;">logout</span> Log Out</button>
             <button class="btn-util" onclick="exportData()"><span class="material-icons" style="font-size:16px;">save_alt</span> Local Backup</button>
             <button class="btn-util" onclick="document.getElementById('importFile').click()"><span class="material-icons" style="font-size:16px;">folder_open</span></button>
             <input type="file" id="importFile" style="display:none;" accept=".json" onchange="importData(event)">
