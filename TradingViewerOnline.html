@@ -42,6 +42,8 @@
         .btn-util:hover { background: #f1f3f4; color: var(--text-primary); }
 
         /* Cloud Buttons Specific Styles */
+        .btn-util.btn-switch-system {background: #f8f9fa;border-color: #3c4043;color: #202124;}
+        .btn-util.btn-switch-system:hover {background: #e8eaed;box-shadow: 0 1px 3px rgba(60,64,67,0.3);}
         .btn-cloud-up { color: #188038; border-color: #188038; background: #e6f4ea;}
         .btn-cloud-up:hover { background: #ceead6; color: #137333;}
         .btn-cloud-down { color: var(--g-blue); border-color: var(--g-blue); background: #e8f0fe;}
@@ -138,6 +140,7 @@
             </div>
         </div>
         <div class="util-btns">
+            <button class="btn-util btn-switch-system" onclick="window.location.href='https://gaman-cheung.github.io/Fibo-Tradingviewer/wavecalfullfinal.html'"><span class="material-icons" style="font-size:16px;">functions</span> 波浪推演矩阵</button>
             <button class="btn-util btn-cloud-down" onclick="loadFromCloud()" id="btn-pull"><span class="material-icons" style="font-size:16px;">cloud_download</span> Pull from Cloud</button>
             <button class="btn-util btn-cloud-up" onclick="saveToCloud()" id="btn-push"><span class="material-icons" style="font-size:16px;">cloud_upload</span> Push to Cloud</button> 
             
