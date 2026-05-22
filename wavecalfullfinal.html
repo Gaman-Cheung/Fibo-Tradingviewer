@@ -61,6 +61,17 @@ header h1 {
 }
 
 /* ================= TradingViewer 风格顶部按钮 ================= */
+/* 切换系统按钮特有样式 */
+.btn-util.btn-switch-system {
+    background: #f8f9fa;
+    border-color: #3c4043;
+    color: #202124;
+    margin-right: 8px; /* 与后面的按钮拉开一点距离 */
+}
+.btn-util.btn-switch-system:hover {
+    background: #e8eaed;
+    box-shadow: 0 1px 3px rgba(60,64,67,0.3);
+}
 .util-btns { 
     display: flex; 
     gap: 8px; 
@@ -603,6 +614,9 @@ td {
     <h1>五浪 + ABC + 子浪嵌套斐波那契动态推演矩阵</h1>
 
     <div class="util-btns">
+        <button class="btn-util btn-switch-system" onclick="window.location.href='https://gaman-cheung.github.io/Fibo-Tradingviewer/TradingViewerOnline.html'">
+            <span class="material-icons" style="font-size:16px;">analytics</span> 交易终端
+        </button>
         <button class="btn-util btn-cloud-down" onclick="pullFromCloud()" id="btn-pull">
             <span class="material-icons" style="font-size:16px;">cloud_download</span> Pull from Cloud
         </button>
