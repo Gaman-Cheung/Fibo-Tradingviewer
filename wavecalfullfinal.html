@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>五浪 + ABC + 子浪嵌套斐波那契推演矩阵</title>
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    
 <style>
 :root {
     --primary: #6200ee;
@@ -59,51 +60,48 @@ header h1 {
     white-space: nowrap;
 }
 
-.cloud-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    overflow-x: auto;
-    padding: 4px 0;
+/* ================= TradingViewer 风格顶部按钮 ================= */
+.util-btns { 
+    display: flex; 
+    gap: 8px; 
+    flex-wrap: wrap; 
+    align-items: center; 
 }
-
-.cloud-btn {
-    height: 36px;
-    border: 1px solid #d9dce3;
-    background: #fff;
-    color: #344054;
-    border-radius: 7px;
-    padding: 0 14px;
-    font-size: 14px;
-    font-weight: 700;
+.btn-util {
+    display: inline-flex; 
+    align-items: center; 
+    gap: 4px; 
+    background: white; 
+    border: 1px solid #dadce0;
+    padding: 6px 12px; 
+    border-radius: 6px; 
+    font-size: 13px; 
+    font-weight: bold; 
+    cursor: pointer; 
+    color: #5f6368; 
+    transition: 0.2s;
     font-family: inherit;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-    white-space: nowrap;
+}
+.btn-util:hover { 
+    background: #f1f3f4; 
+    color: #202124; 
 }
 
-.cloud-btn.pull {
-    color: #0969ff;
-    border-color: #0969ff;
-    background: #f8fbff;
-}
+/* Cloud Buttons Specific Styles */
+.btn-cloud-up { color: #188038; border-color: #188038; background: #e6f4ea;}
+.btn-cloud-up:hover { background: #ceead6; color: #137333;}
+.btn-cloud-down { color: #4285F4; border-color: #4285F4; background: #e8f0fe;}
+.btn-cloud-down:hover { background: #d2e3fc; color: #174ea6;}
 
-.cloud-btn.push {
-    color: #008000;
-    border-color: #008000;
-    background: #f8fff8;
+/* 退出按钮特有的悬停效果：变红 */
+.btn-util.btn-logout {
+    margin-left: 10px; 
+    color: #5f6368;    
 }
-
-.cloud-btn:hover {
-    filter: brightness(.97);
-}
-
-.cloud-btn.icon-only {
-    width: 52px;
-    justify-content: center;
-    padding: 0;
+.btn-util.btn-logout:hover {
+    background: #fdf2f2;      
+    border-color: #f5c2c7;    
+    color: #d32f2f;           
 }
 
 .tab-bar {
@@ -604,14 +602,28 @@ td {
 <header>
     <h1>五浪 + ABC + 子浪嵌套斐波那契动态推演矩阵</h1>
 
-    <div class="cloud-actions">
-        <button class="cloud-btn pull" onclick="pullFromCloud()">☁️⬇ Pull from Cloud</button>
-        <button class="cloud-btn push" onclick="pushToCloud()">☁️⬆ Push to Cloud</button>
-        <button class="cloud-btn" onclick="downloadLocalBackup()">⬇ Local Backup</button>
-        <button class="cloud-btn icon-only" onclick="document.getElementById('backupFile').click()" title="Open Local Backup">📁</button>
-        <button class="cloud-btn" onclick="logOutCloud()">⇱ Log Out</button>
+    <div class="util-btns">
+        <button class="btn-util btn-cloud-down" onclick="pullFromCloud()" id="btn-pull">
+            <span class="material-icons" style="font-size:16px;">cloud_download</span> Pull from Cloud
+        </button>
+        <button class="btn-util btn-cloud-up" onclick="pushToCloud()" id="btn-push">
+            <span class="material-icons" style="font-size:16px;">cloud_upload</span> Push to Cloud
+        </button>
+        
+        <button class="btn-util" onclick="downloadLocalBackup()">
+            <span class="material-icons" style="font-size:16px;">save_alt</span> Local Backup
+        </button>
+        <button class="btn-util" onclick="document.getElementById('backupFile').click()" title="Open Local Backup">
+            <span class="material-icons" style="font-size:16px;">folder_open</span>
+        </button>
+        
+        <button class="btn-util btn-logout" onclick="logOutCloud()">
+            <span class="material-icons" style="font-size:16px;">logout</span> Log Out
+        </button>
         <input id="backupFile" type="file" accept="application/json" style="display:none" onchange="importLocalBackup(event)">
     </div>
+    
+    
 </header>
 
 <div class="tab-bar">
