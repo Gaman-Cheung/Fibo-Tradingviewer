@@ -235,7 +235,6 @@
         </div>
         <div class="action-bar">
             <button onclick="switchTab('v6')" class="btn-add" style="background:var(--g-red);"><span class="material-icons">add</span> 在 Look first 添加标的</button>
-            <button onclick="syncV7withV6()" class="btn-add btn-sync"><span class="material-icons">sync</span> Refresh from Look first</button>
         </div>
         <div style="margin-top:10px;color:var(--text-secondary);font-size:12px;line-height:1.6;">
             High、Low、Current及斐波那契位自动引用 Look first。默认以 Current 计算支撑、压力及目标涨跌幅，可在完整视图切换为 Prev；T1/T2 Override 留空即使用自动目标。
@@ -352,6 +351,7 @@
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
             document.getElementById('tab-' + tabId).classList.add('active');
             document.getElementById('btn-' + tabId).classList.add('active');
+            localStorage.setItem('tv_active_tab', tabId);
             if (tabId === 'v7') {
                 syncV7withV6(true);
                 requestAnimationFrame(syncV7ScrollWidth);
@@ -544,6 +544,7 @@
             requestAnimationFrame(syncV7ScrollWidth);
             if (!silent) {
                 const syncBtn = document.querySelector('#tab-v7 .btn-sync');
+                if (!syncBtn) return;
                 const originalHtml = syncBtn.innerHTML;
                 syncBtn.innerHTML = '<span class="material-icons">check_circle</span> 已自动引用 Look first';
                 setTimeout(() => { syncBtn.innerHTML = originalHtml; }, 1600);
@@ -826,6 +827,8 @@
             )); else addV7Row();
             syncV7withV6(true);
             initV7TableUX();
+            const savedTab = localStorage.getItem('tv_active_tab');
+            switchTab(savedTab === 'v7' ? 'v7' : 'v6');
         };
         // ================= 🆕 新增：登出逻辑 =================
         document.getElementById('logoutBtn').addEventListener('click', async () => {
