@@ -605,13 +605,13 @@
 
         function hydrateV7FromLookFirst(row) {
             const ticker = (row.querySelector('.name')?.value || '').trim().toUpperCase();
-            if (!ticker) return false;
-
             let source = null;
-            document.querySelectorAll('#tableBodyV6 tr').forEach(v6Row => {
+            const v6Rows = [...document.querySelectorAll('#tableBodyV6 tr')];
+            const v7Rows = [...document.querySelectorAll('#tableBodyV7 tr')];
+            v6Rows.forEach(v6Row => {
                 if (source) return;
                 const v6Ticker = (v6Row.querySelector('.name')?.value || '').trim().toUpperCase();
-                if (v6Ticker === ticker) {
+                if (ticker && v6Ticker === ticker) {
                     source = {
                         h: v6Row.querySelector('.high')?.value || '',
                         l: v6Row.querySelector('.low')?.value || '',
@@ -620,10 +620,27 @@
                 }
             });
 
+            // 旧云端行有时尚未带入 Ticker；此时按 Look first/Then leap 同行序号回退。
+            if (!source) {
+                const rowIndex = v7Rows.indexOf(row);
+                const v6Row = rowIndex >= 0 ? v6Rows[rowIndex] : null;
+                if (v6Row) {
+                    source = {
+                        h: v6Row.querySelector('.high')?.value || '',
+                        l: v6Row.querySelector('.low')?.value || '',
+                        c: v6Row.querySelector('.current')?.value || ''
+                    };
+                    const sourceTicker = v6Row.querySelector('.name')?.value || '';
+                    const nameInput = row.querySelector('.name');
+                    if (nameInput && !nameInput.value) nameInput.value = sourceTicker;
+                }
+            }
+
             if (!source) {
                 try {
                     const saved = JSON.parse(localStorage.getItem('tv_lookfirst_data_v3') || '[]');
-                    const match = saved.find(item => String(item.n || '').trim().toUpperCase() === ticker);
+                    const rowIndex = v7Rows.indexOf(row);
+                    const match = (ticker && saved.find(item => String(item.n || '').trim().toUpperCase() === ticker)) || saved[rowIndex];
                     if (match) source = { h: match.h ?? '', l: match.l ?? '', c: match.c ?? '' };
                 } catch (e) {
                     source = null;
@@ -639,6 +656,15 @@
             lowInput.value = source.l;
             currentInput.value = source.c;
             return true;
+        }
+
+        function refreshV7PriceMirrors() {
+            document.querySelectorAll('#tableBodyV7 tr').forEach(row => {
+                if (hydrateV7FromLookFirst(row)) {
+                    const trigger = row.querySelector('.high');
+                    if (trigger) calcV7(trigger);
+                }
+            });
         }
 
         function calcV7(el) {
@@ -824,6 +850,7 @@
                 data.push({ n: tr.querySelector('.name').value, h: tr.querySelector('.high').value, l: tr.querySelector('.low').value, c: tr.querySelector('.current').value });
             });
             localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify(data));
+            refreshV7PriceMirrors();
         }
         function saveLocalV7() {
             const data = [];
