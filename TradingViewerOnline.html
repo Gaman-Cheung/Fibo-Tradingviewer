@@ -512,6 +512,43 @@
         // ================= Then leap Core =================
         const tBodyV7 = document.getElementById('tableBodyV7');
 
+        function mergeLookFirstRecords(items) {
+            const map = new Map();
+            items.forEach(item => {
+                const ticker = String(item?.n || '').trim().toUpperCase();
+                if (!ticker) return;
+                if (!map.has(ticker)) map.set(ticker, { n:ticker, h:'', l:'', c:'' });
+                const record = map.get(ticker);
+                const h = parseFloat(item?.h), l = parseFloat(item?.l), c = parseFloat(item?.c);
+                if (Number.isFinite(h) && Number.isFinite(l) && h > l) {
+                    record.h = item.h;
+                    record.l = item.l;
+                }
+                if (Number.isFinite(c)) record.c = item.c;
+            });
+            return [...map.values()].filter(item => {
+                const h = parseFloat(item.h), l = parseFloat(item.l), c = parseFloat(item.c);
+                return Number.isFinite(h) && Number.isFinite(l) && Number.isFinite(c) && h > l;
+            });
+        }
+
+        function collectLookFirstRecords() {
+            const domItems = [...document.querySelectorAll('#tableBodyV6 tr')].map(row => ({
+                n:row.querySelector('.name')?.value || '',
+                h:row.querySelector('.high')?.value || '',
+                l:row.querySelector('.low')?.value || '',
+                c:row.querySelector('.current')?.value || ''
+            }));
+            let savedItems = [];
+            try {
+                savedItems = JSON.parse(localStorage.getItem('tv_lookfirst_data_v3') || '[]');
+            } catch (e) {
+                savedItems = [];
+            }
+            // 先读已保存值，再用当前DOM覆盖，兼容某个来源暂时缺少Current的情况。
+            return mergeLookFirstRecords([...savedItems, ...domItems]);
+        }
+
         function syncV7withV6(silent = false, seedData = null) {
             const v7Cache = {};
             if (Array.isArray(seedData)) {
@@ -536,12 +573,11 @@
             }
 
             tBodyV7.innerHTML = '';
-            document.querySelectorAll('#tableBodyV6 tr').forEach(tr => {
-                const ticker = tr.querySelector('.name').value.trim().toUpperCase();
-                if(!ticker) return;
-                const h = tr.querySelector('.high').value;
-                const l = tr.querySelector('.low').value;
-                const c = tr.querySelector('.current').value;
+            collectLookFirstRecords().forEach(source => {
+                const ticker = source.n;
+                const h = source.h;
+                const l = source.l;
+                const c = source.c;
                 const cached = v7Cache[ticker] || { t:'sideways', r:'', m:'neutral', s:'', g:'', g1:'', p:'', v:'', b:'current' };
                 addV7Row(ticker, h, l, c, cached.t, cached.r, cached.m, cached.s, cached.g, cached.p, cached.v, cached.g1, cached.b);
             });
@@ -610,59 +646,10 @@
 
         function hydrateV7FromLookFirst(row) {
             const ticker = (row.querySelector('.name')?.value || '').trim().toUpperCase();
-            let source = null;
-            const isComplete = item => {
-                const h = parseFloat(item?.h), l = parseFloat(item?.l), c = parseFloat(item?.c);
-                return Number.isFinite(h) && Number.isFinite(l) && Number.isFinite(c) && h > l;
-            };
-            const v6Rows = [...document.querySelectorAll('#tableBodyV6 tr')];
             const v7Rows = [...document.querySelectorAll('#tableBodyV7 tr')];
-            v6Rows.forEach(v6Row => {
-                if (source) return;
-                const v6Ticker = (v6Row.querySelector('.name')?.value || '').trim().toUpperCase();
-                if (ticker && v6Ticker === ticker) {
-                    const candidate = {
-                        h: v6Row.querySelector('.high')?.value || '',
-                        l: v6Row.querySelector('.low')?.value || '',
-                        c: v6Row.querySelector('.current')?.value || ''
-                    };
-                    if (isComplete(candidate)) source = candidate;
-                }
-            });
-
-            // 旧云端行有时尚未带入 Ticker；此时按 Look first/Then leap 同行序号回退。
-            if (!source) {
-                const rowIndex = v7Rows.indexOf(row);
-                const populatedV6Rows = v6Rows.filter(item => isComplete({
-                    h:item.querySelector('.high')?.value,
-                    l:item.querySelector('.low')?.value,
-                    c:item.querySelector('.current')?.value
-                }));
-                const v6Row = rowIndex >= 0 ? populatedV6Rows[rowIndex] : null;
-                if (v6Row) {
-                    const candidate = {
-                        h: v6Row.querySelector('.high')?.value || '',
-                        l: v6Row.querySelector('.low')?.value || '',
-                        c: v6Row.querySelector('.current')?.value || ''
-                    };
-                    if (isComplete(candidate)) source = candidate;
-                    const sourceTicker = v6Row.querySelector('.name')?.value || '';
-                    const nameInput = row.querySelector('.name');
-                    if (nameInput && !nameInput.value) nameInput.value = sourceTicker;
-                }
-            }
-
-            if (!source) {
-                try {
-                    const saved = JSON.parse(localStorage.getItem('tv_lookfirst_data_v3') || '[]');
-                    const rowIndex = v7Rows.indexOf(row);
-                    const populatedSaved = saved.filter(item => isComplete(item));
-                    const match = (ticker && saved.find(item => String(item.n || '').trim().toUpperCase() === ticker && isComplete(item))) || populatedSaved[rowIndex];
-                    if (match) source = { h: match.h ?? '', l: match.l ?? '', c: match.c ?? '' };
-                } catch (e) {
-                    source = null;
-                }
-            }
+            const sources = collectLookFirstRecords();
+            const rowIndex = v7Rows.indexOf(row);
+            const source = (ticker && sources.find(item => item.n === ticker)) || sources[rowIndex] || null;
 
             if (!source) return false;
             const highInput = row.querySelector('.high');
@@ -672,6 +659,8 @@
             highInput.value = source.h;
             lowInput.value = source.l;
             currentInput.value = source.c;
+            const nameInput = row.querySelector('.name');
+            if (nameInput && !nameInput.value) nameInput.value = source.n;
             return true;
         }
 
@@ -925,7 +914,12 @@
             syncV7withV6(true, savedV7Data);
             initV7TableUX();
             const savedTab = localStorage.getItem('tv_active_tab');
-            switchTab(savedTab === 'v7' ? 'v7' : 'v6');
+            const navigationEntry = window.performance?.getEntriesByType?.('navigation')?.[0];
+            const isReload = navigationEntry?.type === 'reload';
+            const cameFromLogin = document.referrer.includes('TradingViewerDoubleSys.html');
+            // 登录后固定从 Look first 开始；只有 F5/普通页内切换才恢复上次标签。
+            const initialTab = cameFromLogin && !isReload ? 'v6' : (savedTab === 'v7' ? 'v7' : 'v6');
+            switchTab(initialTab);
         };
         // ================= 🆕 新增：登出逻辑 =================
         document.getElementById('logoutBtn').addEventListener('click', async () => {
@@ -936,6 +930,7 @@
                 alert('登出失败: ' + error.message);
             } else {
                 alert('已安全登出！');
+                localStorage.setItem('tv_active_tab', 'v6');
                 // 踢回登录页
                 window.location.replace('https://gaman-cheung.github.io/Fibo-Tradingviewer/TradingViewerDoubleSys.html');
             }
