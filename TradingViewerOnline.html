@@ -603,6 +603,44 @@
             return `<div class="price">${level.price.toFixed(2)}</div><div class="${cls}">${pctText}</div><small>${level.label}</small>`;
         }
 
+        function hydrateV7FromLookFirst(row) {
+            const ticker = (row.querySelector('.name')?.value || '').trim().toUpperCase();
+            if (!ticker) return false;
+
+            let source = null;
+            document.querySelectorAll('#tableBodyV6 tr').forEach(v6Row => {
+                if (source) return;
+                const v6Ticker = (v6Row.querySelector('.name')?.value || '').trim().toUpperCase();
+                if (v6Ticker === ticker) {
+                    source = {
+                        h: v6Row.querySelector('.high')?.value || '',
+                        l: v6Row.querySelector('.low')?.value || '',
+                        c: v6Row.querySelector('.current')?.value || ''
+                    };
+                }
+            });
+
+            if (!source) {
+                try {
+                    const saved = JSON.parse(localStorage.getItem('tv_lookfirst_data_v3') || '[]');
+                    const match = saved.find(item => String(item.n || '').trim().toUpperCase() === ticker);
+                    if (match) source = { h: match.h ?? '', l: match.l ?? '', c: match.c ?? '' };
+                } catch (e) {
+                    source = null;
+                }
+            }
+
+            if (!source) return false;
+            const highInput = row.querySelector('.high');
+            const lowInput = row.querySelector('.low');
+            const currentInput = row.querySelector('.current');
+            if (!highInput || !lowInput || !currentInput) return false;
+            highInput.value = source.h;
+            lowInput.value = source.l;
+            currentInput.value = source.c;
+            return true;
+        }
+
         function calcV7(el) {
             const row = el?.closest?.('tr');
             if (!row) return;
@@ -612,6 +650,8 @@
                 return;
             }
             const read = (selector, fallback = '') => row.querySelector(selector)?.value ?? fallback;
+            // 每次计算前只补齐价格镜像，不重建整行，避免打断正在输入的覆盖值。
+            hydrateV7FromLookFirst(row);
             const h = parseFloat(read('.high'));
             const l = parseFloat(read('.low'));
             const c = parseFloat(read('.current'));
