@@ -156,7 +156,7 @@
                     <span class="material-icons" style="font-size: 18px;">travel_explore</span> Look first
                 </button>
                 <button class="tab-btn" onclick="switchTab('v7')" id="btn-v7">
-                    <span class="material-icons" style="font-size: 18px;">track_changes</span> Then leap · AutoLink v3
+                    <span class="material-icons" style="font-size: 18px;">track_changes</span> Then leap
                 </button>
             </div>
         </div>
@@ -611,31 +611,41 @@
         function hydrateV7FromLookFirst(row) {
             const ticker = (row.querySelector('.name')?.value || '').trim().toUpperCase();
             let source = null;
+            const isComplete = item => {
+                const h = parseFloat(item?.h), l = parseFloat(item?.l), c = parseFloat(item?.c);
+                return Number.isFinite(h) && Number.isFinite(l) && Number.isFinite(c) && h > l;
+            };
             const v6Rows = [...document.querySelectorAll('#tableBodyV6 tr')];
             const v7Rows = [...document.querySelectorAll('#tableBodyV7 tr')];
             v6Rows.forEach(v6Row => {
                 if (source) return;
                 const v6Ticker = (v6Row.querySelector('.name')?.value || '').trim().toUpperCase();
                 if (ticker && v6Ticker === ticker) {
-                    source = {
+                    const candidate = {
                         h: v6Row.querySelector('.high')?.value || '',
                         l: v6Row.querySelector('.low')?.value || '',
                         c: v6Row.querySelector('.current')?.value || ''
                     };
+                    if (isComplete(candidate)) source = candidate;
                 }
             });
 
             // 旧云端行有时尚未带入 Ticker；此时按 Look first/Then leap 同行序号回退。
             if (!source) {
                 const rowIndex = v7Rows.indexOf(row);
-                const populatedV6Rows = v6Rows.filter(item => (item.querySelector('.name')?.value || '').trim());
+                const populatedV6Rows = v6Rows.filter(item => isComplete({
+                    h:item.querySelector('.high')?.value,
+                    l:item.querySelector('.low')?.value,
+                    c:item.querySelector('.current')?.value
+                }));
                 const v6Row = rowIndex >= 0 ? populatedV6Rows[rowIndex] : null;
                 if (v6Row) {
-                    source = {
+                    const candidate = {
                         h: v6Row.querySelector('.high')?.value || '',
                         l: v6Row.querySelector('.low')?.value || '',
                         c: v6Row.querySelector('.current')?.value || ''
                     };
+                    if (isComplete(candidate)) source = candidate;
                     const sourceTicker = v6Row.querySelector('.name')?.value || '';
                     const nameInput = row.querySelector('.name');
                     if (nameInput && !nameInput.value) nameInput.value = sourceTicker;
@@ -646,8 +656,8 @@
                 try {
                     const saved = JSON.parse(localStorage.getItem('tv_lookfirst_data_v3') || '[]');
                     const rowIndex = v7Rows.indexOf(row);
-                    const populatedSaved = saved.filter(item => String(item.n || '').trim());
-                    const match = (ticker && saved.find(item => String(item.n || '').trim().toUpperCase() === ticker)) || populatedSaved[rowIndex];
+                    const populatedSaved = saved.filter(item => isComplete(item));
+                    const match = (ticker && saved.find(item => String(item.n || '').trim().toUpperCase() === ticker && isComplete(item))) || populatedSaved[rowIndex];
                     if (match) source = { h: match.h ?? '', l: match.l ?? '', c: match.c ?? '' };
                 } catch (e) {
                     source = null;
@@ -683,11 +693,16 @@
                 return;
             }
             const read = (selector, fallback = '') => row.querySelector(selector)?.value ?? fallback;
-            // 每次计算前只补齐价格镜像，不重建整行，避免打断正在输入的覆盖值。
-            hydrateV7FromLookFirst(row);
-            const h = parseFloat(read('.high'));
-            const l = parseFloat(read('.low'));
-            const c = parseFloat(read('.current'));
+            // 已有有效镜像时绝不覆盖；只有缺失时才从 Look first 补齐。
+            let h = parseFloat(read('.high'));
+            let l = parseFloat(read('.low'));
+            let c = parseFloat(read('.current'));
+            if (!Number.isFinite(h) || !Number.isFinite(l) || !Number.isFinite(c) || h <= l) {
+                hydrateV7FromLookFirst(row);
+                h = parseFloat(read('.high'));
+                l = parseFloat(read('.low'));
+                c = parseFloat(read('.current'));
+            }
             const previous = parseFloat(read('.previous'));
             const volumeRatio = parseFloat(read('.volume-ratio'));
             const stop = parseFloat(read('.stop'));
@@ -699,7 +714,7 @@
             const macd = read('.macd', 'neutral');
 
             if (!Number.isFinite(h) || !Number.isFinite(l) || !Number.isFinite(c) || h <= l) {
-                row.querySelector('.market-cell').innerHTML = '<span class="risk-bad">Look first 数据不完整</span>';
+                row.querySelector('.market-cell').innerHTML = `<span class="risk-bad">Look first 数据不完整</span><br><small>H:${Number.isFinite(h)?h:'--'} L:${Number.isFinite(l)?l:'--'} C:${Number.isFinite(c)?c:'--'}</small>`;
                 ['support-cell','pressure-cell','t1-cell','t2-cell','rr-cell','ai-cell'].forEach(cls => row.querySelector('.' + cls).innerHTML = '-');
                 return;
             }
