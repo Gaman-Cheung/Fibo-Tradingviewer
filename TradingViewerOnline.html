@@ -103,6 +103,12 @@
         .level-map .resistance { color:#c5221f; }
         .level-map .support { color:#137333; }
         .level-map .event { color:#b06000; font-weight:900; }
+        .market-cell { min-width:115px; line-height:1.55; }
+        .auto-level { min-width:105px; line-height:1.55; }
+        .auto-level .price { font-weight:900; font-size:14px; }
+        .auto-level .up { color:#c5221f; font-weight:900; }
+        .auto-level .down { color:#137333; font-weight:900; }
+        .auto-level small { color:var(--text-secondary); white-space:normal; display:block; }
         #tab-v7.compact-view .detail-col { display:none; }
         .v7-top-scroll {
             height:16px; overflow-x:auto; overflow-y:hidden; margin:0 2px 6px;
@@ -206,26 +212,21 @@
                 <thead>
                     <tr>
                         <th class="col-base">Ticker</th>
-                        <th class="col-base">High</th>
-                        <th class="col-base">Low</th>
+                        <th class="col-base">Current / Zone</th>
+                        <th class="col-retrace">Support / %</th>
+                        <th class="col-retrace">Pressure / %</th>
+                        <th class="col-target">Auto T1 / %</th>
+                        <th class="col-target">Auto T2 / %</th>
+                        <th class="col-target">R:R</th>
                         <th class="col-indicator detail-col">Prev</th>
-                        <th class="col-base">Current</th>
                         <th class="col-indicator detail-col">Vol.R</th>
                         <th class="col-indicator detail-col">Stop</th>
-                        <th class="col-target detail-col">T1</th>
-                        <th class="col-target detail-col">T2</th>
-                        <th class="col-target">R:R</th>
-                        <th class="col-retrace detail-col">23.6%</th>
-                        <th class="col-retrace detail-col">38.2%</th>
-                        <th class="col-retrace detail-col">50.0%</th>
-                        <th class="col-retrace detail-col">💎 61.8%</th>
-                        <th class="col-retrace detail-col">🚨 78.6%</th>
-                        <th class="col-retrace detail-col">🧛 88.6%</th>
+                        <th class="col-target detail-col">T1 Override</th>
+                        <th class="col-target detail-col">T2 Override</th>
+                        <th class="col-indicator detail-col">% Baseline</th>
                         <th class="col-indicator detail-col">Trend (13d)</th>
                         <th class="col-indicator detail-col">RSI (14)</th>
                         <th class="col-indicator detail-col">MACD Trend</th>
-                        <th>Status</th>
-                        <th class="col-retrace">S/R Ladder</th>
                         <th class="col-ai">🎯 Composite Signal</th>
                         <th>Action</th>
                     </tr>
@@ -234,12 +235,12 @@
             </table>
         </div>
         <div class="action-bar">
-            <button onclick="addV7Row()" class="btn-add" style="background:var(--g-red);"><span class="material-icons">add</span> Add Then leap Row</button>
-            <button onclick="syncV7withV6()" class="btn-add btn-sync"><span class="material-icons">sync</span> Sync Mirror from Look first</button>
+            <button onclick="switchTab('v6')" class="btn-add" style="background:var(--g-red);"><span class="material-icons">add</span> 在 Look first 添加标的</button>
+            <button onclick="syncV7withV6()" class="btn-add btn-sync"><span class="material-icons">sync</span> Refresh from Look first</button>
             <button onclick="toggleV7Compact()" class="btn-add btn-sync" id="v7ViewToggle"><span class="material-icons">view_column</span> 完整录入</button>
         </div>
         <div style="margin-top:10px;color:var(--text-secondary);font-size:12px;line-height:1.6;">
-            Prev = 前一收盘价/前一观察价；Vol.R = 当前成交量 ÷ 20日平均成交量；T1为第一压力目标（可空），T2为主要目标并用于最终入场评级。
+            High、Low、Current及斐波那契位自动引用 Look first。默认以 Current 计算支撑、压力及目标涨跌幅，可在完整视图切换为 Prev；T1/T2 Override 留空即使用自动目标。
         </div>
     </div>
 
@@ -353,7 +354,10 @@
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
             document.getElementById('tab-' + tabId).classList.add('active');
             document.getElementById('btn-' + tabId).classList.add('active');
-            if (tabId === 'v7') requestAnimationFrame(syncV7ScrollWidth);
+            if (tabId === 'v7') {
+                syncV7withV6(true);
+                requestAnimationFrame(syncV7ScrollWidth);
+            }
         }
 
         function syncV7ScrollWidth() {
@@ -529,7 +533,7 @@
         // ================= Then leap Core =================
         const tBodyV7 = document.getElementById('tableBodyV7');
 
-        function syncV7withV6() {
+        function syncV7withV6(silent = false) {
             const v7Cache = {};
             document.querySelectorAll('#tableBodyV7 tr').forEach(tr => {
                 const ticker = tr.querySelector('.name').value.trim().toUpperCase();
@@ -541,7 +545,8 @@
                     g: tr.querySelector('.target').value,
                     g1: tr.querySelector('.target1').value,
                     p: tr.querySelector('.previous').value,
-                    v: tr.querySelector('.volume-ratio').value
+                    v: tr.querySelector('.volume-ratio').value,
+                    b: tr.querySelector('.baseline').value
                 };
             });
 
@@ -549,188 +554,207 @@
             document.querySelectorAll('#tableBodyV6 tr').forEach(tr => {
                 const ticker = tr.querySelector('.name').value.trim().toUpperCase();
                 if(!ticker) return;
-                const h = tr.querySelector('.high').value; const l = tr.querySelector('.low').value; const c = tr.querySelector('.current').value;
-                const cached = v7Cache[ticker] || { t: 'sideways', r: '', m: 'neutral', s: '', g: '', g1: '', p: '', v: '' };
-                addV7Row(ticker, h, l, c, cached.t, cached.r, cached.m, cached.s, cached.g, cached.p, cached.v, cached.g1);
+                const h = tr.querySelector('.high').value;
+                const l = tr.querySelector('.low').value;
+                const c = tr.querySelector('.current').value;
+                const cached = v7Cache[ticker] || { t:'sideways', r:'', m:'neutral', s:'', g:'', g1:'', p:'', v:'', b:'current' };
+                addV7Row(ticker, h, l, c, cached.t, cached.r, cached.m, cached.s, cached.g, cached.p, cached.v, cached.g1, cached.b);
             });
 
             saveLocalV7();
-            const syncBtn = document.querySelector('.btn-sync'); const originalHtml = syncBtn.innerHTML;
-            syncBtn.innerHTML = '<span class="material-icons">check_circle</span> Synced Successfully!';
-            syncBtn.style.background = '#e6f4ea'; syncBtn.style.color = '#137333'; syncBtn.style.borderColor = '#137333';
-            setTimeout(() => { syncBtn.innerHTML = originalHtml; syncBtn.style = ''; }, 2000);
+            requestAnimationFrame(syncV7ScrollWidth);
+            if (!silent) {
+                const syncBtn = document.querySelector('#tab-v7 .btn-sync');
+                const originalHtml = syncBtn.innerHTML;
+                syncBtn.innerHTML = '<span class="material-icons">check_circle</span> 已自动引用 Look first';
+                setTimeout(() => { syncBtn.innerHTML = originalHtml; }, 1600);
+            }
         }
 
-        function buildLevelMap(levels, h, l, previous, current) {
-            const labels = { '236':'23.6%', '382':'38.2%', '500':'50%', '618':'61.8%', '786':'78.6%', '886':'88.6%' };
-            const items = Object.entries(levels).map(([key, price]) => ({ label: labels[key], price }));
-            const supports = items.filter(x => x.price <= current).sort((a, b) => b.price - a.price).slice(0, 2);
-            const resistances = items.filter(x => x.price > current).sort((a, b) => a.price - b.price).slice(0, 3);
-            const events = [];
+        function getAutoPlan(h, l, c) {
+            const diff = h - l;
+            const fibs = [
+                { label:'23.6%', price:h - diff * 0.236 }, { label:'38.2%', price:h - diff * 0.382 },
+                { label:'50%', price:h - diff * 0.5 }, { label:'61.8%', price:h - diff * 0.618 },
+                { label:'78.6%', price:h - diff * 0.786 }, { label:'88.6%', price:h - diff * 0.886 }
+            ];
+            const extensions = [
+                { label:'1.272延伸', price:l + diff * 1.272 },
+                { label:'1.618延伸', price:l + diff * 1.618 },
+                { label:'2.618延伸', price:l + diff * 2.618 }
+            ];
+            const supports = [...fibs, { label:'前低', price:l }];
+            if (c >= h) supports.push({ label:'前高回踩', price:h });
+            const support = supports.filter(x => x.price <= c).sort((a,b) => b.price - a.price)[0] || { label:'前低', price:l };
+            const fibPressure = fibs.filter(x => x.price > c).sort((a,b) => a.price - b.price)[0] || null;
+            const nearHigh = c < h && (h - c) / Math.abs(h || 1) <= 0.01;
+            let pressure, t1, t2, stage;
 
-            if (Number.isFinite(previous)) {
-                items.forEach(x => {
-                    if (previous >= x.price && current < x.price) events.push(`跌破 ${x.label} @ ${x.price.toFixed(2)}`);
-                    else if (previous < x.price && current >= x.price) events.push(`收复 ${x.label} @ ${x.price.toFixed(2)}`);
-                });
+            if (c < h && !nearHigh && fibPressure) {
+                stage = 'recovery';
+                pressure = fibPressure;
+                t1 = fibPressure;
+                t2 = { label:'前高', price:h };
+            } else if (c < h) {
+                stage = 'nearHigh';
+                pressure = { label:'前高突破', price:h };
+                t1 = pressure;
+                t2 = extensions[0];
+            } else {
+                stage = 'breakout';
+                const future = extensions.filter(x => x.price > c).sort((a,b) => a.price - b.price);
+                pressure = future[0] || { label:'已超2.618', price:extensions[2].price };
+                t1 = future[0] || null;
+                t2 = future[1] || future[0] || null;
             }
+            return { fibs, extensions, support, pressure, t1, t2, stage };
+        }
 
-            const eventHtml = events.length ? `<div class="event">${events.slice(0, 2).join('<br>')}</div>` : '';
-            const resistanceHtml = resistances.length
-                ? `<div class="resistance">↑ 压力：${resistances.map(x => `${x.label} ${x.price.toFixed(2)}`).join(' / ')}</div>`
-                : `<div class="resistance">↑ 压力：前高 ${h.toFixed(2)}</div>`;
-            const supportHtml = supports.length
-                ? `<div class="support">↓ 支撑：${supports.map(x => `${x.label} ${x.price.toFixed(2)}`).join(' / ')}</div>`
-                : `<div class="support">↓ 支撑：前低 ${l.toFixed(2)}</div>`;
-            return eventHtml + resistanceHtml + supportHtml;
+        function movePct(price, base) {
+            return Number.isFinite(price) && Number.isFinite(base) && base !== 0 ? (price - base) / base * 100 : null;
+        }
+
+        function levelHtml(level, base, fallback = '暂无') {
+            if (!level || !Number.isFinite(level.price)) return `<span style="color:var(--text-secondary);">${fallback}</span>`;
+            const pct = movePct(level.price, base);
+            const cls = pct !== null && pct < 0 ? 'down' : 'up';
+            const pctText = pct === null ? '--' : `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+            return `<div class="price">${level.price.toFixed(2)}</div><div class="${cls}">${pctText}</div><small>${level.label}</small>`;
         }
 
         function calcV7(el) {
             const row = el.closest('tr');
             const h = parseFloat(row.querySelector('.high').value);
             const l = parseFloat(row.querySelector('.low').value);
-            const previous = parseFloat(row.querySelector('.previous').value);
             const c = parseFloat(row.querySelector('.current').value);
+            const previous = parseFloat(row.querySelector('.previous').value);
             const volumeRatio = parseFloat(row.querySelector('.volume-ratio').value);
+            const stop = parseFloat(row.querySelector('.stop').value);
+            const override1 = parseFloat(row.querySelector('.target1').value);
+            const override2 = parseFloat(row.querySelector('.target').value);
+            const baselineMode = row.querySelector('.baseline').value;
             const trend = row.querySelector('.trend').value;
             const rsi = parseFloat(row.querySelector('.rsi').value);
             const macd = row.querySelector('.macd').value;
-            const stop = parseFloat(row.querySelector('.stop').value);
-            const target1 = parseFloat(row.querySelector('.target1').value);
-            const target2 = parseFloat(row.querySelector('.target').value);
 
-            if (!h || !l || h <= l) {
-                row.querySelectorAll('.calc-result').forEach(td => td.innerText = '-');
-                row.querySelector('.status-cell').innerHTML = '-';
-                row.querySelector('.level-cell').innerHTML = '-';
-                row.querySelector('.rr-cell').innerHTML = '-';
-                row.querySelector('.ai-cell').innerHTML = '-';
+            if (!Number.isFinite(h) || !Number.isFinite(l) || !Number.isFinite(c) || h <= l) {
+                row.querySelector('.market-cell').innerHTML = '<span class="risk-bad">Look first 数据不完整</span>';
+                ['support-cell','pressure-cell','t1-cell','t2-cell','rr-cell','ai-cell'].forEach(cls => row.querySelector('.' + cls).innerHTML = '-');
                 return;
             }
 
-            const diff = h - l;
-            const levels = { '236': h - diff * 0.236, '382': h - diff * 0.382, '500': h - diff * 0.5, '618': h - diff * 0.618, '786': h - diff * 0.786, '886': h - diff * 0.886 };
-            for (const key in levels) row.querySelector('.res-' + key).innerText = levels[key].toFixed(2);
-            row.querySelector('.level-cell').innerHTML = Number.isFinite(c) ? buildLevelMap(levels, h, l, previous, c) : '-';
+            const plan = getAutoPlan(h, l, c);
+            const effectiveT1 = Number.isFinite(override1) && override1 > c ? { label:'人工覆盖 T1', price:override1 } : plan.t1;
+            const effectiveT2 = Number.isFinite(override2) && override2 > c ? { label:'人工覆盖 T2', price:override2 } : plan.t2;
+            const base = baselineMode === 'previous' && Number.isFinite(previous) && previous > 0 ? previous : c;
+            const baseName = base === c ? 'Current' : 'Prev';
 
-            let status = '-'; let fiboScore = 0;
-            if (!isNaN(c)) {
-                applyAutoHighlight(row, c, levels);
-                if (c >= h) { status = '<span class="status-badge" style="background:#cce5ff;color:#004085;">📈 Breakout</span>'; fiboScore = 0; }
-                else if (c >= levels['382']) { status = '<span class="status-badge">⏳ Pullback</span>'; fiboScore = 0; }
-                else if (c >= levels['618']) { status = '<span class="status-badge">⚖️ Correction</span>'; fiboScore = 1; }
-                else if (c >= levels['786']) { status = '<span class="status-badge" style="background:#fff3cd;color:#856404;">💎 Golden Dip</span>'; fiboScore = 4; }
-                else if (c >= levels['886']) { status = '<span class="status-badge" style="background:#f8d7da;color:#721c24;">🚨 Danger Zone</span>'; fiboScore = 3; }
-                else if (c >= l) { status = '<span class="status-badge" style="background:#e2d9f3;color:#4a148c;">🧛 Harmonic</span>'; fiboScore = 2; }
-                else { status = '<span class="status-badge" style="background:#343a40;color:#fff;">💀 Dead</span>'; fiboScore = -5; }
-                row.querySelector('.status-cell').innerHTML = status;
+            let zone, fiboScore;
+            const levels = Object.fromEntries(plan.fibs.map(x => [x.label, x.price]));
+            if (c >= h) { zone = '📈 Breakout'; fiboScore = 0; }
+            else if (c >= levels['38.2%']) { zone = '⏳ Pullback'; fiboScore = 0; }
+            else if (c >= levels['61.8%']) { zone = '⚖️ Correction'; fiboScore = 1; }
+            else if (c >= levels['78.6%']) { zone = '💎 Golden Dip'; fiboScore = 4; }
+            else if (c >= levels['88.6%']) { zone = '🚨 Danger Zone'; fiboScore = 3; }
+            else if (c >= l) { zone = '🧛 Harmonic'; fiboScore = 2; }
+            else { zone = '💀 Structure Broken'; fiboScore = -5; }
 
-                let trendScore = trend === 'uptrend' ? 2 : (trend === 'downtrend' ? -3 : 0);
-                let rsiScore = 0;
-                if (!isNaN(rsi)) {
-                    if (rsi <= 30) rsiScore = 2;
-                    else if (rsi <= 45) rsiScore = 1;
-                    else if (rsi >= 70) rsiScore = -2;
-                }
-                let macdScore = macd === 'divergence' ? 2 : (macd === 'bullish' ? 1 : (macd === 'bearish' ? -1 : 0));
-                const momentumScore = Math.min(3, rsiScore + macdScore);
+            const dayMove = Number.isFinite(previous) && previous > 0 ? movePct(c, previous) : null;
+            row.querySelector('.market-cell').innerHTML = `<strong>${c.toFixed(2)}</strong><br><small>${zone}</small>${dayMove === null ? '' : `<br><span class="${dayMove < 0 ? 'risk-bad' : 'risk-ok'}">vs Prev ${dayMove >= 0 ? '+' : ''}${dayMove.toFixed(2)}%</span>`}`;
+            row.querySelector('.support-cell').innerHTML = levelHtml(plan.support, base);
+            row.querySelector('.pressure-cell').innerHTML = levelHtml(plan.pressure, base);
+            row.querySelector('.t1-cell').innerHTML = levelHtml(effectiveT1, base);
+            row.querySelector('.t2-cell').innerHTML = levelHtml(effectiveT2, base);
+            [row.querySelector('.support-cell'), row.querySelector('.pressure-cell'), row.querySelector('.t1-cell'), row.querySelector('.t2-cell')]
+                .forEach(cell => cell.title = `涨跌幅基准：${baseName}`);
 
-                let volumeScore = 0;
-                let volumeText = 'Volume 未填';
-                if (Number.isFinite(previous) && previous > 0 && Number.isFinite(volumeRatio) && volumeRatio > 0) {
-                    const movePct = (c - previous) / previous;
-                    if (movePct > 0.002 && volumeRatio >= 1.5) { volumeScore = 1; volumeText = '放量上涨确认'; }
-                    else if (movePct > 0.002 && volumeRatio <= 0.8) { volumeScore = -1; volumeText = '缩量反弹'; }
-                    else if (movePct < -0.002 && volumeRatio >= 1.5) { volumeScore = -2; volumeText = '放量下跌风险'; }
-                    else if (movePct < -0.002 && volumeRatio <= 0.8) { volumeScore = 1; volumeText = '缩量回调'; }
-                    else volumeText = `量价中性 (${volumeRatio.toFixed(2)}x)`;
-                } else if (Number.isFinite(volumeRatio) && volumeRatio > 0) {
-                    volumeText = `量比 ${volumeRatio.toFixed(2)}x，缺 Prev`;
-                }
-
-                let strengthBonus = 0;
-                if (trend === 'uptrend' && c >= h && (macd === 'bullish' || volumeScore > 0)) strengthBonus = 2;
-                else if (trend === 'uptrend' && c >= levels['382']) strengthBonus = 1;
-                const totalScore = fiboScore + trendScore + momentumScore + volumeScore + strengthBonus;
-
-                let rr1 = null, rr2 = null;
-                const riskComplete = Number.isFinite(stop) && Number.isFinite(target2);
-                let riskValid = false;
-                if (Number.isFinite(stop) && stop < c) {
-                    if (Number.isFinite(target1) && target1 > c) rr1 = (target1 - c) / (c - stop);
-                    if (Number.isFinite(target2) && target2 > c) rr2 = (target2 - c) / (c - stop);
-                    riskValid = riskComplete && Number.isFinite(rr2) && rr2 > 0;
-                }
-
-                if (!riskComplete) row.querySelector('.rr-cell').innerHTML = '<span class="risk-warn">待设 Stop/T2</span>';
-                else if (!riskValid) row.querySelector('.rr-cell').innerHTML = '<span class="risk-bad">参数无效</span>';
-                else {
-                    const riskPct = (c - stop) / c * 100;
-                    const rrClass = rr2 >= 2 ? 'risk-ok' : (rr2 >= 1.3 ? 'risk-warn' : 'risk-bad');
-                    const t1Text = Number.isFinite(rr1) ? `T1 ${rr1.toFixed(2)}R<br>` : '';
-                    row.querySelector('.rr-cell').innerHTML = `${t1Text}<span class="${rrClass}">T2 ${rr2.toFixed(2)}R</span><br><small>风险 ${riskPct.toFixed(1)}%</small>`;
-                }
-
-                const structureBroken = c < l;
-                const poorEntry = riskComplete && (!riskValid || rr2 < 1.3);
-                const sniperAllowed = trend !== 'downtrend' && riskComplete && riskValid && rr2 >= 2;
-                const technicalLabel = totalScore >= 6 ? 'Strong Setup' : (totalScore >= 3 ? 'Good Structure' : (totalScore >= 1 ? 'Watch Structure' : 'Weak Structure'));
-                const entryLabel = !riskComplete ? 'Risk Pending' : (!riskValid ? 'Invalid Plan' : (rr2 >= 2 ? 'Good Entry' : (rr2 >= 1.3 ? 'Acceptable Entry' : 'Poor Entry')));
-
-                let aiHtml = '';
-                if (structureBroken) aiHtml = '<span class="ai-badge" style="background:#e0e0e0;color:#757575;">🛑 Structure Invalid</span>';
-                else if (totalScore >= 6 && sniperAllowed) aiHtml = '<span class="ai-badge" style="background:#d50000;color:white;box-shadow:0 2px 5px rgba(213,0,0,0.4)">🔥 Sniper Buy</span>';
-                else if (totalScore >= 3 && riskComplete && riskValid && rr2 >= 1.3) aiHtml = '<span class="ai-badge" style="background:#00c853;color:white;">🟢 Good Setup</span>';
-                else if (totalScore >= 3 && (poorEntry || !riskComplete)) aiHtml = '<span class="ai-badge" style="background:#ffb300;color:#333;">⏳ Wait Better Entry</span>';
-                else if (totalScore >= 1) aiHtml = '<span class="ai-badge" style="background:#ffd600;color:#333;">👀 Watch</span>';
-                else aiHtml = '<span class="ai-badge" style="background:#e0e0e0;color:#757575;">🛑 Avoid</span>';
-
-                aiHtml += `<div style="font-size:10px;margin-top:4px;color:#5f6368;">${technicalLabel} / ${entryLabel}</div>`;
-                aiHtml += `<div style="font-size:10px;color:#5f6368;">Score ${totalScore}: F${fiboScore} + T${trendScore} + M${momentumScore} + V${volumeScore} + S${strengthBonus}</div>`;
-                aiHtml += `<div style="font-size:10px;color:${volumeScore < 0 ? '#c5221f' : '#5f6368'};">${volumeText}</div>`;
-                row.querySelector('.ai-cell').innerHTML = aiHtml;
+            const trendScore = trend === 'uptrend' ? 2 : (trend === 'downtrend' ? -3 : 0);
+            let rsiScore = 0;
+            if (Number.isFinite(rsi)) {
+                if (rsi <= 30) rsiScore = 2;
+                else if (rsi <= 45) rsiScore = 1;
+                else if (rsi >= 70) rsiScore = -2;
             }
+            const macdScore = macd === 'divergence' ? 2 : (macd === 'bullish' ? 1 : (macd === 'bearish' ? -1 : 0));
+            const momentumScore = Math.min(3, rsiScore + macdScore);
+
+            let volumeScore = 0;
+            let volumeText = 'Volume 未填';
+            if (Number.isFinite(previous) && previous > 0 && Number.isFinite(volumeRatio) && volumeRatio > 0) {
+                const move = (c - previous) / previous;
+                if (move > 0.002 && volumeRatio >= 1.5) { volumeScore = 1; volumeText = '放量上涨确认'; }
+                else if (move > 0.002 && volumeRatio <= 0.8) { volumeScore = -1; volumeText = '缩量反弹'; }
+                else if (move < -0.002 && volumeRatio >= 1.5) { volumeScore = -2; volumeText = '放量下跌风险'; }
+                else if (move < -0.002 && volumeRatio <= 0.8) { volumeScore = 1; volumeText = '缩量回调'; }
+                else volumeText = `量价中性 (${volumeRatio.toFixed(2)}x)`;
+            }
+            let strengthBonus = 0;
+            if (trend === 'uptrend' && c >= h && (macd === 'bullish' || volumeScore > 0)) strengthBonus = 2;
+            else if (trend === 'uptrend' && c >= levels['38.2%']) strengthBonus = 1;
+            const totalScore = fiboScore + trendScore + momentumScore + volumeScore + strengthBonus;
+
+            let rr1 = null, rr2 = null;
+            const riskValid = Number.isFinite(stop) && stop < c && effectiveT2 && Number.isFinite(effectiveT2.price) && effectiveT2.price > c;
+            if (Number.isFinite(stop) && stop < c) {
+                if (effectiveT1 && effectiveT1.price > c) rr1 = (effectiveT1.price - c) / (c - stop);
+                if (effectiveT2 && effectiveT2.price > c) rr2 = (effectiveT2.price - c) / (c - stop);
+            }
+            if (!Number.isFinite(stop)) row.querySelector('.rr-cell').innerHTML = '<span class="risk-warn">待设 Stop</span>';
+            else if (!riskValid) row.querySelector('.rr-cell').innerHTML = '<span class="risk-bad">风险计划无效</span>';
+            else {
+                const riskPct = (c - stop) / c * 100;
+                row.querySelector('.rr-cell').innerHTML = `${Number.isFinite(rr1) ? `T1 ${rr1.toFixed(2)}R<br>` : ''}<span class="${rr2 >= 2 ? 'risk-ok' : (rr2 >= 1.3 ? 'risk-warn' : 'risk-bad')}">T2 ${rr2.toFixed(2)}R</span><br><small>风险 ${riskPct.toFixed(1)}%</small>`;
+            }
+
+            const structureBroken = c < l;
+            const firstBarrierTight = plan.stage === 'recovery' && Number.isFinite(rr1) && rr1 < 0.5;
+            const sniperAllowed = trend !== 'downtrend' && riskValid && rr2 >= 2 && !firstBarrierTight;
+            const technicalLabel = totalScore >= 6 ? 'Strong Setup' : (totalScore >= 3 ? 'Good Structure' : (totalScore >= 1 ? 'Watch Structure' : 'Weak Structure'));
+            const entryLabel = !Number.isFinite(stop) ? 'Risk Pending' : (!riskValid ? 'Invalid Plan' : (rr2 >= 2 ? 'Good Entry' : (rr2 >= 1.3 ? 'Acceptable Entry' : 'Poor Entry')));
+
+            let aiHtml = '';
+            if (structureBroken) aiHtml = '<span class="ai-badge" style="background:#e0e0e0;color:#757575;">🛑 Structure Invalid</span>';
+            else if (totalScore >= 6 && sniperAllowed) aiHtml = '<span class="ai-badge" style="background:#d50000;color:white;">🔥 Sniper Buy</span>';
+            else if (totalScore >= 3 && firstBarrierTight) aiHtml = '<span class="ai-badge" style="background:#ffb300;color:#333;">⏳ Wait Reclaim</span>';
+            else if (totalScore >= 3 && riskValid && rr2 >= 1.3) aiHtml = '<span class="ai-badge" style="background:#00c853;color:white;">🟢 Good Setup</span>';
+            else if (totalScore >= 3) aiHtml = '<span class="ai-badge" style="background:#ffb300;color:#333;">⏳ Wait Better Entry</span>';
+            else if (totalScore >= 1) aiHtml = '<span class="ai-badge" style="background:#ffd600;color:#333;">👀 Watch</span>';
+            else aiHtml = '<span class="ai-badge" style="background:#e0e0e0;color:#757575;">🛑 Avoid</span>';
+            aiHtml += `<div style="font-size:10px;margin-top:4px;color:#5f6368;">${technicalLabel} / ${entryLabel}</div>`;
+            aiHtml += `<div style="font-size:10px;color:#5f6368;">F${fiboScore}+T${trendScore}+M${momentumScore}+V${volumeScore}+S${strengthBonus}=${totalScore}</div>`;
+            aiHtml += `<div style="font-size:10px;color:${volumeScore < 0 ? '#c5221f' : '#5f6368'};">${firstBarrierTight ? '第一压力过近；' : ''}${volumeText}</div>`;
+            row.querySelector('.ai-cell').innerHTML = aiHtml;
             saveLocalV7();
         }
 
-        function addV7Row(n='', h='', l='', c='', t='sideways', r='', m='neutral', s='', g='', p='', v='', g1='') {
+        function addV7Row(n='', h='', l='', c='', t='sideways', r='', m='neutral', s='', g='', p='', v='', g1='', b='current') {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td><input type="text" class="input-name name" value="${n}" placeholder="TICKER" oninput="saveLocalV7()"></td>
-                <td><input type="number" class="high" value="${h}" oninput="calcV7(this)"></td>
-                <td><input type="number" class="low" value="${l}" oninput="calcV7(this)"></td>
-                <td class="detail-col"><input type="number" class="input-risk previous" value="${p}" placeholder="前值" oninput="calcV7(this)"></td>
-                <td><input type="number" class="current" value="${c}" oninput="calcV7(this)"></td>
+                <td>
+                    <input type="text" class="input-name name" value="${n}" readonly title="标的来自 Look first">
+                    <input type="hidden" class="high" value="${h}"><input type="hidden" class="low" value="${l}">
+                </td>
+                <td class="market-cell"><input type="hidden" class="current" value="${c}">-</td>
+                <td class="support-cell auto-level">-</td>
+                <td class="pressure-cell auto-level">-</td>
+                <td class="t1-cell auto-level">-</td>
+                <td class="t2-cell auto-level">-</td>
+                <td class="rr-cell">-</td>
+                <td class="detail-col"><input type="number" class="input-risk previous" value="${p}" placeholder="Prev" oninput="calcV7(this)"></td>
                 <td class="detail-col"><input type="number" step="0.01" class="input-risk volume-ratio" value="${v}" placeholder="量比" oninput="calcV7(this)"></td>
                 <td class="detail-col"><input type="number" class="input-risk stop" value="${s}" placeholder="止损" oninput="calcV7(this)"></td>
-                <td class="detail-col"><input type="number" class="input-risk target1" value="${g1}" placeholder="T1" oninput="calcV7(this)"></td>
-                <td class="detail-col"><input type="number" class="input-risk target" value="${g}" placeholder="T2" oninput="calcV7(this)"></td>
-                <td class="rr-cell">-</td>
-                <td class="calc-result res-236 detail-col">-</td><td class="calc-result res-382 detail-col">-</td><td class="calc-result res-500 detail-col">-</td>
-                <td class="calc-result res-618 detail-col">-</td><td class="calc-result res-786 detail-col">-</td><td class="calc-result res-886 detail-col">-</td>
-                <td class="detail-col">
-                    <select class="trend" onchange="calcV7(this)">
-                        <option value="uptrend" ${t==='uptrend'?'selected':''}>📈 Uptrend (+2)</option>
-                        <option value="sideways" ${t==='sideways'?'selected':''}>➖ Sideways (+0)</option>
-                        <option value="downtrend" ${t==='downtrend'?'selected':''}>📉 Downtrend (-3)</option>
-                    </select>
-                </td>
-                <td class="detail-col"><input type="number" class="input-rsi rsi" value="${r}" placeholder="e.g. 25" oninput="calcV7(this)"></td>
-                <td class="detail-col">
-                    <select class="macd" onchange="calcV7(this)">
-                        <option value="neutral" ${m==='neutral'?'selected':''}>Wait/Flat</option>
-                        <option value="bullish" ${m==='bullish'?'selected':''}>📈 Bullish</option>
-                        <option value="bearish" ${m==='bearish'?'selected':''}>📉 Bearish</option>
-                        <option value="divergence" ${m==='divergence'?'selected':''}>⭐ Divergence</option>
-                    </select>
-                </td>
-                <td class="status-cell">-</td><td class="level-cell level-map">-</td><td class="ai-cell" style="background:#fff3e0;">-</td>
-                <td class="action-cell">
-                    <span class="material-icons btn-icon btn-delete" onclick="this.closest('tr').remove(); saveLocalV7();">delete</span>
-                    <span class="material-icons btn-icon drag-handle">drag_indicator</span>
-                </td>
+                <td class="detail-col"><input type="number" class="input-risk target1" value="${g1}" placeholder="自动" oninput="calcV7(this)"></td>
+                <td class="detail-col"><input type="number" class="input-risk target" value="${g}" placeholder="自动" oninput="calcV7(this)"></td>
+                <td class="detail-col"><select class="baseline" onchange="calcV7(this)"><option value="current" ${b!=='previous'?'selected':''}>Current</option><option value="previous" ${b==='previous'?'selected':''}>Prev</option></select></td>
+                <td class="detail-col"><select class="trend" onchange="calcV7(this)"><option value="uptrend" ${t==='uptrend'?'selected':''}>📈 Uptrend (+2)</option><option value="sideways" ${t==='sideways'?'selected':''}>➖ Sideways (+0)</option><option value="downtrend" ${t==='downtrend'?'selected':''}>📉 Downtrend (-3)</option></select></td>
+                <td class="detail-col"><input type="number" class="input-rsi rsi" value="${r}" placeholder="RSI" oninput="calcV7(this)"></td>
+                <td class="detail-col"><select class="macd" onchange="calcV7(this)"><option value="neutral" ${m==='neutral'?'selected':''}>Wait/Flat</option><option value="bullish" ${m==='bullish'?'selected':''}>📈 Bullish</option><option value="bearish" ${m==='bearish'?'selected':''}>📉 Bearish</option><option value="divergence" ${m==='divergence'?'selected':''}>⭐ Divergence</option></select></td>
+                <td class="ai-cell" style="background:#fff3e0;">-</td>
+                <td class="action-cell"><span class="material-icons btn-icon drag-handle">drag_indicator</span></td>
             `;
-            tBodyV7.appendChild(tr); makeRowDraggable(tr, saveLocalV7); if(h && l) calcV7(tr.querySelector('.high'));
+            tBodyV7.appendChild(tr);
+            makeRowDraggable(tr, saveLocalV7);
+            calcV7(tr.querySelector('.high'));
         }
 
         // ================= Drag & Drop / Data Save =================
@@ -767,9 +791,6 @@
             document.querySelectorAll('#tableBodyV7 tr').forEach(tr => {
                 data.push({
                     n: tr.querySelector('.name').value,
-                    h: tr.querySelector('.high').value,
-                    l: tr.querySelector('.low').value,
-                    c: tr.querySelector('.current').value,
                     t: tr.querySelector('.trend').value,
                     r: tr.querySelector('.rsi').value,
                     m: tr.querySelector('.macd').value,
@@ -777,7 +798,8 @@
                     g: tr.querySelector('.target').value,
                     g1: tr.querySelector('.target1').value,
                     p: tr.querySelector('.previous').value,
-                    v: tr.querySelector('.volume-ratio').value
+                    v: tr.querySelector('.volume-ratio').value,
+                    b: tr.querySelector('.baseline').value
                 });
             });
             localStorage.setItem('tv_thenleap_data_v3', JSON.stringify(data));
@@ -810,8 +832,9 @@
             const savedV7 = localStorage.getItem('tv_thenleap_data_v3');
             if (savedV7 && JSON.parse(savedV7).length > 0) JSON.parse(savedV7).forEach(d => addV7Row(
                 d.n, d.h, d.l, d.c, d.t || 'sideways', d.r, d.m,
-                d.s || '', d.g || '', d.p || '', d.v || '', d.g1 || ''
+                d.s || '', d.g || '', d.p || '', d.v || '', d.g1 || '', d.b || 'current'
             )); else addV7Row();
+            syncV7withV6(true);
             initV7TableUX();
         };
         // ================= 🆕 新增：登出逻辑 =================
