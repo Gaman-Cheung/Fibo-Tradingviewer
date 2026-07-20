@@ -109,7 +109,6 @@
         .auto-level .up { color:#c5221f; font-weight:900; }
         .auto-level .down { color:#137333; font-weight:900; }
         .auto-level small { color:var(--text-secondary); white-space:normal; display:block; }
-        #tab-v7.compact-view .detail-col { display:none; }
         .v7-top-scroll {
             height:16px; overflow-x:auto; overflow-y:hidden; margin:0 2px 6px;
             position:sticky; top:0; z-index:30; background:var(--bg-color);
@@ -205,7 +204,7 @@
         <button onclick="addV6Row()" class="btn-add"><span class="material-icons">add</span> Add Look first Row</button>
     </div>
 
-    <div id="tab-v7" class="tab-content compact-view">
+    <div id="tab-v7" class="tab-content">
         <div class="v7-top-scroll" id="v7TopScroll" title="完整视图横向滚动条"><div class="v7-top-scroll-inner" id="v7TopScrollInner"></div></div>
         <div class="table-card" id="v7TableCard">
             <table id="v7Table">
@@ -237,7 +236,6 @@
         <div class="action-bar">
             <button onclick="switchTab('v6')" class="btn-add" style="background:var(--g-red);"><span class="material-icons">add</span> 在 Look first 添加标的</button>
             <button onclick="syncV7withV6()" class="btn-add btn-sync"><span class="material-icons">sync</span> Refresh from Look first</button>
-            <button onclick="toggleV7Compact()" class="btn-add btn-sync" id="v7ViewToggle"><span class="material-icons">view_column</span> 完整录入</button>
         </div>
         <div style="margin-top:10px;color:var(--text-secondary);font-size:12px;line-height:1.6;">
             High、Low、Current及斐波那契位自动引用 Look first。默认以 Current 计算支撑、压力及目标涨跌幅，可在完整视图切换为 Prev；T1/T2 Override 留空即使用自动目标。
@@ -371,23 +369,6 @@
             }
         }
 
-        function setV7Compact(compact) {
-            const tab = document.getElementById('tab-v7');
-            const btn = document.getElementById('v7ViewToggle');
-            if (!tab || !btn) return;
-            tab.classList.toggle('compact-view', compact);
-            btn.innerHTML = compact
-                ? '<span class="material-icons">view_column</span> 完整录入'
-                : '<span class="material-icons">compress</span> 精简视图';
-            localStorage.setItem('tv_v7_compact_view', compact ? '1' : '0');
-            requestAnimationFrame(syncV7ScrollWidth);
-        }
-
-        function toggleV7Compact() {
-            const tab = document.getElementById('tab-v7');
-            setV7Compact(!tab.classList.contains('compact-view'));
-        }
-
         function initV7TableUX() {
             const topScroll = document.getElementById('v7TopScroll');
             const tableCard = document.getElementById('v7TableCard');
@@ -407,8 +388,6 @@
                 syncing = false;
             });
 
-            const compact = localStorage.getItem('tv_v7_compact_view') !== '0';
-            setV7Compact(compact);
             syncV7ScrollWidth();
             if (window.ResizeObserver) new ResizeObserver(syncV7ScrollWidth).observe(document.getElementById('v7Table'));
             window.addEventListener('resize', syncV7ScrollWidth);
@@ -644,8 +623,10 @@
             }
 
             const plan = getAutoPlan(h, l, c);
-            const effectiveT1 = Number.isFinite(override1) && override1 > c ? { label:'人工覆盖 T1', price:override1 } : plan.t1;
-            const effectiveT2 = Number.isFinite(override2) && override2 > c ? { label:'人工覆盖 T2', price:override2 } : plan.t2;
+            const invalidOverride1 = Number.isFinite(override1) && override1 <= c;
+            const invalidOverride2 = Number.isFinite(override2) && override2 <= c;
+            const effectiveT1 = Number.isFinite(override1) && !invalidOverride1 ? { label:'人工覆盖 T1', price:override1 } : plan.t1;
+            const effectiveT2 = Number.isFinite(override2) && !invalidOverride2 ? { label:'人工覆盖 T2', price:override2 } : plan.t2;
             const base = baselineMode === 'previous' && Number.isFinite(previous) && previous > 0 ? previous : c;
             const baseName = base === c ? 'Current' : 'Prev';
 
@@ -663,8 +644,12 @@
             row.querySelector('.market-cell').innerHTML = `<strong>${c.toFixed(2)}</strong><br><small>${zone}</small>${dayMove === null ? '' : `<br><span class="${dayMove < 0 ? 'risk-bad' : 'risk-ok'}">vs Prev ${dayMove >= 0 ? '+' : ''}${dayMove.toFixed(2)}%</span>`}`;
             row.querySelector('.support-cell').innerHTML = levelHtml(plan.support, base);
             row.querySelector('.pressure-cell').innerHTML = levelHtml(plan.pressure, base);
-            row.querySelector('.t1-cell').innerHTML = levelHtml(effectiveT1, base);
-            row.querySelector('.t2-cell').innerHTML = levelHtml(effectiveT2, base);
+            row.querySelector('.t1-cell').innerHTML = invalidOverride1
+                ? `<span class="risk-bad">覆盖值须高于 Current</span><small>暂用自动 T1</small>${levelHtml(plan.t1, base)}`
+                : levelHtml(effectiveT1, base);
+            row.querySelector('.t2-cell').innerHTML = invalidOverride2
+                ? `<span class="risk-bad">覆盖值须高于 Current</span><small>暂用自动 T2</small>${levelHtml(plan.t2, base)}`
+                : levelHtml(effectiveT2, base);
             [row.querySelector('.support-cell'), row.querySelector('.pressure-cell'), row.querySelector('.t1-cell'), row.querySelector('.t2-cell')]
                 .forEach(cell => cell.title = `涨跌幅基准：${baseName}`);
 
@@ -743,8 +728,8 @@
                 <td class="detail-col"><input type="number" class="input-risk previous" value="${p}" placeholder="Prev" oninput="calcV7(this)"></td>
                 <td class="detail-col"><input type="number" step="0.01" class="input-risk volume-ratio" value="${v}" placeholder="量比" oninput="calcV7(this)"></td>
                 <td class="detail-col"><input type="number" class="input-risk stop" value="${s}" placeholder="止损" oninput="calcV7(this)"></td>
-                <td class="detail-col"><input type="number" class="input-risk target1" value="${g1}" placeholder="自动" oninput="calcV7(this)"></td>
-                <td class="detail-col"><input type="number" class="input-risk target" value="${g}" placeholder="自动" oninput="calcV7(this)"></td>
+                <td class="detail-col"><input type="number" class="input-risk target1" value="${g1}" placeholder="自动"></td>
+                <td class="detail-col"><input type="number" class="input-risk target" value="${g}" placeholder="自动"></td>
                 <td class="detail-col"><select class="baseline" onchange="calcV7(this)"><option value="current" ${b!=='previous'?'selected':''}>Current</option><option value="previous" ${b==='previous'?'selected':''}>Prev</option></select></td>
                 <td class="detail-col"><select class="trend" onchange="calcV7(this)"><option value="uptrend" ${t==='uptrend'?'selected':''}>📈 Uptrend (+2)</option><option value="sideways" ${t==='sideways'?'selected':''}>➖ Sideways (+0)</option><option value="downtrend" ${t==='downtrend'?'selected':''}>📉 Downtrend (-3)</option></select></td>
                 <td class="detail-col"><input type="number" class="input-rsi rsi" value="${r}" placeholder="RSI" oninput="calcV7(this)"></td>
@@ -753,6 +738,11 @@
                 <td class="action-cell"><span class="material-icons btn-icon drag-handle">drag_indicator</span></td>
             `;
             tBodyV7.appendChild(tr);
+            const recalcTarget = event => calcV7(event.target);
+            tr.querySelectorAll('.target1, .target').forEach(input => {
+                input.addEventListener('input', recalcTarget);
+                input.addEventListener('change', recalcTarget);
+            });
             makeRowDraggable(tr, saveLocalV7);
             calcV7(tr.querySelector('.high'));
         }
