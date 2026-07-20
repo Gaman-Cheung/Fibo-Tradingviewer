@@ -156,7 +156,7 @@
                     <span class="material-icons" style="font-size: 18px;">travel_explore</span> Look first
                 </button>
                 <button class="tab-btn" onclick="switchTab('v7')" id="btn-v7">
-                    <span class="material-icons" style="font-size: 18px;">track_changes</span> Then leap
+                    <span class="material-icons" style="font-size: 18px;">track_changes</span> Then leap · AutoLink v3
                 </button>
             </div>
         </div>
@@ -512,23 +512,28 @@
         // ================= Then leap Core =================
         const tBodyV7 = document.getElementById('tableBodyV7');
 
-        function syncV7withV6(silent = false) {
+        function syncV7withV6(silent = false, seedData = null) {
             const v7Cache = {};
-            document.querySelectorAll('#tableBodyV7 tr').forEach(tr => {
-                const read = (selector, fallback = '') => tr.querySelector(selector)?.value ?? fallback;
-                const ticker = read('.name').trim().toUpperCase();
-                if(ticker) v7Cache[ticker] = {
-                    t: read('.trend', 'sideways'),
-                    r: read('.rsi'),
-                    m: read('.macd', 'neutral'),
-                    s: read('.stop'),
-                    g: read('.target'),
-                    g1: read('.target1'),
-                    p: read('.previous'),
-                    v: read('.volume-ratio'),
-                    b: read('.baseline', 'current')
-                };
-            });
+            if (Array.isArray(seedData)) {
+                seedData.forEach(item => {
+                    const ticker = String(item?.n || '').trim().toUpperCase();
+                    if (ticker) v7Cache[ticker] = {
+                        t:item.t || 'sideways', r:item.r || '', m:item.m || 'neutral',
+                        s:item.s || '', g:item.g || '', g1:item.g1 || '',
+                        p:item.p || '', v:item.v || '', b:item.b || 'current'
+                    };
+                });
+            } else {
+                document.querySelectorAll('#tableBodyV7 tr').forEach(tr => {
+                    const read = (selector, fallback = '') => tr.querySelector(selector)?.value ?? fallback;
+                    const ticker = read('.name').trim().toUpperCase();
+                    if(ticker) v7Cache[ticker] = {
+                        t: read('.trend', 'sideways'), r: read('.rsi'), m: read('.macd', 'neutral'),
+                        s: read('.stop'), g: read('.target'), g1: read('.target1'),
+                        p: read('.previous'), v: read('.volume-ratio'), b: read('.baseline', 'current')
+                    };
+                });
+            }
 
             tBodyV7.innerHTML = '';
             document.querySelectorAll('#tableBodyV6 tr').forEach(tr => {
@@ -623,7 +628,8 @@
             // 旧云端行有时尚未带入 Ticker；此时按 Look first/Then leap 同行序号回退。
             if (!source) {
                 const rowIndex = v7Rows.indexOf(row);
-                const v6Row = rowIndex >= 0 ? v6Rows[rowIndex] : null;
+                const populatedV6Rows = v6Rows.filter(item => (item.querySelector('.name')?.value || '').trim());
+                const v6Row = rowIndex >= 0 ? populatedV6Rows[rowIndex] : null;
                 if (v6Row) {
                     source = {
                         h: v6Row.querySelector('.high')?.value || '',
@@ -640,7 +646,8 @@
                 try {
                     const saved = JSON.parse(localStorage.getItem('tv_lookfirst_data_v3') || '[]');
                     const rowIndex = v7Rows.indexOf(row);
-                    const match = (ticker && saved.find(item => String(item.n || '').trim().toUpperCase() === ticker)) || saved[rowIndex];
+                    const populatedSaved = saved.filter(item => String(item.n || '').trim());
+                    const match = (ticker && saved.find(item => String(item.n || '').trim().toUpperCase() === ticker)) || populatedSaved[rowIndex];
                     if (match) source = { h: match.h ?? '', l: match.l ?? '', c: match.c ?? '' };
                 } catch (e) {
                     source = null;
@@ -897,11 +904,10 @@
             if (savedV6 && JSON.parse(savedV6).length > 0) JSON.parse(savedV6).forEach(d => addV6Row(d.n, d.h, d.l, d.c)); else addV6Row();
 
             const savedV7 = localStorage.getItem('tv_thenleap_data_v3');
-            if (savedV7 && JSON.parse(savedV7).length > 0) JSON.parse(savedV7).forEach(d => addV7Row(
-                d.n, d.h, d.l, d.c, d.t || 'sideways', d.r, d.m,
-                d.s || '', d.g || '', d.p || '', d.v || '', d.g1 || '', d.b || 'current'
-            )); else addV7Row();
-            syncV7withV6(true);
+            let savedV7Data = [];
+            try { savedV7Data = savedV7 ? JSON.parse(savedV7) : []; } catch (e) { savedV7Data = []; }
+            // 直接用 Look first 价格与 V7 附加字段合并建表，避免先生成空价格行。
+            syncV7withV6(true, savedV7Data);
             initV7TableUX();
             const savedTab = localStorage.getItem('tv_active_tab');
             switchTab(savedTab === 'v7' ? 'v7' : 'v6');
