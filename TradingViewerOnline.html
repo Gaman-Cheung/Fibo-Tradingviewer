@@ -682,15 +682,22 @@
                 return;
             }
             const read = (selector, fallback = '') => row.querySelector(selector)?.value ?? fallback;
-            // 已有有效镜像时绝不覆盖；只有缺失时才从 Look first 补齐。
-            let h = parseFloat(read('.high'));
-            let l = parseFloat(read('.low'));
-            let c = parseFloat(read('.current'));
-            if (!Number.isFinite(h) || !Number.isFinite(l) || !Number.isFinite(c) || h <= l) {
-                hydrateV7FromLookFirst(row);
-                h = parseFloat(read('.high'));
-                l = parseFloat(read('.low'));
-                c = parseFloat(read('.current'));
+            // 计算时直接读取 Look first 唯一数据源；隐藏镜像仅作最后回退。
+            const ticker = read('.name').trim().toUpperCase();
+            const v7Rows = [...document.querySelectorAll('#tableBodyV7 tr')];
+            const sourceRecords = collectLookFirstRecords();
+            const rowIndex = v7Rows.indexOf(row);
+            const liveSource = sourceRecords.find(item => item.n === ticker) || sourceRecords[rowIndex] || null;
+            let h = parseFloat(liveSource?.h ?? read('.high'));
+            let l = parseFloat(liveSource?.l ?? read('.low'));
+            let c = parseFloat(liveSource?.c ?? read('.current'));
+            if (liveSource) {
+                const highInput = row.querySelector('.high');
+                const lowInput = row.querySelector('.low');
+                const currentInput = row.querySelector('.current');
+                if (highInput) highInput.value = liveSource.h;
+                if (lowInput) lowInput.value = liveSource.l;
+                if (currentInput) currentInput.value = liveSource.c;
             }
             const previous = parseFloat(read('.previous'));
             const volumeRatio = parseFloat(read('.volume-ratio'));
