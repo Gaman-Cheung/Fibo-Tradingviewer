@@ -515,17 +515,18 @@
         function syncV7withV6(silent = false) {
             const v7Cache = {};
             document.querySelectorAll('#tableBodyV7 tr').forEach(tr => {
-                const ticker = tr.querySelector('.name').value.trim().toUpperCase();
+                const read = (selector, fallback = '') => tr.querySelector(selector)?.value ?? fallback;
+                const ticker = read('.name').trim().toUpperCase();
                 if(ticker) v7Cache[ticker] = {
-                    t: tr.querySelector('.trend').value,
-                    r: tr.querySelector('.rsi').value,
-                    m: tr.querySelector('.macd').value,
-                    s: tr.querySelector('.stop').value,
-                    g: tr.querySelector('.target').value,
-                    g1: tr.querySelector('.target1').value,
-                    p: tr.querySelector('.previous').value,
-                    v: tr.querySelector('.volume-ratio').value,
-                    b: tr.querySelector('.baseline').value
+                    t: read('.trend', 'sideways'),
+                    r: read('.rsi'),
+                    m: read('.macd', 'neutral'),
+                    s: read('.stop'),
+                    g: read('.target'),
+                    g1: read('.target1'),
+                    p: read('.previous'),
+                    v: read('.volume-ratio'),
+                    b: read('.baseline', 'current')
                 };
             });
 
@@ -603,19 +604,26 @@
         }
 
         function calcV7(el) {
-            const row = el.closest('tr');
-            const h = parseFloat(row.querySelector('.high').value);
-            const l = parseFloat(row.querySelector('.low').value);
-            const c = parseFloat(row.querySelector('.current').value);
-            const previous = parseFloat(row.querySelector('.previous').value);
-            const volumeRatio = parseFloat(row.querySelector('.volume-ratio').value);
-            const stop = parseFloat(row.querySelector('.stop').value);
-            const override1 = parseFloat(row.querySelector('.target1').value);
-            const override2 = parseFloat(row.querySelector('.target').value);
-            const baselineMode = row.querySelector('.baseline').value;
-            const trend = row.querySelector('.trend').value;
-            const rsi = parseFloat(row.querySelector('.rsi').value);
-            const macd = row.querySelector('.macd').value;
+            const row = el?.closest?.('tr');
+            if (!row) return;
+            const requiredCells = ['.market-cell','.support-cell','.pressure-cell','.t1-cell','.t2-cell','.rr-cell','.ai-cell'];
+            if (requiredCells.some(selector => !row.querySelector(selector))) {
+                syncV7withV6(true);
+                return;
+            }
+            const read = (selector, fallback = '') => row.querySelector(selector)?.value ?? fallback;
+            const h = parseFloat(read('.high'));
+            const l = parseFloat(read('.low'));
+            const c = parseFloat(read('.current'));
+            const previous = parseFloat(read('.previous'));
+            const volumeRatio = parseFloat(read('.volume-ratio'));
+            const stop = parseFloat(read('.stop'));
+            const override1 = parseFloat(read('.target1'));
+            const override2 = parseFloat(read('.target'));
+            const baselineMode = read('.baseline', 'current');
+            const trend = read('.trend', 'sideways');
+            const rsi = parseFloat(read('.rsi'));
+            const macd = read('.macd', 'neutral');
 
             if (!Number.isFinite(h) || !Number.isFinite(l) || !Number.isFinite(c) || h <= l) {
                 row.querySelector('.market-cell').innerHTML = '<span class="risk-bad">Look first 数据不完整</span>';
@@ -780,17 +788,18 @@
         function saveLocalV7() {
             const data = [];
             document.querySelectorAll('#tableBodyV7 tr').forEach(tr => {
+                const read = (selector, fallback = '') => tr.querySelector(selector)?.value ?? fallback;
                 data.push({
-                    n: tr.querySelector('.name').value,
-                    t: tr.querySelector('.trend').value,
-                    r: tr.querySelector('.rsi').value,
-                    m: tr.querySelector('.macd').value,
-                    s: tr.querySelector('.stop').value,
-                    g: tr.querySelector('.target').value,
-                    g1: tr.querySelector('.target1').value,
-                    p: tr.querySelector('.previous').value,
-                    v: tr.querySelector('.volume-ratio').value,
-                    b: tr.querySelector('.baseline').value
+                    n: read('.name'),
+                    t: read('.trend', 'sideways'),
+                    r: read('.rsi'),
+                    m: read('.macd', 'neutral'),
+                    s: read('.stop'),
+                    g: read('.target'),
+                    g1: read('.target1'),
+                    p: read('.previous'),
+                    v: read('.volume-ratio'),
+                    b: read('.baseline', 'current')
                 });
             });
             localStorage.setItem('tv_thenleap_data_v3', JSON.stringify(data));
