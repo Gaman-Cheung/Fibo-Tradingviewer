@@ -1,0 +1,3087 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wave Theory Trading System</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    
+<style>
+:root {
+    --primary: #4285F4;
+    --primary-dark: #3367d6;
+    --secondary: #34A853;
+    --secondary-dark: #188038;
+    --bg: #f8f9fa;
+    --surface: #ffffff;
+    --text: #202124;
+    --muted: #5f6368;
+    --border: #dadce0;
+    --danger: #EA4335;
+    --warning: #FBBC05;
+    --purple-soft: #e8f0fe;
+    --teal-soft: #e6f4ea;
+    --red-soft: #fce8e6;
+    --shadow1: 0 2px 6px rgba(0,0,0,.08);
+    --shadow2: 0 4px 10px rgba(0,0,0,.12);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 16px;
+}
+
+header {
+    background: transparent;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 0;
+    margin-bottom: 16px;
+    box-shadow: none;
+    position: relative;
+    z-index: 30;
+}
+
+header h1 {
+    font-size: 24px;
+    font-weight: 900;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.header-left { display: flex; align-items: center; flex: 0 0 auto; }
+.app-logo { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,.2); border: 2px solid var(--primary); }
+
+/* 与交易终端一致的顶部滚动提醒 */
+.header-reminder {
+    box-sizing: border-box; flex: 1 1 320px; min-width: 240px; height: 44px; display: flex; align-items: center;
+    overflow: hidden; padding: 4px; background: #e8eaed; border: 0; border-radius: 8px; color: var(--muted);
+}
+.header-reminder > .material-icons { flex: 0 0 auto; margin: 0 8px 0 6px; font-size: 18px; color: var(--muted); }
+.marquee-viewport {
+    flex: 1; min-width: 0; height: 36px; display: flex; align-items: center; overflow: hidden;
+    white-space: nowrap; background: var(--surface); border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.1);
+}
+.marquee-track {
+    display: inline-block; min-width: max-content; padding-left: 100%; font-size: 13px; font-weight: 700;
+    animation: wave-reminder-marquee var(--marquee-duration, 36s) linear infinite;
+}
+.header-reminder:hover .marquee-track { animation-play-state: paused; }
+@keyframes wave-reminder-marquee { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+.marquee-edit {
+    flex: 0 0 36px; align-self: stretch; margin-left: 4px; padding: 0; border: 0; border-radius: 6px;
+    background: transparent; color: var(--muted); cursor: pointer;
+}
+.marquee-edit:hover { background: var(--surface); color: var(--primary); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.marquee-edit .material-icons { font-size: 17px; vertical-align: middle; }
+
+/* ================= TradingViewer 风格顶部按钮 ================= */
+/* 切换系统按钮特有样式 */
+.btn-util.btn-switch-system {
+    background: #f8f9fa;
+    border-color: #3c4043;
+    color: #202124;
+}
+.btn-util.btn-switch-system:hover {
+    background: #e8eaed;
+    box-shadow: 0 1px 3px rgba(60,64,67,0.3);
+}
+.util-btns { 
+    display: flex; 
+    gap: 8px; 
+    flex-wrap: wrap; 
+    align-items: center; 
+}
+.btn-util {
+    display: inline-flex; 
+    align-items: center; 
+    gap: 4px; 
+    background: white; 
+    border: 1px solid #dadce0;
+    padding: 6px 12px; 
+    border-radius: 6px; 
+    font-size: 13px;
+    font-weight: bold; 
+    cursor: pointer; 
+    color: #5f6368; 
+    transition: 0.2s;
+    font-family: inherit;
+}
+.btn-util:hover { 
+    background: #f1f3f4; 
+    color: #202124; 
+}
+
+/* Cloud Buttons Specific Styles */
+.btn-cloud-up { color: #188038; border-color: #188038; background: #e6f4ea;}
+.btn-cloud-up:hover { background: #ceead6; color: #137333;}
+.btn-cloud-down { color: #4285F4; border-color: #4285F4; background: #e8f0fe;}
+.btn-cloud-down:hover { background: #d2e3fc; color: #174ea6;}
+
+/* 退出按钮特有的悬停效果：变红 */
+.btn-util.btn-logout {
+    margin-left: 10px; 
+    color: #5f6368;    
+}
+.btn-util.btn-logout:hover {
+    background: #fdf2f2;      
+    border-color: #f5c2c7;    
+    color: #d32f2f;           
+}
+
+.tab-bar {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 0 12px;
+    position: relative;
+    z-index: 20;
+    overflow-x: auto;
+}
+
+.tabs {
+    display: flex;
+    gap: 4px;
+    flex: 1;
+    overflow-x: auto;
+    padding: 4px;
+    background: #e8eaed;
+    border-radius: 8px;
+}
+.btn-util.btn-pro-tips { background: #f8f9fa; border-color: #3c4043; color: #202124; }
+.btn-util.btn-pro-tips:hover { background: #e8eaed; box-shadow: 0 1px 3px rgba(60,64,67,.3); }
+
+/* Pro Tips / reminder editor */
+.note-modal-backdrop {
+    display: none; position: fixed; inset: 0; z-index: 10000; padding: 24px;
+    align-items: center; justify-content: center; background: rgba(32,33,36,.48);
+}
+.note-modal-backdrop.open { display: flex; }
+.note-modal {
+    width: min(760px, 94vw); max-height: 88vh; display: flex; flex-direction: column;
+    background: #fff; border-radius: 12px; box-shadow: 0 18px 50px rgba(0,0,0,.28); overflow: hidden;
+}
+.note-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.note-modal-header h2 { margin: 0; font-size: 18px; }
+.note-modal-close { width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
+.note-modal-close:hover { background: #f1f3f4; }
+.note-modal-body { padding: 16px 18px; overflow: auto; }
+.note-textarea {
+    box-sizing: border-box; width: 100%; min-height: 340px; resize: vertical; padding: 14px;
+    border: 1px solid var(--border); border-radius: 8px; outline: none; text-align: left;
+    font: 14px/1.75 Roboto, sans-serif; color: var(--text); background: #fcfcfc;
+}
+.note-textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(66,133,244,.12); }
+.note-modal-hint { margin-top: 8px; color: var(--muted); font-size: 12px; }
+.note-modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--border); }
+.btn-note-save { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn-note-save:hover { background: var(--primary-dark); color: #fff; }
+
+.tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--muted);
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+    border-bottom: 3px solid var(--primary);
+}
+.tab:nth-child(4n+1) { border-bottom-color: #4285F4; }
+.tab:nth-child(4n+2) { border-bottom-color: #EA4335; }
+.tab:nth-child(4n+3) { border-bottom-color: #FBBC05; }
+.tab:nth-child(4n+4) { border-bottom-color: #34A853; }
+
+.tab.active {
+    background: var(--surface);
+    color: var(--primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,.1);
+}
+
+.tab .close {
+    font-size: 14px;
+    opacity: .75;
+}
+
+.tab .close:hover {
+    opacity: 1;
+    font-weight: 700;
+}
+
+.tab-add {
+    background: var(--surface);
+    color: var(--primary);
+    border: 1px solid var(--primary);
+    border-radius: 20px;
+    white-space: nowrap;
+}
+.tab-add:hover { background: #e8f0fe; }
+
+.container {
+    max-width: 1800px;
+    margin: 0 auto;
+    padding: 4px 0 0;
+    display: grid;
+    grid-template-columns: 470px 1fr;
+    gap: 20px;
+}
+
+@media (max-width: 1100px) {
+    header {
+        height: auto;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .header-reminder { width: 100%; flex-basis: 44px; }
+
+    .container {
+        grid-template-columns: 1fr;
+    }
+}
+
+.card {
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow1);
+}
+
+.card:hover {
+    box-shadow: var(--shadow1);
+}
+
+.card-title {
+    color: var(--primary);
+    font-size: 18px;
+    font-weight: 700;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.sub-title {
+    font-size: 14px;
+    color: var(--muted);
+    margin: 14px 0 8px;
+    font-weight: 500;
+}
+
+.hint {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.65;
+}
+
+.input-group {
+    position: relative;
+    margin-bottom: 23px;
+}
+
+.input-group input,
+.input-group select {
+    width: 100%;
+    padding: 10px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 14px;
+    background: var(--surface);
+    outline: none;
+}
+
+.input-group select {
+    cursor: pointer;
+}
+
+.input-group input:focus,
+.input-group select:focus {
+    border: 1px solid var(--primary);
+    background: #f8faff;
+    box-shadow: 0 0 0 2px rgba(66,133,244,.1);
+}
+
+.input-group label {
+    position: absolute;
+    left: 6px;
+    top: 11px;
+    padding: 0 3px;
+    font-size: 14px;
+    background: var(--surface);
+    color: var(--muted);
+    pointer-events: none;
+    transition: .2s;
+}
+
+.input-group input:focus ~ label,
+.input-group input:not(:placeholder-shown) ~ label,
+.input-group select ~ label {
+    top: -8px;
+    font-size: 12px;
+    color: var(--primary);
+    font-weight: 500;
+}
+
+.grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+}
+
+.grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+}
+
+@media (max-width: 650px) {
+    .grid-2,
+    .grid-3 {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+}
+
+.chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 18px;
+}
+
+.chip {
+    font-size: 12px;
+    border-radius: 18px;
+    padding: 7px 12px;
+    background: #eee;
+}
+
+.chip.retrace {
+    background: #e8f0fe;
+    color: var(--primary-dark);
+}
+
+.chip.extend {
+    background: #e6f4ea;
+    color: #188038;
+}
+
+.chip.abc {
+    background: #fef7e0;
+    color: #b06000;
+}
+
+.selectable-ratios .chip {
+    cursor: pointer;
+    opacity: 0.38;
+    border: 1px solid transparent;
+    transition: .18s;
+    user-select: none;
+}
+
+.selectable-ratios .chip.active {
+    opacity: 1;
+    border-color: rgba(0,0,0,.12);
+    box-shadow: 0 1px 3px rgba(0,0,0,.12);
+}
+
+.selectable-ratios .chip:not(.active) {
+    filter: grayscale(.75);
+}
+
+button {
+    border: none;
+    border-radius: 20px;
+    padding: 9px 14px;
+    font-family: inherit;
+    font-weight: 500;
+    font-size: 13px;
+    cursor: pointer;
+    transition: .2s;
+}
+
+.btn-primary {
+    background: var(--primary);
+    color: #fff;
+}
+
+.btn-primary:hover {
+    background: var(--primary-dark);
+}
+
+.btn-secondary {
+    background: #fff;
+    color: var(--primary);
+    border: 1px solid var(--primary);
+}
+.btn-secondary:hover { background: #e8f0fe; }
+
+.btn-danger {
+    background: var(--red-soft);
+    color: var(--danger);
+}
+
+.btn-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.switch-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.switch {
+    position: relative;
+    width: 38px;
+    height: 16px;
+}
+
+.switch input {
+    display: none;
+}
+
+.slider {
+    position: absolute;
+    inset: 0;
+    border-radius: 8px;
+    background: #ccc;
+    cursor: pointer;
+}
+
+.slider:before {
+    content: "";
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    left: -2px;
+    top: -3px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,.4);
+    transition: .25s;
+}
+
+.switch input:checked + .slider {
+    background: #aecbfa;
+}
+
+.switch input:checked + .slider:before {
+    transform: translateX(20px);
+    background: var(--primary);
+}
+
+.subwave-card {
+    background: #f8f9fa;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.subwave-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+}
+
+.subwave-header strong {
+    color: var(--secondary-dark);
+}
+
+.canvas-wrap {
+    position: relative;
+    top: auto;
+}
+
+canvas {
+    width: 100%;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: var(--shadow1);
+    display: block;
+}
+
+.chart-controls {
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: var(--shadow1);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.chart-controls label {
+    cursor: pointer;
+    user-select: none;
+}
+
+.chart-controls input {
+    vertical-align: middle;
+    margin-right: 4px;
+}
+
+.summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0,1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+@media (max-width: 850px) {
+    .summary {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.summary-item {
+    background: linear-gradient(135deg, #e8f0fe, #e6f4ea);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+}
+
+.summary-item .label {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+}
+
+.summary-item .value {
+    font-size: 19px;
+    color: var(--primary);
+    font-weight: 700;
+}
+
+.section {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    padding: 18px;
+    margin-bottom: 18px;
+    overflow-x: auto;
+}
+
+.section h3 {
+    font-size: 15px;
+    color: var(--primary);
+    margin-bottom: 10px;
+}
+
+.section h4 {
+    font-size: 13px;
+    color: var(--secondary-dark);
+    margin: 16px 0 8px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+th {
+    text-align: left;
+    padding: 11px 8px;
+    color: var(--muted);
+    background: #f1f3f4;
+    border-bottom: 3px solid var(--primary);
+    white-space: nowrap;
+}
+
+td {
+    padding: 11px 8px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+}
+
+.badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.badge.retrace {
+    background: #e8f0fe;
+    color: var(--primary-dark);
+}
+
+.badge.extend {
+    background: #e6f4ea;
+    color: #188038;
+}
+
+.badge.warn {
+    background: #fef7e0;
+    color: #b06000;
+}
+
+.badge.danger {
+    background: var(--red-soft);
+    color: var(--danger);
+}
+
+.highlight {
+    background: rgba(3,218,198,.10);
+}
+
+.notice {
+    background: #fff8e1;
+    border-left: 4px solid #ffb300;
+    padding: 12px;
+    border-radius: 0 6px 6px 0;
+    font-size: 13px;
+    line-height: 1.7;
+    margin-top: 10px;
+}
+
+.validation-box {
+    margin: 14px 0 4px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+.validation-box.ok {
+    background: #e8f5e9;
+    border-left: 4px solid #2e7d32;
+    color: #1b5e20;
+}
+
+.validation-box.warn {
+    background: #fff8e1;
+    border-left: 4px solid #ffb300;
+    color: #795500;
+}
+
+.validation-box.error {
+    background: var(--red-soft);
+    border-left: 4px solid var(--danger);
+    color: #7f0015;
+}
+
+.empty {
+    background: #fafafa;
+    color: var(--muted);
+    font-size: 13px;
+    padding: 12px;
+    border-radius: 8px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <div class="header-left">
+        <h1><img src="logo.png" alt="Logo" class="app-logo"> Wave Theory Trading System</h1>
+    </div>
+
+    <div class="header-reminder" title="慢速滚动；鼠标悬停暂停">
+        <span class="material-icons">campaign</span>
+        <div class="marquee-viewport"><div class="marquee-track" id="waveReminderMarqueeText"></div></div>
+        <button type="button" class="marquee-edit" onclick="openWaveNoteEditor('marquee')" title="编辑滚动提醒">
+            <span class="material-icons">edit</span>
+        </button>
+    </div>
+
+    <div class="util-btns">
+        <button type="button" class="btn-util btn-pro-tips" onclick="openWaveNoteEditor('tips')">
+            <span class="material-icons" style="font-size:16px;">menu_book</span> Pro Tips
+        </button>
+        <button class="btn-util btn-switch-system" onclick="window.location.href='https://gaman-cheung.github.io/Fibo-Tradingviewer/TradingViewerOnline.html'">
+            <span class="material-icons" style="font-size:16px;">analytics</span> 交易终端
+        </button>
+        <button class="btn-util btn-cloud-down" onclick="pullFromCloud()" id="btn-pull">
+            <span class="material-icons" style="font-size:16px;">cloud_download</span> Pull from Cloud
+        </button>
+        <button class="btn-util btn-cloud-up" onclick="pushToCloud()" id="btn-push">
+            <span class="material-icons" style="font-size:16px;">cloud_upload</span> Push to Cloud
+        </button>
+        
+        <button class="btn-util" onclick="downloadLocalBackup()">
+            <span class="material-icons" style="font-size:16px;">save_alt</span> Local Backup
+        </button>
+        <button class="btn-util" onclick="document.getElementById('backupFile').click()" title="Open Local Backup">
+            <span class="material-icons" style="font-size:16px;">folder_open</span>
+        </button>
+        
+        <button class="btn-util btn-logout" onclick="logOutCloud()">
+            <span class="material-icons" style="font-size:16px;">logout</span> Log Out
+        </button>
+        <input id="backupFile" type="file" accept="application/json" style="display:none" onchange="importLocalBackup(event)">
+    </div>
+    
+    
+</header>
+
+<div class="note-modal-backdrop" id="waveNoteModalBackdrop" onclick="handleWaveNoteBackdrop(event)" aria-hidden="true">
+    <div class="note-modal" role="dialog" aria-modal="true" aria-labelledby="waveNoteModalTitle">
+        <div class="note-modal-header">
+            <h2 id="waveNoteModalTitle">Pro Tips</h2>
+            <button type="button" class="note-modal-close" onclick="closeWaveNoteEditor()" title="关闭"><span class="material-icons">close</span></button>
+        </div>
+        <div class="note-modal-body">
+            <textarea id="waveNoteEditorText" class="note-textarea"></textarea>
+            <div class="note-modal-hint" id="waveNoteModalHint">内容会保存在本地备份与 Supabase 的 wp_data 中。</div>
+        </div>
+        <div class="note-modal-footer">
+            <button type="button" class="btn-util" onclick="closeWaveNoteEditor()">取消</button>
+            <button type="button" class="btn-util btn-note-save" onclick="saveWaveNoteEditor()"><span class="material-icons" style="font-size:16px;">save</span> 保存</button>
+        </div>
+    </div>
+</div>
+
+<div class="tab-bar">
+    <div id="tabs" class="tabs"></div>
+    <button class="tab-add" onclick="createNewTab()">＋ 新建标的</button>
+</div>
+
+<div class="container">
+
+    <aside>
+
+        <div class="card">
+            <div class="card-title">① 主浪锚点输入</div>
+
+            <div class="input-group">
+                <input type="text" id="symbolName" placeholder=" " oninput="renameActiveTab(this.value); calculateAll(); saveCurrentTab();">
+                <label>标的 / 指数名称，如 上证指数、BTC、ETH</label>
+            </div>
+
+            <div class="grid-2">
+                <div class="input-group">
+                    <input type="number" id="p0" placeholder=" " oninput="calculateAll(); saveCurrentTab();">
+                    <label>P0 大浪起点</label>
+                </div>
+                <div class="input-group">
+                    <input type="number" id="p1" placeholder=" " oninput="calculateAll(); saveCurrentTab();">
+                    <label>P1 大1浪高点</label>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="input-group">
+                    <input type="number" id="p2" placeholder=" " oninput="calculateAll(); saveCurrentTab();">
+                    <label>P2 大2浪低点，可空</label>
+                </div>
+                <div class="input-group">
+                    <input type="number" id="p3" placeholder=" " oninput="calculateAll(); saveCurrentTab();">
+                    <label>P3 大3浪高点，可空</label>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="input-group">
+                    <input type="number" id="p4" placeholder=" " oninput="calculateAll(); saveCurrentTab();">
+                    <label>P4 大4浪低点，可空</label>
+                </div>
+                <div class="input-group">
+                    <input type="number" id="p5" placeholder=" " oninput="calculateAll(); saveCurrentTab();">
+                    <label>P5 大5浪高点，可空</label>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="input-group">
+                    <input type="number" id="aPoint" placeholder=" " oninput="calculateAll(); saveCurrentTab();">
+                    <label>A浪低点，可空</label>
+                </div>
+                <div class="input-group">
+                    <input type="number" id="bPoint" placeholder=" " oninput="calculateAll(); saveCurrentTab();">
+                    <label>B浪反弹高点，可空</label>
+                </div>
+            </div>
+
+            <p class="hint">
+                数值可以逐步填写。越往后的锚点越不确定时，系统会使用区间推演；当 P2/P3/P4/P5 逐步确认后，后续预测区间会自然收敛。
+            </p>
+        </div>
+
+        <div class="card">
+            <div class="card-title">② 斐波那契参数</div>
+
+            <div class="sub-title">回撤 / 反弹参数，可点击启用或关闭</div>
+            <div class="chip-row selectable-ratios" id="retraceChips">
+                <span class="chip retrace active" data-type="retrace" data-val="0.236">23.6%</span>
+                <span class="chip retrace active" data-type="retrace" data-val="0.382">38.2%</span>
+                <span class="chip retrace active" data-type="retrace" data-val="0.5">50.0%</span>
+                <span class="chip retrace active" data-type="retrace" data-val="0.618">61.8%</span>
+                <span class="chip retrace active" data-type="retrace" data-val="0.786">78.6%</span>
+                <span class="chip retrace active" data-type="retrace" data-val="0.886">88.6%</span>
+            </div>
+
+            <div class="input-group">
+                <input type="text" id="customRetrace" placeholder=" " oninput="calculateAll(); saveCurrentTab();">
+                <label>自定义回撤/反弹参数，如 0.333, 0.707</label>
+            </div>
+
+            <div class="sub-title">延伸参数，可点击启用或关闭</div>
+            <div class="chip-row selectable-ratios" id="extendChips">
+                <span class="chip extend active" data-type="extend" data-val="1">100%</span>
+                <span class="chip extend active" data-type="extend" data-val="1.272">127.2%</span>
+                <span class="chip extend active" data-type="extend" data-val="1.382">138.2%</span>
+                <span class="chip extend active" data-type="extend" data-val="1.618">161.8%</span>
+                <span class="chip extend active" data-type="extend" data-val="2">200%</span>
+                <span class="chip extend active" data-type="extend" data-val="2.618">261.8%</span>
+                <span class="chip extend active" data-type="extend" data-val="4.236">423.6%</span>
+            </div>
+
+            <div class="input-group">
+                <input type="text" id="customExtend" placeholder=" " oninput="calculateAll(); saveCurrentTab();">
+                <label>自定义延伸参数，如 1.111, 5.236, 6.18</label>
+            </div>
+
+            <div class="sub-title">ABC 专用参数</div>
+            <div class="chip-row">
+                <span class="chip abc">A: 38.2 / 50 / 61.8</span>
+                <span class="chip abc">B: 38.2 / 61.8 / 78.6 / 88.6</span>
+                <span class="chip abc">C: 61.8 / 100 / 127.2 / 161.8</span>
+            </div>
+
+            <p class="hint">
+                只有被选中的参数会参与右侧计算、子浪推演和图形核心区绘制。自定义参数不会生成 chip，但会直接参与当前计算。
+            </p>
+        </div>
+
+        <div class="card">
+            <div class="switch-line">
+                <span style="font-weight:500;">开启子浪推演</span>
+                <label class="switch">
+                    <input type="checkbox" id="subToggle" onchange="toggleSubPanel(); saveCurrentTab();">
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <p class="hint">
+                子浪按独立波段测算。上涨波段计算回撤支撑与向上延伸；下跌波段计算反弹压力与向下延伸。
+            </p>
+
+            <div id="subPanel" style="display:none; margin-top:20px; border-top:1px dashed #ccc; padding-top:20px;">
+                <div class="card-title" style="font-size:15px; color:var(--text);">
+                    ③ 子浪波段推演
+                </div>
+
+                <div id="subList"></div>
+
+                <div class="btn-row">
+                    <button class="btn-primary" onclick="addSubWave('up'); saveCurrentTab();">＋ 添加上涨波段</button>
+                    <button class="btn-secondary" onclick="addSubWave('down'); saveCurrentTab();">＋ 添加下跌波段</button>
+                    <button class="btn-secondary" onclick="autoContinueSubWave(); saveCurrentTab();" title="保持上一波方向，并按上一波幅度的 1.272 倍投射">同方向 1.272 扩展</button>
+                </div>
+            </div>
+        </div>
+
+    </aside>
+
+    <main>
+
+        <div class="canvas-wrap">
+            <canvas id="chart" height="420"></canvas>
+
+            <div class="chart-controls">
+                <label><input type="checkbox" id="showBandW3" checked onchange="calculateAll(); saveCurrentTab();"> 大3核心区</label>
+                <label><input type="checkbox" id="showBandW4" checked onchange="calculateAll(); saveCurrentTab();"> 大4防守区</label>
+                <label><input type="checkbox" id="showBandW5" checked onchange="calculateAll(); saveCurrentTab();"> 大5核心区</label>
+                <label><input type="checkbox" id="showBandABC" checked onchange="calculateAll(); saveCurrentTab();"> ABC/C浪区</label>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:24px;">
+            <div class="card-title">
+                <span>📊 空间多级测算矩阵</span>
+                <span style="font-size:12px; color:var(--muted); font-weight:400;">五浪 / ABC / 子浪动态收敛</span>
+            </div>
+
+            <div class="summary">
+                <div class="summary-item">
+                    <div class="label">浪1幅度</div>
+                    <div class="value" id="sumW1">--</div>
+                </div>
+                <div class="summary-item">
+                    <div class="label">当前阶段</div>
+                    <div class="value" id="sumStage">--</div>
+                </div>
+                <div class="summary-item">
+                    <div class="label">大3核心区</div>
+                    <div class="value" id="sumW3">--</div>
+                </div>
+                <div class="summary-item">
+                    <div class="label">大5核心区</div>
+                    <div class="value" id="sumW5">--</div>
+                </div>
+            </div>
+
+            <div id="structureValidation" class="validation-box warn">
+                等待输入 P0、P1 后进行普通推动浪结构校验。
+            </div>
+
+            <div class="section">
+                <h3>一、主浪结构摘要</h3>
+                <table id="summaryTable">
+                    <thead>
+                        <tr>
+                            <th>节点</th>
+                            <th>价格</th>
+                            <th>状态</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <div class="section">
+                <h3>二、大2浪潜在筑底防守位</h3>
+                <table id="wave2Table">
+                    <thead>
+                        <tr>
+                            <th>回撤比例</th>
+                            <th>目标价</th>
+                            <th>说明</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <div class="section">
+                <h3>三、大3浪核心区间</h3>
+                <table id="wave3Table">
+                    <thead>
+                        <tr>
+                            <th>延伸比例</th>
+                            <th>目标价 / 区间</th>
+                            <th>说明</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+                <div id="wave3AlertBox"></div>
+            </div>
+
+            <div class="section">
+                <h3>四、大4浪潜在筑底防守位</h3>
+                <table id="wave4Table">
+                    <thead>
+                        <tr>
+                            <th>回撤比例</th>
+                            <th>目标价 / 区间</th>
+                            <th>规则校验</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+                <div class="notice">
+                    标准推动浪中，大4浪通常不应明显跌破大1浪高点 P1；若跌破，需要警惕浪型划分错误或市场结构转弱。
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>五、大5浪核心区间</h3>
+                <div id="wave5Box"></div>
+            </div>
+
+            <div class="section">
+                <h3>六、ABC 调整浪预测</h3>
+                <div id="abcBox"></div>
+            </div>
+
+            <div class="section" id="subResultSection" style="display:none;">
+                <h3>七、子浪波段推演与共振观察</h3>
+                <div id="subResults"></div>
+            </div>
+
+        </div>
+
+    </main>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+// 1. 初始化 Supabase 配置（请替换为您的实际凭证）
+const SUPABASE_URL = 'https://azquoojnwadtekkhxhui.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6cXVvb2pud2FkdGVra2h4aHVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MjY5OTMsImV4cCI6MjA4OTIwMjk5M30.v3vm-f_ufTFKc5PjGpf3Av9kDO_rwrL89XTMyauhh3g'; // 请确保这串 key 是完整的
+
+// 创建全局 supabase 客户端实例
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// 🆕 核心配置 3：页面加载时“自动拦截登录态”并“自动拉取云端数据”
+    // ========================================================
+    // ========================================================
+    // 🛠️ 2. 页面加载：安全拦截登录态
+    // ========================================================
+    document.addEventListener('DOMContentLoaded', async () => {
+        // 使用更安全的防崩溃写法
+        const { data, error } = await supabaseClient.auth.getSession();
+        const session = data?.session; // 如果 data 是空，这里的 ? 符号能防止代码崩溃
+
+        if (error || !session) {
+            alert("⚠️ 检测到未登录或网络受限！\n1. 请先通过主入口登录。\n2. 如果你是在本地双击打开的，必须上传到 GitHub 线上环境测试！");
+            window.location.href = 'https://gaman-cheung.github.io/Fibo-Tradingviewer/TradingViewerDoubleSys.html';
+            return;
+        }
+
+        console.log("👋 欢迎回来，已确认用户:", session.user.email);
+        await pullFromCloud();
+    });
+
+    // ========================================================
+    // 🆕 补充与融合：云端数据【推送】与【拉取】函数 (已全部升级为 getUser 写法)
+    // ========================================================
+
+const STORAGE_KEY = "wave_matrix_tabs_v3";
+const SHARED_INSTRUMENT_POOL_KEY = "tv_instrument_pool_v1";
+const SHARED_ACTIVE_INSTRUMENT_KEY = "tv_active_instrument_id";
+
+const DEFAULT_ACTIVE_RETRACE = ["0.236", "0.382", "0.5", "0.618", "0.786", "0.886"];
+const DEFAULT_ACTIVE_EXTEND = ["1", "1.272", "1.382", "1.618", "2", "2.618", "4.236"];
+
+const W4_RETRACE = [0.236, 0.382, 0.5, 0.618];
+const W5_BY_W1 = [0.618, 1, 1.272, 1.618];
+const W5_BY_W3 = [0.382, 0.5, 0.618, 1];
+const W5_BY_03 = [0.382, 0.618, 1];
+
+const ABC_A = [0.236, 0.382, 0.5, 0.618];
+const ABC_B = [0.382, 0.5, 0.618, 0.786, 0.886];
+const ABC_C = [0.618, 1, 1.272, 1.618];
+
+let subIdSeed = 0;
+let isRestoring = false;
+
+let appState = {
+    activeTabId: null,
+    tabs: [],
+    uiNotes: { marquee: "", tips: "" },
+    instrumentPool: { version:1, items:[], tombstones:[] }
+};
+
+function createEmptyTab(name = "新标的") {
+    return {
+        id: "tab_" + Date.now() + "_" + Math.random().toString(16).slice(2),
+        name,
+        form: {
+            symbolName: name,
+            p0: "",
+            p1: "",
+            p2: "",
+            p3: "",
+            p4: "",
+            p5: "",
+            aPoint: "",
+            bPoint: "",
+            customRetrace: "",
+            customExtend: "",
+            subToggle: false,
+            showBandW3: true,
+            showBandW4: true,
+            showBandW5: true,
+            showBandABC: true,
+            activeRetraceRatios: [...DEFAULT_ACTIVE_RETRACE],
+            activeExtendRatios: [...DEFAULT_ACTIVE_EXTEND],
+            subWaves: []
+        }
+    };
+}
+
+function normalizeSharedTicker(value) {
+    return String(value || "").trim().toUpperCase();
+}
+
+function createSharedInstrumentId() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    return `inst_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function loadSharedInstrumentPool() {
+    let localPool = null;
+    try { localPool = JSON.parse(localStorage.getItem(SHARED_INSTRUMENT_POOL_KEY) || "null"); } catch (e) {}
+    const embedded = appState?.instrumentPool;
+    const pools = [embedded, localPool].filter(pool => pool && Array.isArray(pool.items));
+    const merged = { version:1, items:[], tombstones:[] };
+    const byId = new Map();
+    const tombstones = new Map();
+    pools.forEach(pool => (pool.tombstones || []).forEach(entry => {
+        if (!entry?.id) return;
+        const existing = tombstones.get(entry.id);
+        if (!existing || Date.parse(entry.deletedAt || 0) >= Date.parse(existing.deletedAt || 0)) tombstones.set(entry.id, entry);
+    }));
+    pools.forEach(pool => pool.items.forEach(item => {
+        if (!item?.id) return;
+        const existing = byId.get(item.id);
+        const existingTime = Date.parse(existing?.updatedAt || existing?.createdAt || 0) || 0;
+        const itemTime = Date.parse(item.updatedAt || item.createdAt || 0) || 0;
+        if (!existing || itemTime >= existingTime) byId.set(item.id, { ...existing, ...item });
+    }));
+    tombstones.forEach((entry,id) => {
+        const item = byId.get(id);
+        if (!item || (Date.parse(entry.deletedAt || 0) || 0) >= (Date.parse(item.updatedAt || item.createdAt || 0) || 0)) byId.delete(id);
+    });
+    merged.items = [...byId.values()];
+    merged.tombstones = [...tombstones.values()];
+    return merged;
+}
+
+function saveSharedInstrumentPool(pool) {
+    pool.version = 1;
+    if (!Array.isArray(pool.tombstones)) pool.tombstones = [];
+    localStorage.setItem(SHARED_INSTRUMENT_POOL_KEY, JSON.stringify(pool));
+    appState.instrumentPool = pool;
+}
+
+function ensureWaveInstrumentLinks() {
+    const pool = loadSharedInstrumentPool();
+    const now = new Date().toISOString();
+    const mobileLayout = !!window.matchMedia?.('(max-width: 768px)').matches;
+    const deletedIds = new Set((pool.tombstones || []).map(entry => entry.id));
+    appState.tabs = appState.tabs.filter(tab => !tab.instrumentId || !deletedIds.has(tab.instrumentId));
+    const activePoolItems = pool.items.filter(item => item.status !== "archived");
+    if (mobileLayout && activePoolItems.length && appState.tabs.length === 1 && normalizeSharedTicker(appState.tabs[0]?.name) === normalizeSharedTicker("新标的")) appState.tabs = [];
+    const byId = new Map(pool.items.map(item => [item.id, item]));
+    const byTicker = new Map(pool.items.map(item => [normalizeSharedTicker(item.ticker), item]));
+
+    appState.tabs.forEach((tab, index) => {
+        let item = tab.instrumentId ? byId.get(tab.instrumentId) : null;
+        if (!item) item = byTicker.get(normalizeSharedTicker(tab.name || tab.form?.symbolName));
+        if (!item) {
+            const ticker = String(tab.name || tab.form?.symbolName || `Instrument ${index + 1}`).trim();
+            item = { id:createSharedInstrumentId(), ticker, code:"", market:"OTHER", order:pool.items.length, status:"active", createdAt:now, updatedAt:now, deletedAt:null };
+            pool.items.push(item); byId.set(item.id,item); byTicker.set(normalizeSharedTicker(item.ticker),item);
+        }
+        tab.instrumentId = item.id;
+        tab.name = item.ticker;
+        if (tab.form) tab.form.symbolName = item.ticker;
+    });
+
+    if (mobileLayout) {
+        pool.items.filter(item => item.status !== "archived").forEach(item => {
+            if (appState.tabs.some(tab => tab.instrumentId === item.id)) return;
+            const tab = createEmptyTab(item.ticker);
+            tab.instrumentId = item.id;
+            appState.tabs.push(tab);
+        });
+    }
+
+    const order = new Map(pool.items.map(item => [item.id, Number(item.order)]));
+    if (mobileLayout) appState.tabs.sort((a,b) => (order.get(a.instrumentId) ?? 1e9) - (order.get(b.instrumentId) ?? 1e9));
+    const activeIds = new Set(pool.items.filter(item => item.status !== "archived").map(item => item.id));
+    const requestedInstrumentId = localStorage.getItem(SHARED_ACTIVE_INSTRUMENT_KEY);
+    let active = appState.tabs.find(tab => tab.instrumentId === requestedInstrumentId && activeIds.has(tab.instrumentId));
+    if (!active) active = appState.tabs.find(tab => tab.id === appState.activeTabId && activeIds.has(tab.instrumentId));
+    if (!active) active = appState.tabs.find(tab => activeIds.has(tab.instrumentId));
+    if (active) {
+        appState.activeTabId = active.id;
+        localStorage.setItem(SHARED_ACTIVE_INSTRUMENT_KEY, active.instrumentId);
+    }
+    saveSharedInstrumentPool(pool);
+}
+
+function openSharedInstrumentPool() {
+    window.location.href = 'https://gaman-cheung.github.io/Fibo-Tradingviewer/TradingViewerOnline.html?tab=pool';
+}
+
+function persistTabs() {
+    ensureWaveUiNotes();
+    appState.instrumentPool = loadSharedInstrumentPool();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+}
+
+function ensureWaveUiNotes() {
+    if (!appState.uiNotes || typeof appState.uiNotes !== "object") appState.uiNotes = {};
+    if (typeof appState.uiNotes.marquee !== "string") appState.uiNotes.marquee = "";
+    if (typeof appState.uiNotes.tips !== "string") appState.uiNotes.tips = "";
+    return appState.uiNotes;
+}
+
+function loadTabs() {
+    const rawData = localStorage.getItem(STORAGE_KEY);
+
+    if (!rawData) {
+        const first = createEmptyTab("新标的");
+        appState.tabs = [first];
+        appState.activeTabId = first.id;
+        persistTabs();
+        return;
+    }
+
+    try {
+        appState = JSON.parse(rawData);
+        if (!appState.tabs || !appState.tabs.length) {
+            const first = createEmptyTab("新标的");
+            appState.tabs = [first];
+            appState.activeTabId = first.id;
+        }
+
+        if (!appState.activeTabId || !appState.tabs.find(t => t.id === appState.activeTabId)) {
+            appState.activeTabId = appState.tabs[0].id;
+        }
+    } catch (e) {
+        const first = createEmptyTab("新标的");
+        appState.tabs = [first];
+        appState.activeTabId = first.id;
+    }
+    ensureWaveUiNotes();
+}
+
+let waveNoteEditorMode = "tips";
+
+function renderWaveHeaderMarquee() {
+    const track = document.getElementById("waveReminderMarqueeText");
+    if (!track) return;
+    const notes = ensureWaveUiNotes();
+    const displayText = notes.marquee.trim() || "点击右侧铅笔，添加波浪推演纪律或盘前提醒";
+    track.textContent = displayText;
+    const duration = Math.max(30, Math.min(120, 26 + displayText.length * 0.42));
+    track.style.setProperty("--marquee-duration", `${duration}s`);
+    track.style.animation = "none";
+    void track.offsetWidth;
+    track.style.animation = "";
+}
+
+function openWaveNoteEditor(mode) {
+    waveNoteEditorMode = mode === "marquee" ? "marquee" : "tips";
+    const notes = ensureWaveUiNotes();
+    const backdrop = document.getElementById("waveNoteModalBackdrop");
+    const editor = document.getElementById("waveNoteEditorText");
+    const title = document.getElementById("waveNoteModalTitle");
+    const hint = document.getElementById("waveNoteModalHint");
+    const isMarquee = waveNoteEditorMode === "marquee";
+    title.textContent = isMarquee ? "编辑滚动提醒" : "Pro Tips";
+    editor.value = notes[waveNoteEditorMode] || "";
+    editor.placeholder = isMarquee
+        ? "例如：先确认浪级，再确认结构；不因主观预期强行数浪。"
+        : "在这里记录波浪划分原则、推演说明、复盘提示或名言警句……";
+    editor.style.minHeight = isMarquee ? "140px" : "340px";
+    hint.textContent = isMarquee
+        ? "保存后会在顶部慢速滚动；鼠标悬停可以暂停。Local Backup 与 Push to Cloud 均会保存。"
+        : "支持长文字和换行；Local Backup 与 Push to Cloud 均会保存。";
+    backdrop.classList.add("open");
+    backdrop.setAttribute("aria-hidden", "false");
+    setTimeout(() => editor.focus(), 0);
+}
+
+function closeWaveNoteEditor() {
+    const backdrop = document.getElementById("waveNoteModalBackdrop");
+    backdrop.classList.remove("open");
+    backdrop.setAttribute("aria-hidden", "true");
+}
+
+function saveWaveNoteEditor() {
+    const notes = ensureWaveUiNotes();
+    notes[waveNoteEditorMode] = document.getElementById("waveNoteEditorText").value;
+    persistTabs();
+    if (waveNoteEditorMode === "marquee") renderWaveHeaderMarquee();
+    closeWaveNoteEditor();
+}
+
+function handleWaveNoteBackdrop(event) {
+    if (event.target.id === "waveNoteModalBackdrop") closeWaveNoteEditor();
+}
+
+document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && document.getElementById("waveNoteModalBackdrop")?.classList.contains("open")) closeWaveNoteEditor();
+});
+
+function activeTab() {
+    return appState.tabs.find(t => t.id === appState.activeTabId);
+}
+
+function renderTabs() {
+    const box = document.getElementById("tabs");
+    const activeIds = new Set(loadSharedInstrumentPool().items.filter(item => item.status !== "archived").map(item => item.id));
+    box.innerHTML = appState.tabs.filter(tab => activeIds.has(tab.instrumentId)).map(tab => `
+        <div class="tab ${tab.id === appState.activeTabId ? "active" : ""}" onclick="switchTab('${tab.id}')">
+            <span>${escapeHtml(tab.name || "未命名标的")}</span>
+            <span class="close" onclick="event.stopPropagation(); closeTab('${tab.id}')">×</span>
+        </div>
+    `).join("");
+}
+
+function createNewTab() {
+    saveCurrentTab();
+
+    const tab = createEmptyTab("新标的");
+    const pool = loadSharedInstrumentPool();
+    const now = new Date().toISOString();
+    const instrumentId = createSharedInstrumentId();
+    pool.items.push({ id:instrumentId, ticker:"新标的", code:"", market:"OTHER", order:pool.items.filter(item => item.status !== "archived").length, status:"active", createdAt:now, updatedAt:now, deletedAt:null });
+    tab.instrumentId = instrumentId;
+    saveSharedInstrumentPool(pool);
+    appState.tabs.push(tab);
+    appState.activeTabId = tab.id;
+    localStorage.setItem(SHARED_ACTIVE_INSTRUMENT_KEY, instrumentId);
+
+    persistTabs();
+    renderTabs();
+    loadTabToForm(tab);
+    calculateAll();
+}
+
+function switchTab(id) {
+    if (id === appState.activeTabId) return;
+
+    saveCurrentTab();
+    appState.activeTabId = id;
+
+    const tab = activeTab();
+    if (tab?.instrumentId) localStorage.setItem(SHARED_ACTIVE_INSTRUMENT_KEY, tab.instrumentId);
+    loadTabToForm(tab);
+
+    persistTabs();
+    renderTabs();
+    calculateAll();
+}
+
+function closeTab(id) {
+    if (appState.tabs.length <= 1) {
+        alert("至少保留一个标的。");
+        return;
+    }
+
+    const idx = appState.tabs.findIndex(t => t.id === id);
+    if (idx === -1) return;
+
+    appState.tabs.splice(idx, 1);
+
+    if (appState.activeTabId === id) {
+        appState.activeTabId = appState.tabs[Math.max(0, idx - 1)].id;
+    }
+    const nextActive = activeTab();
+    if (nextActive?.instrumentId) localStorage.setItem(SHARED_ACTIVE_INSTRUMENT_KEY, nextActive.instrumentId);
+
+    persistTabs();
+    renderTabs();
+    loadTabToForm(activeTab());
+    calculateAll();
+}
+
+function renameActiveTab(name) {
+    const tab = activeTab();
+    if (!tab) return;
+
+    tab.name = name.trim() || "未命名标的";
+    if (tab.form) tab.form.symbolName = name;
+    const pool = loadSharedInstrumentPool();
+    const item = pool.items.find(entry => entry.id === tab.instrumentId);
+    if (item) { item.ticker = tab.name; item.updatedAt = new Date().toISOString(); saveSharedInstrumentPool(pool); }
+
+    renderTabs();
+    persistTabs();
+}
+
+function escapeHtml(str) {
+    return String(str)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+function getInputValue(id) {
+    const el = document.getElementById(id);
+    return el ? el.value : "";
+}
+
+function getCheckboxValue(id) {
+    const el = document.getElementById(id);
+    return el ? el.checked : false;
+}
+
+function getActiveRatioValues(type) {
+    return [...document.querySelectorAll(`.chip[data-type="${type}"].active`)]
+        .map(el => el.dataset.val);
+}
+
+function collectSubWaveForm() {
+    return [...document.querySelectorAll(".subwave-card")].map(card => {
+        const id = card.dataset.id;
+        return {
+            type: document.getElementById(`sub_${id}_type`)?.value || "up",
+            name: document.getElementById(`sub_${id}_name`)?.value || "",
+            high: document.getElementById(`sub_${id}_high`)?.value || "",
+            low: document.getElementById(`sub_${id}_low`)?.value || "",
+            current: document.getElementById(`sub_${id}_current`)?.value || ""
+        };
+    });
+}
+
+function saveCurrentTab() {
+    if (isRestoring) return;
+
+    const tab = activeTab();
+    if (!tab) return;
+
+    tab.form = {
+        symbolName: getInputValue("symbolName"),
+        p0: getInputValue("p0"),
+        p1: getInputValue("p1"),
+        p2: getInputValue("p2"),
+        p3: getInputValue("p3"),
+        p4: getInputValue("p4"),
+        p5: getInputValue("p5"),
+        aPoint: getInputValue("aPoint"),
+        bPoint: getInputValue("bPoint"),
+        customRetrace: getInputValue("customRetrace"),
+        customExtend: getInputValue("customExtend"),
+        subToggle: getCheckboxValue("subToggle"),
+        showBandW3: getCheckboxValue("showBandW3"),
+        showBandW4: getCheckboxValue("showBandW4"),
+        showBandW5: getCheckboxValue("showBandW5"),
+        showBandABC: getCheckboxValue("showBandABC"),
+        activeRetraceRatios: getActiveRatioValues("retrace"),
+        activeExtendRatios: getActiveRatioValues("extend"),
+        subWaves: collectSubWaveForm()
+    };
+
+    tab.name = tab.form.symbolName.trim() || tab.name || "未命名标的";
+
+    persistTabs();
+    renderTabs();
+}
+
+function setInputValue(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.value = value ?? "";
+}
+
+function setCheckboxValue(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.checked = !!value;
+}
+
+function restoreRatioChips(type, activeValues) {
+    const activeSet = new Set((activeValues || []).map(String));
+
+    document.querySelectorAll(`.chip[data-type="${type}"]`).forEach(chip => {
+        if (activeSet.has(String(chip.dataset.val))) {
+            chip.classList.add("active");
+        } else {
+            chip.classList.remove("active");
+        }
+    });
+}
+
+function loadTabToForm(tab) {
+    if (!tab) return;
+
+    isRestoring = true;
+
+    const f = tab.form || {};
+
+    setInputValue("symbolName", f.symbolName || tab.name || "");
+    setInputValue("p0", f.p0 || "");
+    setInputValue("p1", f.p1 || "");
+    setInputValue("p2", f.p2 || "");
+    setInputValue("p3", f.p3 || "");
+    setInputValue("p4", f.p4 || "");
+    setInputValue("p5", f.p5 || "");
+    setInputValue("aPoint", f.aPoint || "");
+    setInputValue("bPoint", f.bPoint || "");
+    setInputValue("customRetrace", f.customRetrace || "");
+    setInputValue("customExtend", f.customExtend || "");
+
+    setCheckboxValue("subToggle", !!f.subToggle);
+    setCheckboxValue("showBandW3", f.showBandW3 !== false);
+    setCheckboxValue("showBandW4", f.showBandW4 !== false);
+    setCheckboxValue("showBandW5", f.showBandW5 !== false);
+    setCheckboxValue("showBandABC", f.showBandABC !== false);
+
+    restoreRatioChips("retrace", f.activeRetraceRatios || DEFAULT_ACTIVE_RETRACE);
+    restoreRatioChips("extend", f.activeExtendRatios || DEFAULT_ACTIVE_EXTEND);
+
+    document.getElementById("subPanel").style.display = f.subToggle ? "block" : "none";
+    document.getElementById("subResultSection").style.display = f.subToggle ? "block" : "none";
+
+    restoreSubWaves(f.subWaves || []);
+
+    isRestoring = false;
+}
+
+function restoreSubWaves(list) {
+    const box = document.getElementById("subList");
+    if (!box) return;
+
+    box.innerHTML = "";
+    subIdSeed = 0;
+
+    list.forEach(sw => {
+        const legacyHigh = sw.p1 || "";
+        const legacyLow = sw.p0 || "";
+        const legacyCurrent = sw.p2 || "";
+
+        addSubWave(sw.type || "up", {
+            name: sw.name || "",
+            high: sw.high ?? legacyHigh,
+            low: sw.low ?? legacyLow,
+            current: sw.current ?? legacyCurrent
+        }, true);
+
+        const last = document.querySelector(".subwave-card:last-child");
+        if (!last) return;
+
+        const id = last.dataset.id;
+
+        document.getElementById(`sub_${id}_type`).value = sw.type || "up";
+        document.getElementById(`sub_${id}_name`).value = sw.name || "";
+        document.getElementById(`sub_${id}_high`).value = sw.high ?? legacyHigh;
+        document.getElementById(`sub_${id}_low`).value = sw.low ?? legacyLow;
+        document.getElementById(`sub_${id}_current`).value = sw.current ?? legacyCurrent;
+    });
+}
+
+// 假设您已经完成了 supabase 客户端初始化，并完成了用户登录
+
+// ☁️ 上传数据：将当前整个 appState 推送到云端对应的 wp_data 字段中
+// 🛠️ 3. 云端推送
+// ========================================================
+async function pushToCloud() {
+    if (typeof saveCurrentTab === 'function') saveCurrentTab();
+    ensureWaveInstrumentLinks();
+    appState.instrumentPool = loadSharedInstrumentPool();
+
+    // 使用更安全的防崩溃写法
+    const { data, error: userError } = await supabaseClient.auth.getUser();
+    const user = data?.user;
+
+    if (userError || !user) {
+        alert("未找到有效的用户信息，请重新登录！(请确保在线上环境运行)");
+        return;
+    }
+
+    const { error } = await supabaseClient
+        .from('fibo_data')
+        .upsert({
+            user_id: user.id,
+            wp_data: appState
+        }, { onConflict: 'user_id' });
+
+    if (error) {
+        alert("同步至云端失败：" + error.message);
+    } else {
+        alert("☁️ 矩阵数据已成功同步至云端！");
+    }
+}
+
+// ========================================================
+// 🛠️ 4. 云端拉取
+// ========================================================
+async function pullFromCloud() {
+    // 使用更安全的防崩溃写法
+    const { data: userData, error: userError } = await supabaseClient.auth.getUser();
+    const user = userData?.user;
+
+    if (userError || !user) return;
+
+    const { data, error } = await supabaseClient
+        .from('fibo_data')
+        .select('wp_data, v6_data')
+        .eq('user_id', user.id)
+        .single();
+
+    if (error && error.code !== 'PGRST116') {
+        alert("从云端拉取失败：" + error.message);
+        return;
+    }
+
+    if (data && data.wp_data) {
+        appState = data.wp_data;
+        const v6PoolCarrier = Array.isArray(data.v6_data) ? data.v6_data.find(item => item?.__instrument_pool_v1?.items) : null;
+        if (v6PoolCarrier?.__instrument_pool_v1?.items) {
+            const embeddedItems = Array.isArray(appState.instrumentPool?.items) ? appState.instrumentPool.items : [];
+            const embeddedTombstones = Array.isArray(appState.instrumentPool?.tombstones) ? appState.instrumentPool.tombstones : [];
+            const cloudTombstones = Array.isArray(v6PoolCarrier.__instrument_pool_v1.tombstones) ? v6PoolCarrier.__instrument_pool_v1.tombstones : [];
+            appState.instrumentPool = { version:1, items:[...embeddedItems, ...v6PoolCarrier.__instrument_pool_v1.items], tombstones:[...embeddedTombstones, ...cloudTombstones] };
+        }
+        if (appState.instrumentPool?.items && Array.isArray(appState.instrumentPool.items)) saveSharedInstrumentPool(appState.instrumentPool);
+        ensureWaveInstrumentLinks();
+        ensureWaveUiNotes();
+
+        if (typeof persistTabs === 'function') {
+            persistTabs();
+            renderTabs();
+            renderWaveHeaderMarquee();
+            loadTabToForm(activeTab());
+            calculateAll();
+        }
+        console.log("☁️ 成功从云端恢复推演矩阵数据！");
+    }
+}
+
+// ========================================================
+// 🛠️ 5. 登出
+// ========================================================
+async function logOutCloud() {
+    // 1. 如果有自定义逻辑，保留调用
+    if (typeof window.customLogOutCloud === "function") {
+        window.customLogOutCloud();
+    }
+
+    try {
+        // 2. 调用 Supabase 的标准登出方法
+        // 注意：这里需要用到你在脚本开头定义的 supabaseClient
+        const { error } = await supabaseClient.auth.signOut();
+
+        if (error) {
+            console.error("登出时出错:", error.message);
+            alert("登出失败，请稍后再试。");
+        } else {
+            console.log("已成功清除登录状态。");
+            alert('已安全登出！');
+
+            // 3. 核心：重定向回登录页
+            // 确保 TradingViewer.html 在根目录下
+            window.location.href = 'https://gaman-cheung.github.io/Fibo-Tradingviewer/TradingViewerDoubleSys.html';
+        }
+    } catch (e) {
+        console.error("登出逻辑异常:", e);
+        // 异常情况下也强制跳转
+        window.location.href = 'https://gaman-cheung.github.io/Fibo-Tradingviewer/TradingViewerDoubleSys.html';
+    }
+}
+
+function downloadLocalBackup() {
+    saveCurrentTab();
+
+    const blob = new Blob([JSON.stringify(appState, null, 2)], {
+        type: "application/json"
+    });
+
+    const a = document.createElement("a");
+    const date = new Date().toISOString().slice(0, 10);
+
+    a.href = URL.createObjectURL(blob);
+    a.download = `wave_matrix_backup_${date}.json`;
+    a.click();
+
+    URL.revokeObjectURL(a.href);
+}
+
+function importLocalBackup(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+        try {
+            const data = JSON.parse(e.target.result);
+
+            if (!data.tabs || !Array.isArray(data.tabs)) {
+                alert("备份文件格式不正确。");
+                return;
+            }
+
+            appState = data;
+            if (appState.instrumentPool?.items && Array.isArray(appState.instrumentPool.items)) saveSharedInstrumentPool(appState.instrumentPool);
+            ensureWaveInstrumentLinks();
+            ensureWaveUiNotes();
+
+            if (!appState.activeTabId || !appState.tabs.find(t => t.id === appState.activeTabId)) {
+                appState.activeTabId = appState.tabs[0]?.id || null;
+            }
+
+            persistTabs();
+            renderTabs();
+            renderWaveHeaderMarquee();
+            loadTabToForm(activeTab());
+            calculateAll();
+
+            alert("本地备份已导入。");
+        } catch (err) {
+            alert("导入失败：JSON 文件无法解析。");
+        } finally {
+            event.target.value = "";
+        }
+    };
+
+    reader.readAsText(file);
+}
+
+function raw(id) {
+    return document.getElementById(id)?.value.trim() || "";
+}
+
+function numOrNull(id) {
+    const v = raw(id);
+    if (v === "") return null;
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : null;
+}
+
+function num(id, fallback = 0) {
+    const n = numOrNull(id);
+    return n === null ? fallback : n;
+}
+
+function fmt(v, d = 2) {
+    if (v === null || v === undefined || !Number.isFinite(v)) return "--";
+    return Number(v).toFixed(d);
+}
+
+function fmt0(v) {
+    if (v === null || v === undefined || !Number.isFinite(v)) return "--";
+    return Number(v).toFixed(0);
+}
+
+function pct(r) {
+    return `${(r * 100).toFixed(1)}%`;
+}
+
+function parseRatios(id) {
+    return raw(id)
+        .split(/[,，\s]+/)
+        .map(v => parseFloat(v))
+        .filter(v => Number.isFinite(v) && v > 0);
+}
+
+function uniqueSorted(arr) {
+    return [...new Set(arr.map(v => Number(v.toFixed(6))))].sort((a, b) => a - b);
+}
+
+function selectedChipRatios(type) {
+    return [...document.querySelectorAll(`.chip[data-type="${type}"].active`)]
+        .map(el => parseFloat(el.dataset.val))
+        .filter(v => Number.isFinite(v) && v > 0);
+}
+
+function retraceRatios() {
+    return uniqueSorted([
+        ...selectedChipRatios("retrace"),
+        ...parseRatios("customRetrace")
+    ]);
+}
+
+function extendRatios() {
+    return uniqueSorted([
+        ...selectedChipRatios("extend"),
+        ...parseRatios("customExtend")
+    ]);
+}
+
+function rangeOf(arr) {
+    const vals = arr.filter(v => Number.isFinite(v));
+    if (!vals.length) return null;
+    return {
+        min: Math.min(...vals),
+        max: Math.max(...vals)
+    };
+}
+
+function rangeText(r) {
+    if (!r) return "--";
+    if (Math.abs(r.max - r.min) < 1e-7) return fmt(r.min);
+    return `${fmt(r.min)} - ${fmt(r.max)}`;
+}
+
+function makeRow(cells, cls = "") {
+    return `<tr class="${cls}">${cells.map(c => `<td>${c}</td>`).join("")}</tr>`;
+}
+
+function badge(text, type = "retrace") {
+    return `<span class="badge ${type}">${text}</span>`;
+}
+
+function getMain() {
+    return {
+        p0: numOrNull("p0"),
+        p1: numOrNull("p1"),
+        p2: numOrNull("p2"),
+        p3: numOrNull("p3"),
+        p4: numOrNull("p4"),
+        p5: numOrNull("p5"),
+        a: numOrNull("aPoint"),
+        b: numOrNull("bPoint")
+    };
+}
+
+function directionSign(p0, p1) {
+    if (p0 === null || p1 === null) return 1;
+    return p1 >= p0 ? 1 : -1;
+}
+
+function addByDir(base, len, ratio, dir) {
+    return base + dir * Math.abs(len) * ratio;
+}
+
+function subByDir(base, len, ratio, dir) {
+    return base - dir * Math.abs(len) * ratio;
+}
+
+function currentStage(m) {
+    if (m.p5 !== null && m.a !== null && m.b !== null) return "C浪推演";
+    if (m.p5 !== null && m.a !== null) return "B/C浪推演";
+    if (m.p5 !== null) return "ABC调整";
+    if (m.p4 !== null) return "大5浪";
+    if (m.p3 !== null) return "大4浪";
+    if (m.p2 !== null) return "大3浪";
+    if (m.p0 !== null && m.p1 !== null) return "大2浪";
+    return "等待输入";
+}
+
+function validateWaveStructure(m, dir) {
+    const errors = [];
+    const warnings = [];
+    const up = dir === 1;
+    const higher = (a, b) => up ? a > b : a < b;
+    const lower = (a, b) => up ? a < b : a > b;
+    const filled = key => m[key] !== null;
+
+    if (!filled("p0") || !filled("p1")) {
+        warnings.push("等待完整填写 P0、P1 后开始普通推动浪结构校验。");
+    }
+
+    if (filled("p0") && filled("p1") && m.p0 === m.p1) {
+        errors.push("P0 与 P1 相同，浪1没有有效幅度。");
+    }
+
+    if (filled("p2")) {
+        if (!filled("p0") || !filled("p1")) {
+            warnings.push("已填写 P2，但 P0/P1 不完整，无法验证浪2。");
+        } else {
+            if (!lower(m.p2, m.p1)) errors.push("P2 没有相对 P1 形成反向调整。");
+            if (!higher(m.p2, m.p0)) errors.push("P2 已越过或触及 P0，普通推动浪计数失效。");
+        }
+    }
+
+    if (filled("p3")) {
+        if (!filled("p2")) {
+            warnings.push("已填写 P3，但 P2 未确认，三浪结构只能作为区间假设。");
+        } else if (!higher(m.p3, m.p2)) {
+            errors.push("P3 没有沿主趋势越过 P2。");
+        }
+        if (filled("p1") && !higher(m.p3, m.p1)) {
+            errors.push("P3 未越过 P1，不符合普通推动浪的三浪结构。");
+        }
+    }
+
+    if (filled("p4")) {
+        if (!filled("p3")) {
+            warnings.push("已填写 P4，但 P3 未确认，四浪结构无法验证。");
+        } else if (!lower(m.p4, m.p3)) {
+            errors.push("P4 没有相对 P3 形成反向调整。");
+        }
+        if (filled("p1") && !higher(m.p4, m.p1)) {
+            errors.push("P4 已进入浪1价格区间；普通推动浪失效，除非按倾斜三角形重新标注。");
+        }
+    }
+
+    if (filled("p5")) {
+        if (!filled("p4")) {
+            warnings.push("已填写 P5，但 P4 未确认，五浪结构无法完整验证。");
+        } else if (!higher(m.p5, m.p4)) {
+            errors.push("P5 没有沿主趋势越过 P4。");
+        }
+        if (filled("p3") && !higher(m.p5, m.p3)) {
+            warnings.push("P5 未越过 P3，可能是失败五浪，也可能需要重新划分浪级。");
+        }
+    }
+
+    if (["p0","p1","p2","p3","p4","p5"].every(filled)) {
+        const w1 = Math.abs(m.p1 - m.p0);
+        const w3 = Math.abs(m.p3 - m.p2);
+        const w5 = Math.abs(m.p5 - m.p4);
+        if (w3 < w1 && w3 < w5) {
+            errors.push(`浪3幅度 ${fmt(w3)} 同时短于浪1 ${fmt(w1)} 与浪5 ${fmt(w5)}，违反“三浪不能最短”。`);
+        }
+    }
+
+    if (filled("a")) {
+        if (!filled("p5")) warnings.push("已填写 A 点，但 P5 未确认。");
+        else if (!lower(m.a, m.p5)) errors.push("A浪没有从 P5 向主趋势反方向运行。");
+    }
+
+    if (filled("b")) {
+        if (!filled("a")) warnings.push("已填写 B 点，但 A 点未确认。");
+        else if (!higher(m.b, m.a)) errors.push("B浪没有相对 A浪形成反弹。");
+        if (filled("p5") && higher(m.b, m.p5)) {
+            warnings.push("B浪越过 P5，可能属于扩散平台型调整，不能按普通锯齿形直接理解。");
+        }
+    }
+
+    return { errors, warnings, valid: errors.length === 0 };
+}
+
+function buildModel() {
+    const m = getMain();
+    const rts = retraceRatios();
+    const exts = extendRatios();
+
+    const dir = directionSign(m.p0, m.p1);
+    const w1Len = (m.p0 !== null && m.p1 !== null) ? Math.abs(m.p1 - m.p0) : null;
+
+    const wave2 = [];
+    const wave3 = [];
+    const wave4 = [];
+    const wave5 = [];
+    const abc = {
+        aTargets: [],
+        bTargets: [],
+        cTargets: []
+    };
+
+    if (w1Len !== null) {
+        rts.forEach(r => {
+            const price = subByDir(m.p1, w1Len, r, dir);
+            wave2.push({ ratio: r, price });
+        });
+    }
+
+    let p2Candidates = m.p2 !== null ? [m.p2] : wave2.map(x => x.price);
+
+    if (w1Len !== null && p2Candidates.length) {
+        exts.forEach(r => {
+            const prices = p2Candidates.map(p2 => addByDir(p2, w1Len, r, dir));
+            wave3.push({
+                ratio: r,
+                prices,
+                range: rangeOf(prices)
+            });
+        });
+    }
+
+    let p3Candidates = m.p3 !== null
+        ? [m.p3]
+        : wave3.filter(x => x.ratio >= 1.272 && x.ratio <= 2).flatMap(x => x.prices);
+
+    if (m.p2 !== null && p3Candidates.length) {
+        W4_RETRACE
+            .filter(r => rts.includes(r))
+            .forEach(r => {
+                const prices = p3Candidates.map(p3 => {
+                    const w3Len = Math.abs(p3 - m.p2);
+                    return subByDir(p3, w3Len, r, dir);
+                });
+
+                wave4.push({
+                    ratio: r,
+                    prices,
+                    range: rangeOf(prices)
+                });
+            });
+    }
+
+    let p4Candidates = m.p4 !== null
+        ? [m.p4]
+        : wave4.filter(x => x.ratio >= 0.236 && x.ratio <= 0.5).flatMap(x => x.prices);
+
+    if (p4Candidates.length && w1Len !== null) {
+        W5_BY_W1
+            .filter(r => exts.includes(r) || r === 0.618)
+            .forEach(r => {
+                const prices = p4Candidates.map(p4 => addByDir(p4, w1Len, r, dir));
+                wave5.push({
+                    method: "按浪1幅度",
+                    ratio: r,
+                    prices,
+                    range: rangeOf(prices)
+                });
+            });
+    }
+
+    if (p4Candidates.length && m.p2 !== null && p3Candidates.length) {
+        W5_BY_W3
+            .filter(r => rts.includes(r) || exts.includes(r))
+            .forEach(r => {
+                let prices = [];
+                p4Candidates.forEach(p4 => {
+                    p3Candidates.forEach(p3 => {
+                        const w3Len = Math.abs(p3 - m.p2);
+                        prices.push(addByDir(p4, w3Len, r, dir));
+                    });
+                });
+
+                wave5.push({
+                    method: "按浪3幅度",
+                    ratio: r,
+                    prices,
+                    range: rangeOf(prices)
+                });
+            });
+    }
+
+    if (p4Candidates.length && m.p0 !== null && p3Candidates.length) {
+        W5_BY_03
+            .filter(r => rts.includes(r) || exts.includes(r))
+            .forEach(r => {
+                let prices = [];
+                p4Candidates.forEach(p4 => {
+                    p3Candidates.forEach(p3 => {
+                        const len03 = Math.abs(p3 - m.p0);
+                        prices.push(addByDir(p4, len03, r, dir));
+                    });
+                });
+
+                wave5.push({
+                    method: "按0-3整体",
+                    ratio: r,
+                    prices,
+                    range: rangeOf(prices)
+                });
+            });
+    }
+
+    if (m.p5 !== null && m.p0 !== null) {
+        const totalLen = Math.abs(m.p5 - m.p0);
+
+        ABC_A
+            .filter(r => rts.includes(r))
+            .forEach(r => {
+                abc.aTargets.push({
+                    ratio: r,
+                    price: subByDir(m.p5, totalLen, r, dir)
+                });
+            });
+
+        const aCandidates = m.a !== null ? [m.a] : abc.aTargets.map(x => x.price);
+
+        if (aCandidates.length) {
+            ABC_B
+                .filter(r => rts.includes(r))
+                .forEach(r => {
+                    const prices = aCandidates.map(a => {
+                        const aLen = Math.abs(m.p5 - a);
+                        return addByDir(a, aLen, r, dir);
+                    });
+
+                    abc.bTargets.push({
+                        ratio: r,
+                        prices,
+                        range: rangeOf(prices)
+                    });
+                });
+        }
+
+        if (m.a !== null) {
+            const bCandidates = m.b !== null
+                ? [m.b]
+                : abc.bTargets.filter(x => x.ratio >= 0.382 && x.ratio <= 0.786).flatMap(x => x.prices);
+
+            ABC_C
+                .filter(r => exts.includes(r) || r === 0.618)
+                .forEach(r => {
+                    const aLen = Math.abs(m.p5 - m.a);
+                    const prices = bCandidates.map(b => subByDir(b, aLen, r, dir));
+
+                    abc.cTargets.push({
+                        ratio: r,
+                        prices,
+                        range: rangeOf(prices)
+                    });
+                });
+        }
+    }
+
+    return {
+        main: m,
+        dir,
+        w1Len,
+        retrace: rts,
+        extend: exts,
+        wave2,
+        wave3,
+        wave4,
+        wave5,
+        abc,
+        subWaves: readSubWaves(),
+        validation: validateWaveStructure(m, dir)
+    };
+}
+
+function calculateAll() {
+    const model = buildModel();
+
+    renderStructureValidation(model);
+    renderSummary(model);
+    renderWave2(model);
+    renderWave3(model);
+    renderWave4(model);
+    renderWave5(model);
+    renderABC(model);
+    renderSubResults(model);
+    drawChart(model);
+}
+
+function renderStructureValidation(model) {
+    const box = document.getElementById("structureValidation");
+    if (!box) return;
+
+    const { errors, warnings } = model.validation;
+    if (!errors.length && !warnings.length) {
+        box.className = "validation-box ok";
+        box.innerHTML = "✅ 当前已输入节点未触发普通推动浪硬规则冲突。未填写的后续节点仍属于情景推演。";
+        return;
+    }
+
+    box.className = `validation-box ${errors.length ? "error" : "warn"}`;
+    const errorHtml = errors.length
+        ? `<strong>⛔ 结构错误（${errors.length}）</strong><ul>${errors.map(x => `<li>${escapeHtml(x)}</li>`).join("")}</ul>`
+        : "";
+    const warningHtml = warnings.length
+        ? `<strong>⚠ 例外/待确认（${warnings.length}）</strong><ul>${warnings.map(x => `<li>${escapeHtml(x)}</li>`).join("")}</ul>`
+        : "";
+    box.innerHTML = `${errorHtml}${warningHtml}<div style="margin-top:6px;">目标矩阵仍保留作重标浪级参考；存在红色错误时，不应把投影视为正式交易目标。</div>`;
+}
+
+function renderSummary(model) {
+    const m = model.main;
+
+    document.getElementById("sumW1").innerText = model.w1Len !== null ? fmt(model.w1Len) : "--";
+    document.getElementById("sumStage").innerText = model.validation.errors.length ? "⚠ 结构待重标" : currentStage(m);
+
+    const w3Range = rangeOf(model.wave3.flatMap(x => x.prices || []));
+    document.getElementById("sumW3").innerText = w3Range ? `${fmt0(w3Range.min)}-${fmt0(w3Range.max)}` : "--";
+
+    const w5Range = rangeOf(model.wave5.flatMap(x => x.prices || []));
+    document.getElementById("sumW5").innerText = w5Range ? `${fmt0(w5Range.min)}-${fmt0(w5Range.max)}` : "--";
+
+    const tbody = document.querySelector("#summaryTable tbody");
+    const nodes = [
+        ["P0", m.p0, "大浪起点"],
+        ["P1", m.p1, "大1浪高点"],
+        ["P2", m.p2, "大2浪低点"],
+        ["P3", m.p3, "大3浪高点"],
+        ["P4", m.p4, "大4浪低点"],
+        ["P5", m.p5, "大5浪高点"],
+        ["A", m.a, "A浪低点"],
+        ["B", m.b, "B浪反弹高点"]
+    ];
+
+    tbody.innerHTML = nodes.map(n => makeRow([
+        n[0],
+        n[1] === null ? "--" : `<strong>${fmt(n[1])}</strong>`,
+        n[1] === null ? `<span style="color:var(--muted);">未确认，用区间推演</span>` : `${badge("已确认", "extend")} ${n[2]}`
+    ])).join("");
+}
+
+function renderWave2(model) {
+    const tbody = document.querySelector("#wave2Table tbody");
+    const m = model.main;
+
+    if (!model.wave2.length) {
+        tbody.innerHTML = makeRow(["--", "--", "请先填写 P0 和 P1，并至少启用一个回撤参数"]);
+        return;
+    }
+
+    tbody.innerHTML = model.wave2.map(x => {
+        const cls = m.p2 !== null && model.w1Len && Math.abs(x.price - m.p2) <= model.w1Len * 0.02 ? "highlight" : "";
+        return makeRow([
+            badge(pct(x.ratio), "retrace"),
+            `<strong>${fmt(x.price)}</strong>`,
+            `大1浪回撤 ${pct(x.ratio)} 的潜在防守位`
+        ], cls);
+    }).join("");
+}
+
+function renderWave3(model) {
+    const tbody = document.querySelector("#wave3Table tbody");
+    const alertBox = document.getElementById("wave3AlertBox");
+
+    if (!model.wave3.length) {
+        tbody.innerHTML = makeRow(["--", "--", "需要 P0、P1，并至少有 P2 或大2浪候选区间，同时启用延伸参数"]);
+        alertBox.innerHTML = "";
+        return;
+    }
+
+    tbody.innerHTML = model.wave3.map(x => makeRow([
+        badge(pct(x.ratio), "extend"),
+        `<strong>${rangeText(x.range)}</strong>`,
+        model.main.p2 !== null
+            ? `以已确认 P2=${fmt(model.main.p2)} 为起点，按浪1幅度外推`
+            : `P2 未确认，基于大2浪候选区间做宽幅推演`
+    ])).join("");
+
+    const alert = getWave3ExtensionAlert(model);
+    alertBox.innerHTML = alert ? renderWave3ExtensionAlert(alert, model) : "";
+}
+
+function getWave3ExtensionAlert(model) {
+    const m = model.main;
+
+    if (
+        m.p0 === null ||
+        m.p1 === null ||
+        m.p2 === null ||
+        m.p3 === null ||
+        !model.w1Len ||
+        !model.extend.length
+    ) {
+        return null;
+    }
+
+    const actualW3Len = Math.abs(m.p3 - m.p2);
+    const actualRatio = actualW3Len / model.w1Len;
+    const maxEnabled = Math.max(...model.extend);
+
+    if (!Number.isFinite(actualRatio) || !Number.isFinite(maxEnabled)) return null;
+
+    if (actualRatio <= maxEnabled) return null;
+
+    return {
+        actualW3Len,
+        actualRatio,
+        maxEnabled
+    };
+}
+
+function renderWave3ExtensionAlert(alert, model) {
+    const m = model.main;
+    const highRatios = [5, 5.236, 6.18, 6.854, 8, 10];
+
+    const rows = highRatios.map(r => {
+        const target = addByDir(m.p2, model.w1Len, r, model.dir);
+        const diffPct = Math.abs(m.p3 - target) / Math.abs(target || 1);
+
+        const mark = diffPct <= 0.015
+            ? badge("P3接近该级别", "warn")
+            : `<span style="color:var(--muted);">距离 ${(diffPct * 100).toFixed(2)}%</span>`;
+
+        return [
+            badge(pct(r), "extend"),
+            `<strong>${fmt(target)}</strong>`,
+            mark
+        ];
+    });
+
+    return `
+        <div class="notice">
+            <strong>⚠ 大3浪异常延伸监测</strong><br>
+            当前大3实际幅度：${fmt(alert.actualW3Len)}，
+            约为浪1的 <strong>${pct(alert.actualRatio)}</strong>。<br>
+            已超过当前启用延伸矩阵上限 ${pct(alert.maxEnabled)}。<br>
+            这可能意味着：三浪强延伸、P1/P2浪级偏小、或当前P3仍只是更大级别三浪内部子浪高点。<br>
+            后续大4、大5推演仍会以已确认 P3 为基础继续计算。
+        </div>
+
+        <h4 style="margin-top:14px;">大3高阶延伸参考，不自动纳入默认计算</h4>
+        ${tableHTML(["高阶比例", "参考价", "与P3关系"], rows)}
+
+        <div class="hint" style="margin-top:8px;">
+            如果你认为该标的长期处于极强趋势，可手动把某个高阶比例，例如 5.236 或 6.18，
+            填入“自定义延伸参数”，系统才会把它纳入正式矩阵。
+        </div>
+    `;
+}
+
+function renderWave4(model) {
+    const tbody = document.querySelector("#wave4Table tbody");
+    const m = model.main;
+
+    if (!model.wave4.length) {
+        tbody.innerHTML = makeRow(["--", "--", "需要 P2，并至少有 P3 或大3浪候选区间"]);
+        return;
+    }
+
+    tbody.innerHTML = model.wave4.map(x => {
+        const r = x.range;
+        let rule = "结构正常观察区";
+
+        if (r && m.p1 !== null) {
+            if (model.dir === 1 && r.min < m.p1) {
+                rule = badge("可能跌破P1，一四浪重叠风险", "danger");
+            } else if (model.dir === -1 && r.max > m.p1) {
+                rule = badge("可能上破P1，一四浪重叠风险", "danger");
+            } else {
+                rule = badge("未触发一四浪重叠", "extend");
+            }
+        }
+
+        return makeRow([
+            badge(pct(x.ratio), "retrace"),
+            `<strong>${rangeText(r)}</strong>`,
+            rule
+        ]);
+    }).join("");
+}
+
+function renderWave5(model) {
+    const box = document.getElementById("wave5Box");
+
+    if (!model.wave5.length) {
+        box.innerHTML = `<div class="empty">需要 P4，或需要 P2/P3 推导出大4浪候选区间后，才能推演大5浪。</div>`;
+        return;
+    }
+
+    const groups = {};
+    model.wave5.forEach(x => {
+        if (!groups[x.method]) groups[x.method] = [];
+        groups[x.method].push(x);
+    });
+
+    let html = "";
+
+    Object.keys(groups).forEach(method => {
+        html += `<h4>${method}</h4>`;
+        html += tableHTML(
+            ["比例", "目标价 / 区间", "说明"],
+            groups[method].map(x => [
+                badge(pct(x.ratio), "extend"),
+                `<strong>${rangeText(x.range)}</strong>`,
+                `${method}测算大5浪潜在目标`
+            ])
+        );
+    });
+
+    const clusters = findClusters(model.wave5.flatMap(x => x.prices || []), 0.015);
+
+    if (clusters.length) {
+        html += `<div class="notice"><strong>大5浪共振区：</strong><br>`;
+        html += clusters.map(c => `• ${fmt(c.min)} - ${fmt(c.max)}，聚合点数量 ${c.count}`).join("<br>");
+        html += `</div>`;
+    }
+
+    box.innerHTML = html;
+}
+
+function renderABC(model) {
+    const box = document.getElementById("abcBox");
+    const m = model.main;
+
+    if (m.p5 === null) {
+        box.innerHTML = `<div class="empty">P5 尚未确认。ABC 调整浪预测需要先确认或假设大5浪高点。</div>`;
+        return;
+    }
+
+    let html = "";
+
+    html += `<h4>A浪潜在下跌目标</h4>`;
+    html += tableHTML(["回撤比例", "A浪目标", "说明"], model.abc.aTargets.map(x => [
+        badge(pct(x.ratio), "retrace"),
+        `<strong>${fmt(x.price)}</strong>`,
+        `以 P5 到 P0 的整体涨幅回撤 ${pct(x.ratio)}`
+    ]));
+
+    html += `<h4>B浪反弹目标</h4>`;
+    if (model.abc.bTargets.length) {
+        html += tableHTML(["反弹比例", "B浪目标 / 区间", "提示"], model.abc.bTargets.map(x => {
+            let warn = "A浪未确认时，以A候选区间推导";
+            if (m.a !== null) warn = `以 A=${fmt(m.a)} 为起点反弹`;
+
+            if (x.range && m.p5 !== null) {
+                if (model.dir === 1 && x.range.max > m.p5) {
+                    warn = badge("可能为扩大型平台或P5划分需重估", "warn");
+                }
+                if (model.dir === -1 && x.range.min < m.p5) {
+                    warn = badge("可能为扩大型平台或P5划分需重估", "warn");
+                }
+            }
+
+            return [
+                badge(pct(x.ratio), "retrace"),
+                `<strong>${rangeText(x.range)}</strong>`,
+                warn
+            ];
+        }));
+    } else {
+        html += `<div class="empty">需要 P5，并至少有 A浪候选或 A浪确认值。</div>`;
+    }
+
+    html += `<h4>C浪下跌目标</h4>`;
+    if (model.abc.cTargets.length) {
+        html += tableHTML(["C浪比例", "C浪目标 / 区间", "说明"], model.abc.cTargets.map(x => [
+            badge(pct(x.ratio), "extend"),
+            `<strong>${rangeText(x.range)}</strong>`,
+            x.ratio === 1
+                ? "C=A 等长位置，常见调整目标"
+                : `C浪按A浪长度的 ${pct(x.ratio)} 测算`
+        ]));
+    } else {
+        html += `<div class="empty">C浪推演需要 A浪确认；B浪可手动填写，未填写时使用B浪候选区间。</div>`;
+    }
+
+    box.innerHTML = html;
+}
+
+function tableHTML(headers, rows) {
+    if (!rows.length) {
+        return `<div class="empty">当前参数下暂无可计算结果。</div>`;
+    }
+
+    return `
+        <table>
+            <thead>
+                <tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr>
+            </thead>
+            <tbody>
+                ${rows.map(r => makeRow(r)).join("")}
+            </tbody>
+        </table>
+    `;
+}
+
+/**
+ * 子浪波段
+ */
+function toggleSubPanel() {
+    const checked = document.getElementById("subToggle").checked;
+    document.getElementById("subPanel").style.display = checked ? "block" : "none";
+    document.getElementById("subResultSection").style.display = checked ? "block" : "none";
+
+    if (checked && document.querySelectorAll(".subwave-card").length === 0) {
+        addSubWave("up");
+    }
+
+    calculateAll();
+}
+
+function addSubWave(type = "up", defaults = null, restoring = false) {
+    const id = ++subIdSeed;
+    const m = getMain();
+
+    let baseLow = m.p2 ?? m.p0 ?? "";
+    let baseHigh = m.p3 ?? m.p1 ?? "";
+
+    let name = defaults?.name ?? "";
+    let high = defaults?.high ?? baseHigh;
+    let low = defaults?.low ?? baseLow;
+    let current = defaults?.current ?? "";
+
+    if (high === "" && low !== "") {
+        high = Number(low) + 100;
+    }
+
+    if (low === "" && high !== "") {
+        low = Number(high) - 100;
+    }
+
+    const div = document.createElement("div");
+    div.className = "subwave-card";
+    div.dataset.id = id;
+
+    div.innerHTML = `
+        <div class="subwave-header">
+            <strong>子浪波段 #${id}</strong>
+            <button class="btn-danger" onclick="removeSubWave(${id}); saveCurrentTab();">删除</button>
+        </div>
+
+        <div class="input-group">
+            <input type="text" id="sub_${id}_name" value="${name}" placeholder=" " oninput="calculateAll(); saveCurrentTab();">
+            <label>波段名称，如 子浪1、3浪-1、4浪A</label>
+        </div>
+
+        <div class="input-group">
+            <select id="sub_${id}_type" onchange="calculateAll(); saveCurrentTab();">
+                <option value="up" ${type === "up" ? "selected" : ""}>上涨波段</option>
+                <option value="down" ${type === "down" ? "selected" : ""}>下跌波段</option>
+            </select>
+            <label>波段方向</label>
+        </div>
+
+        <div class="grid-3">
+            <div class="input-group">
+                <input type="number" id="sub_${id}_high" value="${high}" placeholder=" " oninput="calculateAll(); saveCurrentTab();">
+                <label>High 波段高点</label>
+            </div>
+
+            <div class="input-group">
+                <input type="number" id="sub_${id}_low" value="${low}" placeholder=" " oninput="calculateAll(); saveCurrentTab();">
+                <label>Low 波段低点</label>
+            </div>
+
+            <div class="input-group">
+                <input type="number" id="sub_${id}_current" value="${current}" placeholder=" " oninput="calculateAll(); saveCurrentTab();">
+                <label>Current 当前价，可空</label>
+            </div>
+        </div>
+
+        <p class="hint">
+            上涨波段：以 Low → High 作为一个完整波段，计算回撤支撑和向上延伸。<br>
+            下跌波段：以 High → Low 作为一个完整波段，计算反弹压力和向下延伸。
+        </p>
+    `;
+
+    document.getElementById("subList").appendChild(div);
+
+    if (!restoring) calculateAll();
+}
+
+function removeSubWave(id) {
+    const el = document.querySelector(`.subwave-card[data-id="${id}"]`);
+    if (el) el.remove();
+    calculateAll();
+}
+
+function readSubWaves() {
+    if (!document.getElementById("subToggle").checked) return [];
+
+    return [...document.querySelectorAll(".subwave-card")].map(card => {
+        const id = card.dataset.id;
+        const type = document.getElementById(`sub_${id}_type`).value;
+        const name = document.getElementById(`sub_${id}_name`)?.value.trim() || `子浪波段 #${id}`;
+
+        const highRaw = document.getElementById(`sub_${id}_high`)?.value.trim() || "";
+        const lowRaw = document.getElementById(`sub_${id}_low`)?.value.trim() || "";
+        const currentRaw = document.getElementById(`sub_${id}_current`)?.value.trim() || "";
+
+        const high = highRaw === "" ? null : parseFloat(highRaw);
+        const low = lowRaw === "" ? null : parseFloat(lowRaw);
+        const current = currentRaw === "" ? null : parseFloat(currentRaw);
+
+        const valid = Number.isFinite(high) && Number.isFinite(low) && high !== low;
+        const len = valid ? Math.abs(high - low) : null;
+
+        return {
+            id,
+            type,
+            name,
+            high,
+            low,
+            current,
+            len,
+            valid
+        };
+    });
+}
+
+function autoContinueSubWave() {
+    const waves = readSubWaves().filter(w => w.valid);
+
+    if (!waves.length) {
+        addSubWave("up");
+        return;
+    }
+
+    const last = waves[waves.length - 1];
+    // 本功能是同方向数学扩展，而不是自动判断下一浪方向。
+    const type = last.type;
+
+    let high, low, current;
+
+    if (type === "up") {
+        low = last.current ?? last.low;
+        high = low + last.len * 1.272;
+        current = "";
+    } else {
+        high = last.current ?? last.high;
+        low = high - last.len * 1.272;
+        current = "";
+    }
+
+    addSubWave(type, {
+        name: "",
+        high,
+        low,
+        current
+    });
+}
+
+function calcSubTargets(sw, rts, exts) {
+    let retraces = [];
+    let extensionTargets = [];
+
+    if (!sw.valid) {
+        return {
+            retraces,
+            extensionTargets
+        };
+    }
+
+    const high = sw.high;
+    const low = sw.low;
+    const len = sw.len;
+
+    if (sw.type === "up") {
+        retraces = rts.map(r => ({
+            ratio: r,
+            price: high - len * r
+        }));
+
+        extensionTargets = exts.map(r => ({
+            ratio: r,
+            price: low + len * r
+        }));
+    } else {
+        retraces = rts.map(r => ({
+            ratio: r,
+            price: low + len * r
+        }));
+
+        extensionTargets = exts.map(r => ({
+            ratio: r,
+            price: high - len * r
+        }));
+    }
+
+    return {
+        retraces,
+        extensionTargets
+    };
+}
+
+function renderSubResults(model) {
+    const section = document.getElementById("subResultSection");
+    const box = document.getElementById("subResults");
+
+    const active = document.getElementById("subToggle").checked;
+    section.style.display = active ? "block" : "none";
+
+    if (!active) {
+        box.innerHTML = "";
+        return;
+    }
+
+    if (!model.subWaves.length) {
+        box.innerHTML = `<div class="empty">尚未添加子浪波段。</div>`;
+        return;
+    }
+
+    let html = "";
+
+    const macroTargets = [
+        ...model.wave3.flatMap(x => x.prices || []),
+        ...model.wave5.flatMap(x => x.prices || [])
+    ];
+
+    model.subWaves.forEach(sw => {
+        if (!sw.valid) {
+            html += `
+                <h4>${escapeHtml(sw.name)} ｜数据不完整</h4>
+                <div class="empty">请填写有效的 High 和 Low，且 High 不能等于 Low。</div>
+            `;
+            return;
+        }
+
+        const t = calcSubTargets(sw, model.retrace, model.extend);
+        const name = sw.type === "up" ? "上涨波段" : "下跌波段";
+        const currentInfo = getSubCurrentStatus(sw, t);
+
+        html += `
+            <h4>
+                ${escapeHtml(sw.name)} ｜${name}
+                ｜High=${fmt(sw.high)}，Low=${fmt(sw.low)}
+                ${sw.current !== null ? `，Current=${fmt(sw.current)}` : ""}
+            </h4>
+        `;
+
+        if (currentInfo) {
+            html += `<div class="notice">${currentInfo}</div>`;
+        }
+
+        html += tableHTML(
+            [sw.type === "up" ? "回撤比例" : "反弹比例", "预测价", "说明"],
+            t.retraces.map(x => [
+                badge(pct(x.ratio), "retrace"),
+                `<strong>${fmt(x.price)}</strong>`,
+                sw.type === "up"
+                    ? `该波段上涨后的潜在回撤支撑`
+                    : `该波段下跌后的潜在反弹压力`
+            ])
+        );
+
+        html += tableHTML(
+            ["延伸比例", "预测价", "共振检测"],
+            t.extensionTargets.map(x => {
+                const near = macroTargets.find(mt => Math.abs(x.price - mt) / Math.abs(mt || 1) <= 0.012);
+
+                return [
+                    badge(pct(x.ratio), "extend"),
+                    `<strong>${fmt(x.price)}</strong>`,
+                    near
+                        ? badge(`与大浪目标 ${fmt(near)} 共振`, "warn")
+                        : `<span style="color:var(--muted);">暂无明显共振</span>`
+                ];
+            })
+        );
+    });
+
+    box.innerHTML = html;
+}
+
+function getSubCurrentStatus(sw, targets) {
+    if (sw.current === null || !Number.isFinite(sw.current)) return "";
+
+    const allLevels = [
+        ...targets.retraces.map(x => ({
+            type: sw.type === "up" ? "回撤支撑" : "反弹压力",
+            ratio: x.ratio,
+            price: x.price
+        })),
+        ...targets.extensionTargets.map(x => ({
+            type: sw.type === "up" ? "上涨延伸" : "下跌延伸",
+            ratio: x.ratio,
+            price: x.price
+        }))
+    ];
+
+    if (!allLevels.length) return "";
+
+    const nearest = allLevels
+        .map(x => ({
+            ...x,
+            diff: Math.abs(sw.current - x.price),
+            diffPct: Math.abs(sw.current - x.price) / Math.abs(x.price || 1)
+        }))
+        .sort((a, b) => a.diff - b.diff)[0];
+
+    if (!nearest) return "";
+
+    const nearText = nearest.diffPct <= 0.01
+        ? badge("当前价接近关键位", "warn")
+        : `<span style="color:var(--muted);">当前价距离最近关键位 ${(nearest.diffPct * 100).toFixed(2)}%</span>`;
+
+    return `
+        ${nearText}
+        最近位置：${nearest.type} ${pct(nearest.ratio)}
+        ｜价格 ${fmt(nearest.price)}
+    `;
+}
+
+function findClusters(prices, tolerance = 0.015) {
+    const arr = prices.filter(Number.isFinite).sort((a, b) => a - b);
+    const clusters = [];
+
+    arr.forEach(p => {
+        let found = false;
+
+        for (const c of clusters) {
+            const mid = (c.min + c.max) / 2;
+            if (Math.abs(p - mid) / Math.abs(mid || 1) <= tolerance) {
+                c.min = Math.min(c.min, p);
+                c.max = Math.max(c.max, p);
+                c.count++;
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            clusters.push({ min: p, max: p, count: 1 });
+        }
+    });
+
+    return clusters.filter(c => c.count >= 3).sort((a, b) => b.count - a.count).slice(0, 5);
+}
+
+/**
+ * Canvas 绘图
+ */
+function isChecked(id) {
+    const el = document.getElementById(id);
+    return el ? el.checked : true;
+}
+
+function drawChart(model) {
+    const canvas = document.getElementById("chart");
+    const ctx = canvas.getContext("2d");
+
+    canvas.width = canvas.parentElement.clientWidth;
+
+    const w = canvas.width;
+    const h = canvas.height;
+
+    ctx.clearRect(0, 0, w, h);
+
+    const m = model.main;
+
+    let prices = [];
+
+    ["p0","p1","p2","p3","p4","p5","a","b"].forEach(k => {
+        if (m[k] !== null) prices.push(m[k]);
+    });
+
+    model.wave2.forEach(x => prices.push(x.price));
+    model.wave3.forEach(x => prices.push(...x.prices));
+    model.wave4.forEach(x => prices.push(...x.prices));
+    model.wave5.forEach(x => prices.push(...x.prices));
+    model.abc.aTargets.forEach(x => prices.push(x.price));
+    model.abc.bTargets.forEach(x => prices.push(...x.prices));
+    model.abc.cTargets.forEach(x => prices.push(...x.prices));
+
+    model.subWaves.forEach(sw => {
+        if (sw.high !== null) prices.push(sw.high);
+        if (sw.low !== null) prices.push(sw.low);
+        if (sw.current !== null) prices.push(sw.current);
+    });
+
+    if (!prices.length) {
+        drawEmptyChart(ctx, w, h);
+        return;
+    }
+
+    const minP = Math.min(...prices) * 0.96;
+    const maxP = Math.max(...prices) * 1.04;
+    const range = maxP - minP || 1;
+
+    const y = p => h - ((p - minP) / range) * (h - 70) - 35;
+    const x = ratio => ratio * w;
+
+    drawGrid(ctx, w, h);
+
+    const w3Range = rangeOf(model.wave3.flatMap(a => a.prices || []));
+    const w4Range = rangeOf(model.wave4.flatMap(a => a.prices || []));
+    const w5Range = rangeOf(model.wave5.flatMap(a => a.prices || []));
+    const cRange = rangeOf(model.abc.cTargets.flatMap(a => a.prices || []));
+
+    if (isChecked("showBandW3")) {
+        drawFullWidthBand(ctx, w3Range, y, w, "rgba(66,133,244,.10)", "#4285F4", "大3核心区");
+    }
+
+    if (isChecked("showBandW4")) {
+        drawFullWidthBand(ctx, w4Range, y, w, "rgba(52,168,83,.13)", "#188038", "大4防守区");
+    }
+
+    if (isChecked("showBandW5")) {
+        drawFullWidthBand(ctx, w5Range, y, w, "rgba(251,188,5,.14)", "#b06000", "大5核心区");
+    }
+
+    if (isChecked("showBandABC")) {
+        drawFullWidthBand(ctx, cRange, y, w, "rgba(176,0,32,.10)", "#b00020", "C浪目标区");
+    }
+
+    const mainPoints = [
+        ["0", m.p0, .06],
+        ["①", m.p1, .18],
+        ["②", m.p2, .30],
+        ["③", m.p3, .44],
+        ["④", m.p4, .58],
+        ["⑤", m.p5, .72],
+        ["A", m.a, .82],
+        ["B", m.b, .90]
+    ].filter(p => p[1] !== null);
+
+    if (mainPoints.length >= 2) {
+        ctx.save();
+        ctx.strokeStyle = "#4285F4";
+        ctx.lineWidth = 3;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+
+        mainPoints.forEach((p, i) => {
+            const px = x(p[2]);
+            const py = y(p[1]);
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        });
+
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    mainPoints.forEach(p => drawPoint(ctx, p[0], x(p[2]), y(p[1]), "#4285F4"));
+
+    /**
+     * 修正点：
+     * 子浪不再单独从画布中间开始，而是从主浪最后一个已确认点连续接上。
+     */
+    const validSubs = model.subWaves.filter(sw => sw.valid);
+
+    if (validSubs.length) {
+        const anchor = mainPoints.length ? mainPoints[mainPoints.length - 1] : null;
+        const points = [];
+
+        if (anchor) {
+            points.push({
+                label: anchor[0],
+                price: anchor[1],
+                ratio: anchor[2],
+                isAnchor: true
+            });
+        }
+
+        validSubs.forEach(sw => {
+            let segmentPoints;
+
+            if (sw.type === "up") {
+                segmentPoints = [
+                    { label: `s${sw.id}-L`, price: sw.low },
+                    { label: `s${sw.id}-H`, price: sw.high }
+                ];
+            } else {
+                segmentPoints = [
+                    { label: `s${sw.id}-H`, price: sw.high },
+                    { label: `s${sw.id}-L`, price: sw.low }
+                ];
+            }
+
+            if (sw.current !== null && Number.isFinite(sw.current)) {
+                segmentPoints.push({
+                    label: `s${sw.id}-C`,
+                    price: sw.current
+                });
+            }
+
+            segmentPoints.forEach(p => {
+                const last = points[points.length - 1];
+
+                if (last && Math.abs(last.price - p.price) < 1e-7) {
+                    return;
+                }
+
+                points.push(p);
+            });
+        });
+
+        if (points.length >= 2) {
+            const startRatio = anchor ? Math.min(anchor[2] + 0.04, 0.74) : 0.36;
+            const endRatio = 0.92;
+            const movableCount = anchor ? points.length - 1 : points.length;
+            const step = movableCount > 0 ? (endRatio - startRatio) / movableCount : 0;
+
+            points.forEach((p, i) => {
+                if (p.isAnchor) {
+                    p.x = x(p.ratio);
+                } else {
+                    const movableIndex = anchor ? i - 1 : i;
+                    p.x = x(startRatio + step * movableIndex);
+                }
+
+                p.y = y(p.price);
+            });
+
+            ctx.save();
+            ctx.strokeStyle = "#009688";
+            ctx.lineWidth = 2.4;
+            ctx.beginPath();
+
+            points.forEach((p, i) => {
+                if (i === 0) ctx.moveTo(p.x, p.y);
+                else ctx.lineTo(p.x, p.y);
+            });
+
+            ctx.stroke();
+            ctx.restore();
+
+            points.forEach(p => {
+                if (!p.isAnchor) {
+                    drawPoint(ctx, p.label, p.x, p.y, "#188038", 10);
+                }
+            });
+        }
+    }
+}
+
+function drawEmptyChart(ctx, w, h) {
+    drawGrid(ctx, w, h);
+
+    ctx.save();
+    ctx.fillStyle = "#999";
+    ctx.font = "14px Roboto";
+    ctx.textAlign = "center";
+    ctx.fillText("请输入 P0 和 P1 开始推演", w / 2, h / 2);
+    ctx.restore();
+}
+
+function drawGrid(ctx, w, h) {
+    ctx.save();
+    ctx.strokeStyle = "rgba(0,0,0,.05)";
+    ctx.lineWidth = 1;
+
+    for (let i = 1; i < 6; i++) {
+        const yy = h / 6 * i;
+        ctx.beginPath();
+        ctx.moveTo(0, yy);
+        ctx.lineTo(w, yy);
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
+
+function drawFullWidthBand(ctx, r, yFn, w, fill, stroke, label) {
+    if (!r) return;
+
+    const yTop = yFn(r.max);
+    const yBottom = yFn(r.min);
+
+    const top = Math.min(yTop, yBottom);
+    const height = Math.max(Math.abs(yBottom - yTop), 4);
+
+    const left = 38;
+    const right = w - 38;
+
+    ctx.save();
+
+    ctx.fillStyle = fill;
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1;
+
+    ctx.fillRect(left, top, right - left, height);
+    ctx.strokeRect(left, top, right - left, height);
+
+    ctx.fillStyle = stroke;
+    ctx.font = "12px Roboto";
+    ctx.fillText(`${label}: ${fmt0(r.min)} - ${fmt0(r.max)}`, left + 8, top + 15);
+
+    ctx.restore();
+}
+
+function drawPoint(ctx, text, px, py, color, size = 12) {
+    ctx.save();
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(px, py, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.font = `bold ${size}px Roboto`;
+    ctx.fillText(text, px + 6, py - 8);
+
+    ctx.restore();
+}
+
+/**
+ * 斐波那契 chip 点击
+ */
+document.addEventListener("click", function(e) {
+    const chip = e.target.closest(".selectable-ratios .chip");
+    if (!chip) return;
+
+    chip.classList.toggle("active");
+    calculateAll();
+    saveCurrentTab();
+});
+
+window.addEventListener("resize", calculateAll);
+
+window.onload = function() {
+    loadTabs();
+    ensureWaveInstrumentLinks();
+    persistTabs();
+    renderTabs();
+    renderWaveHeaderMarquee();
+    loadTabToForm(activeTab());
+    calculateAll();
+};
+</script>
+
+</body>
+</html>

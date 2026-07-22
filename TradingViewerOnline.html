@@ -1,0 +1,1544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TradingViewer</title>
+    <link rel="icon" type="image/png" href="logo.png">
+
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        :root {
+            --g-blue: #4285F4; --g-red: #EA4335; --g-yellow: #FBBC05; --g-green: #34A853;
+            --bg-color: #f8f9fa; --surface-color: #ffffff; --border-color: #dadce0; --text-primary: #202124; --text-secondary: #5f6368;
+        }
+        body { font-family: 'Roboto', sans-serif; background-color: var(--bg-color); margin: 0; padding: 16px; color: var(--text-primary); }
+
+        /* Header & Tabs */
+        .header { display: flex; align-items: center; margin-bottom: 16px; justify-content: space-between; flex-wrap: wrap; gap: 10px;}
+        .header-left { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+
+        /* Editable reminder marquee */
+        .header-reminder {
+            box-sizing: border-box; flex: 1 1 320px; min-width: 240px; height: 44px; display: flex; align-items: center;
+            overflow: hidden; padding: 4px; background: #e8eaed; border: 0; border-radius: 8px;
+            color: var(--text-secondary);
+        }
+        .header-reminder > .material-icons { flex: 0 0 auto; margin: 0 8px 0 6px; font-size: 18px; color: var(--text-secondary); }
+        .marquee-viewport {
+            flex: 1; min-width: 0; height: 36px; display: flex; align-items: center;
+            overflow: hidden; white-space: nowrap; background: var(--surface-color); border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .marquee-track {
+            display: inline-block; min-width: max-content; padding-left: 100%; font-size: 13px; font-weight: 700;
+            animation: reminder-marquee var(--marquee-duration, 36s) linear infinite;
+        }
+        .header-reminder:hover .marquee-track { animation-play-state: paused; }
+        @keyframes reminder-marquee { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+        .marquee-edit {
+            flex: 0 0 36px; align-self: stretch; margin-left: 4px; border: 0; border-radius: 6px;
+            background: transparent; color: var(--text-secondary); cursor: pointer;
+        }
+        .marquee-edit:hover { background: var(--surface-color); color: var(--g-blue); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .marquee-edit .material-icons { font-size: 17px; vertical-align: middle; }
+
+        /* Editable notes / tips modal */
+        .note-modal-backdrop {
+            display: none; position: fixed; inset: 0; z-index: 10000; padding: 24px;
+            align-items: center; justify-content: center; background: rgba(32,33,36,0.48);
+        }
+        .note-modal-backdrop.open { display: flex; }
+        .note-modal {
+            width: min(760px, 94vw); max-height: 88vh; display: flex; flex-direction: column;
+            background: white; border-radius: 12px; box-shadow: 0 18px 50px rgba(0,0,0,0.28); overflow: hidden;
+        }
+        .note-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border-color); }
+        .note-modal-header h2 { margin: 0; font-size: 18px; }
+        .note-modal-close { border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; padding: 4px; border-radius: 50%; }
+        .note-modal-close:hover { background: #f1f3f4; }
+        .note-modal-body { padding: 16px 18px; overflow: auto; }
+        .note-textarea {
+            box-sizing: border-box; width: 100%; min-height: 340px; resize: vertical; padding: 14px;
+            border: 1px solid var(--border-color); border-radius: 8px; outline: none; text-align: left;
+            font: 14px/1.75 'Roboto', sans-serif; color: var(--text-primary); background: #fcfcfc;
+        }
+        .note-textarea:focus { border-color: var(--g-blue); box-shadow: 0 0 0 3px rgba(66,133,244,0.12); }
+        .note-modal-hint { margin-top: 8px; color: var(--text-secondary); font-size: 12px; }
+        .note-modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--border-color); }
+        .btn-note-save { background: var(--g-blue); border-color: var(--g-blue); color: white; }
+        .btn-note-save:hover { background: #3367d6; color: white; }
+        .btn-util.btn-pro-tips { background: #f8f9fa; border-color: #3c4043; color: #202124; }
+        .btn-util.btn-pro-tips:hover { background: #e8eaed; box-shadow: 0 1px 3px rgba(60,64,67,0.3); }
+
+        /* 3. Logo 样式 */
+        .app-logo { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,0.2); border: 2px solid var(--g-blue); }
+        .header h1 { font-size: 24px; margin: 0; display: flex; align-items: center; gap: 10px; font-weight: 900;}
+
+        .tab-container { display: flex; background: #e8eaed; border-radius: 8px; padding: 4px; display: inline-flex;}
+        .tab-btn {
+            background: transparent; border: none; padding: 8px 16px; border-radius: 6px;
+            font-size: 14px; font-weight: bold; color: var(--text-secondary); cursor: pointer; transition: 0.3s;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .tab-btn.active { background: var(--surface-color); color: var(--g-blue); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        #btn-pool { display:none; }
+
+        /* Utility Buttons */
+        .util-btns { display: flex; gap: 8px; flex-wrap: wrap;}
+        .btn-util {
+            display: inline-flex; align-items: center; gap: 4px; background: white; border: 1px solid var(--border-color);
+            padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: bold; cursor: pointer; color: var(--text-secondary); transition: 0.2s;
+        }
+        .btn-util:hover { background: #f1f3f4; color: var(--text-primary); }
+
+        /* Cloud Buttons Specific Styles */
+        .btn-util.btn-switch-system {background: #f8f9fa;border-color: #3c4043;color: #202124;}
+        .btn-util.btn-switch-system:hover {background: #e8eaed;box-shadow: 0 1px 3px rgba(60,64,67,0.3);}
+        .btn-cloud-up { color: #188038; border-color: #188038; background: #e6f4ea;}
+        .btn-cloud-up:hover { background: #ceead6; color: #137333;}
+        .btn-cloud-down { color: var(--g-blue); border-color: var(--g-blue); background: #e8f0fe;}
+        .btn-cloud-down:hover { background: #d2e3fc; color: #174ea6;}
+
+        /* 退出按钮的基础样式（复用 btn-util） */
+        .btn-util.btn-logout {
+            margin-left: 10px; /* 保持你想要的间距 */
+            color: #5f6368;    /* 初始文字颜色 */
+        }
+
+        /* 退出按钮特有的悬停效果：变红 */
+        .btn-util.btn-logout:hover {
+            background: #fdf2f2;      /* 淡淡的红背景 */
+            border-color: #f5c2c7;    /* 浅红边框 */
+            color: #d32f2f;           /* 红色文字 */
+        }
+
+        /* Table Styles */
+        .tab-content { display: none; animation: fadeIn 0.3s ease; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        .table-card { background: var(--surface-color); border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); overflow-x: auto; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+        th { background: #f1f3f4; color: var(--text-secondary); padding: 12px 8px; font-size: 12px; font-weight: 500; text-align: center; position: sticky; top: 0; z-index: 10;}
+        td { padding: 8px; border-bottom: 1px solid var(--border-color); font-size: 13px; text-align: center; vertical-align: middle; height: 48px; }
+        tbody tr:hover { background-color: rgba(66, 133, 244, 0.04); }
+
+        th.col-base { border-bottom: 3px solid var(--g-blue); }
+        th.col-retrace { border-bottom: 3px solid var(--g-green); }
+        th.col-target { border-bottom: 3px solid var(--g-yellow); }
+        th.col-indicator { border-bottom: 3px solid #ab47bc; }
+        th.col-ai { border-bottom: 3px solid #ff6d00; background: #fff3e0;}
+
+        input, select { padding: 8px 4px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; width: 60px; outline: none; text-align: center; font-family: 'Roboto', sans-serif;}
+        input:focus, select:focus { border-color: var(--g-blue); background: #f8faff; box-shadow: 0 0 0 2px rgba(66,133,244,0.1);}
+        .input-name { width: 70px; text-align: left; text-transform: uppercase; font-weight: bold; }
+        .input-rsi { width: 45px; }
+        .input-risk { width: 66px; }
+        select { width: 105px; cursor: pointer; }
+
+        .calc-result { font-family: 'Roboto Mono', monospace; font-weight: 500; position: relative;}
+        .profit-pct { color: var(--g-red); font-weight: 900; font-size: 13px;}
+
+        .highlight-cell { background-color: #e8f0fe !important; color: var(--g-blue) !important; font-weight: 900; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(66,133,244,0.3);}
+        .sr-tag { display: block; font-size: 10px; font-weight: 800; margin-top: 4px; padding: 2px 0; border-radius: 3px; letter-spacing: 0.5px; line-height: 1; }
+        .sr-tag.sup { background: rgba(52, 168, 83, 0.15); color: #188038; }
+        .sr-tag.res { background: rgba(234, 67, 53, 0.15); color: #c5221f; }
+
+        .status-badge { display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; min-width: 70px; }
+        .ai-badge { display: inline-block; padding: 6px 10px; border-radius: 4px; font-size: 12px; font-weight: 900; letter-spacing: 0.5px; text-transform: uppercase; min-width: 80px;}
+        .risk-ok { color:#137333; font-weight:900; }
+        .risk-warn { color:#b06000; font-weight:900; }
+        .risk-bad { color:#c5221f; font-weight:900; }
+        .level-map { min-width: 180px; text-align:left; line-height:1.55; white-space:normal; }
+        .level-map .resistance { color:#c5221f; }
+        .level-map .support { color:#137333; }
+        .level-map .event { color:#b06000; font-weight:900; }
+        .market-cell { min-width:115px; line-height:1.55; }
+        .current-proxy { width:78px; font-weight:900; border-color:var(--g-blue); }
+        .market-summary { margin-top:5px; line-height:1.45; }
+        .auto-level { min-width:105px; line-height:1.55; }
+        .auto-level .price { font-weight:900; font-size:14px; }
+        .auto-level .up { color:#c5221f; font-weight:900; }
+        .auto-level .down { color:#137333; font-weight:900; }
+        .auto-level small { color:var(--text-secondary); white-space:normal; display:block; }
+        .v7-top-scroll {
+            height:16px; overflow-x:auto; overflow-y:hidden; margin:0 2px 6px;
+            position:sticky; top:0; z-index:30; background:var(--bg-color);
+            border:1px solid var(--border-color); border-radius:8px;
+        }
+        .v7-top-scroll-inner { height:1px; }
+        #v7TableCard { margin-bottom:12px; }
+
+        tr.dragging { opacity: 0.5; background-color: #e8f0fe; }
+        .action-cell { display: flex; align-items: center; justify-content: center; gap: 4px; }
+        .btn-icon { color: var(--text-secondary); cursor: pointer; padding: 4px; border-radius: 50%; transition: 0.2s; user-select: none; font-size: 18px;}
+        .btn-icon:hover { color: var(--text-primary); background: #e8eaed; }
+        .btn-delete:hover { color: var(--g-red); background: rgba(234,67,53,0.1); }
+        .drag-handle { cursor: grab; }
+        .drag-handle:active { cursor: grabbing; }
+
+        .btn-add {
+            display: inline-flex; align-items: center; gap: 8px; background: var(--g-blue); color: white; border: none;
+            padding: 10px 20px; border-radius: 20px; font-weight: 500; font-size: 14px; cursor: pointer; box-shadow: 0 2px 6px rgba(66,133,244,0.3); transition: 0.2s;
+        }
+        .btn-add:hover { background: #3367d6; box-shadow: 0 4px 10px rgba(66,133,244,0.4); }
+        .btn-sync { background: #fff; color: var(--g-blue); border: 2px solid var(--g-blue); }
+        .btn-sync:hover { background: #e8f0fe; box-shadow: none;}
+
+        .action-bar { display: flex; gap: 12px; align-items: center; }
+
+        /* Instrument Pool */
+        .pool-toolbar {
+            display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px;
+            background:var(--surface-color); border-radius:8px; padding:14px 16px; box-shadow:0 2px 6px rgba(0,0,0,.08);
+        }
+        .pool-toolbar h2 { margin:0; font-size:18px; }
+        .pool-search { flex:1 1 260px; width:auto; min-width:180px; text-align:left; padding:10px 12px; }
+        .pool-count { color:var(--text-secondary); font-size:12px; white-space:nowrap; }
+        .pool-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:14px; }
+        .instrument-card {
+            position:relative; background:var(--surface-color); border:1px solid var(--border-color); border-radius:10px;
+            padding:15px; box-shadow:0 2px 6px rgba(0,0,0,.06); transition:.2s;
+        }
+        .instrument-card:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,0,0,.1); }
+        .instrument-card.dragging { opacity:.45; }
+        .instrument-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+        .instrument-name { font-size:16px; font-weight:900; overflow-wrap:anywhere; }
+        .instrument-code { color:var(--text-secondary); font-size:11px; margin-top:3px; }
+        .instrument-meta { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:14px 0; }
+        .instrument-meta div { background:#f8f9fa; border-radius:6px; padding:8px; text-align:center; font-size:11px; color:var(--text-secondary); }
+        .instrument-meta strong { display:block; margin-top:3px; color:var(--text-primary); font-size:13px; }
+        .instrument-actions { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+        .pool-action { border:1px solid var(--border-color); background:white; border-radius:16px; padding:6px 10px; cursor:pointer; font-size:12px; }
+        .pool-action:hover { background:#f1f3f4; }
+        .pool-action.danger { color:#c5221f; border-color:#f5c2c7; }
+        .pool-drag { cursor:grab; color:var(--text-secondary); user-select:none; }
+        .pool-empty { grid-column:1/-1; padding:40px 20px; text-align:center; color:var(--text-secondary); background:white; border-radius:8px; }
+        .trash-panel { margin-top:22px; background:white; border-radius:8px; padding:14px 16px; box-shadow:0 2px 6px rgba(0,0,0,.06); }
+        .trash-panel summary { cursor:pointer; font-weight:700; color:var(--text-secondary); }
+        .trash-list { display:grid; gap:8px; margin-top:12px; }
+        .trash-item { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px; background:#f8f9fa; border-radius:6px; }
+        .instrument-dialog-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+        .instrument-dialog-grid label { display:block; color:var(--text-secondary); font-size:12px; margin-bottom:5px; }
+        .instrument-dialog-grid input, .instrument-dialog-grid select { box-sizing:border-box; width:100%; text-align:left; padding:10px; }
+
+        /* Loader */
+        #loader { display: none; position: fixed; top: 16px; right: 50%; transform: translateX(50%); background: #333; color: white; padding: 8px 24px; border-radius: 20px; font-size: 14px; font-weight: bold; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+
+        @media (max-width: 768px) {
+            #btn-pool { display:flex; }
+            .header-reminder { order: 3; flex-basis: 100%; }
+            .pool-grid { grid-template-columns:1fr; }
+            .instrument-dialog-grid { grid-template-columns:1fr; }
+            td:first-child, th:first-child { position: sticky; left: 0; background: white; z-index: 2; box-shadow: 2px 0 5px rgba(0,0,0,0.05);}
+            th:first-child { background: #f1f3f4; z-index: 11; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loader">Syncing...</div>
+
+    <div class="header">
+        <div class="header-left">
+            <h1><img src="logo.png" alt="Logo" class="app-logo"> TradingViewer</h1>
+            <div class="tab-container">
+                <button class="tab-btn" onclick="switchTab('pool')" id="btn-pool">
+                    <span class="material-icons" style="font-size: 18px;">inventory_2</span> Pool
+                </button>
+                <button class="tab-btn active" onclick="switchTab('v6')" id="btn-v6">
+                    <span class="material-icons" style="font-size: 18px;">travel_explore</span> Look first
+                </button>
+                <button class="tab-btn" onclick="switchTab('v7')" id="btn-v7">
+                    <span class="material-icons" style="font-size: 18px;">track_changes</span> Then leap
+                </button>
+            </div>
+        </div>
+        <div class="header-reminder" title="慢速滚动；鼠标悬停暂停">
+            <span class="material-icons">campaign</span>
+            <div class="marquee-viewport"><div class="marquee-track" id="reminderMarqueeText"></div></div>
+            <button type="button" class="marquee-edit" onclick="openNoteEditor('marquee')" title="编辑滚动提醒">
+                <span class="material-icons">edit</span>
+            </button>
+        </div>
+        <div class="util-btns">
+            <button type="button" class="btn-util btn-pro-tips" onclick="openNoteEditor('tips')"><span class="material-icons" style="font-size:16px;">menu_book</span> Pro Tips</button>
+            <button class="btn-util btn-switch-system" onclick="window.location.href='https://gaman-cheung.github.io/Fibo-Tradingviewer/wavecalfullfinal.html'"><span class="material-icons" style="font-size:16px;">functions</span> 波浪推演矩阵</button>
+            <button class="btn-util btn-cloud-down" onclick="loadFromCloud()" id="btn-pull"><span class="material-icons" style="font-size:16px;">cloud_download</span> Pull from Cloud</button>
+            <button class="btn-util btn-cloud-up" onclick="saveToCloud()" id="btn-push"><span class="material-icons" style="font-size:16px;">cloud_upload</span> Push to Cloud</button> 
+            
+            <button class="btn-util" onclick="exportData()"><span class="material-icons" style="font-size:16px;">save_alt</span> Local Backup</button>
+            <button class="btn-util" onclick="document.getElementById('importFile').click()"><span class="material-icons" style="font-size:16px;">folder_open</span></button>
+            
+            <button id="logoutBtn" class="btn-util btn-logout" style="margin-left: 10px;"><span class="material-icons" style="font-size:16px;">logout</span> Log Out</button>
+            <input type="file" id="importFile" style="display:none;" accept=".json" onchange="importData(event)">
+        </div>
+    </div>
+
+    <div id="tab-pool" class="tab-content">
+        <div class="pool-toolbar">
+            <h2>Instrument Pool</h2>
+            <input id="poolSearch" class="pool-search" type="search" placeholder="Search ticker / code" oninput="renderInstrumentPool()">
+            <span class="pool-count" id="poolCount">0 instruments</span>
+            <button type="button" class="btn-add" onclick="openInstrumentDialog()"><span class="material-icons">add</span> Add Instrument</button>
+        </div>
+        <div id="instrumentPoolGrid" class="pool-grid"></div>
+        <details class="trash-panel">
+            <summary>Recently Removed <span id="trashCount"></span></summary>
+            <div id="instrumentTrashList" class="trash-list"></div>
+        </details>
+    </div>
+
+    <div id="tab-v6" class="tab-content active">
+        <div class="table-card">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="col-base">Ticker</th>
+                        <th class="col-base">High</th>
+                        <th class="col-base">Low</th>
+                        <th class="col-base">Current</th>
+                        <th class="col-retrace">📉 23.6%</th>
+                        <th class="col-retrace">📉 38.2%</th>
+                        <th class="col-retrace">⚖️ 50.0%</th>
+                        <th class="col-retrace">💎 61.8%</th>
+                        <th class="col-retrace">🚨 78.6%</th>
+                        <th class="col-retrace">🧛 88.6%</th>
+                        <th class="col-target">🚀 127.2%</th>
+                        <th class="col-target">Target %</th>
+                        <th class="col-target">🌕 161.8%</th>
+                        <th class="col-target">Target %</th>
+                        <th class="col-target">🌌 261.8%</th>
+                        <th class="col-target">Target %</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBodyV6"></tbody>
+            </table>
+        </div>
+        <button onclick="createDesktopInstrumentRow()" class="btn-add"><span class="material-icons">add</span> Add Look first Row</button>
+    </div>
+
+    <div id="tab-v7" class="tab-content">
+        <div class="v7-top-scroll" id="v7TopScroll" title="完整视图横向滚动条"><div class="v7-top-scroll-inner" id="v7TopScrollInner"></div></div>
+        <div class="table-card" id="v7TableCard">
+            <table id="v7Table">
+                <thead>
+                    <tr>
+                        <th class="col-base">Ticker</th>
+                        <th class="col-base">Current / Zone</th>
+                        <th class="col-retrace">Support / %</th>
+                        <th class="col-retrace">Pressure / %</th>
+                        <th class="col-target">Auto T1 / %</th>
+                        <th class="col-target">Auto T2 / %</th>
+                        <th class="col-target">R:R</th>
+                        <th class="col-indicator detail-col">Prev Close</th>
+                        <th class="col-indicator detail-col">VR (5D)</th>
+                        <th class="col-indicator detail-col">Stop</th>
+                        <th class="col-target detail-col">T1 Override</th>
+                        <th class="col-target detail-col">T2 Override</th>
+                        <th class="col-indicator detail-col">% Baseline</th>
+                        <th class="col-indicator detail-col">Trend (13d)</th>
+                        <th class="col-indicator detail-col">RSI (14)</th>
+                        <th class="col-indicator detail-col">MACD Trend</th>
+                        <th class="col-ai">🎯 Composite Signal</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBodyV7"></tbody>
+            </table>
+        </div>
+        <div class="action-bar">
+            <button onclick="switchTab('v6')" class="btn-add" style="background:var(--g-red);"><span class="material-icons">add</span> 在 Look first 添加标的</button>
+        </div>
+        <div style="margin-top:10px;color:var(--text-secondary);font-size:12px;line-height:1.6;">
+            High、Low及斐波那契位自动引用 Look first；Then leap 的 Current 是同一数据源的代理输入。Prev Close 为上一交易日收盘价；VR (5D) 可直接填写券商软件显示的五日量比。T1/T2 Override 留空即使用自动目标。
+        </div>
+    </div>
+
+    <div class="note-modal-backdrop" id="noteModalBackdrop" onclick="handleNoteBackdrop(event)" aria-hidden="true">
+        <div class="note-modal" role="dialog" aria-modal="true" aria-labelledby="noteModalTitle">
+            <div class="note-modal-header">
+                <h2 id="noteModalTitle">Pro Tips</h2>
+                <button type="button" class="note-modal-close" onclick="closeNoteEditor()" title="关闭"><span class="material-icons">close</span></button>
+            </div>
+            <div class="note-modal-body">
+                <textarea id="noteEditorText" class="note-textarea"></textarea>
+                <div class="note-modal-hint" id="noteModalHint">内容保存在当前浏览器，并包含在 Local Backup 中。</div>
+            </div>
+            <div class="note-modal-footer">
+                <button type="button" class="btn-util" onclick="closeNoteEditor()">取消</button>
+                <button type="button" class="btn-util btn-note-save" onclick="saveNoteEditor()"><span class="material-icons" style="font-size:16px;">save</span> 保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="note-modal-backdrop" id="instrumentModalBackdrop" onclick="handleInstrumentBackdrop(event)" aria-hidden="true">
+        <div class="note-modal" role="dialog" aria-modal="true" aria-labelledby="instrumentModalTitle" style="width:min(560px,94vw);">
+            <div class="note-modal-header">
+                <h2 id="instrumentModalTitle">Add Instrument</h2>
+                <button type="button" class="note-modal-close" onclick="closeInstrumentDialog()" title="关闭"><span class="material-icons">close</span></button>
+            </div>
+            <div class="note-modal-body">
+                <input type="hidden" id="instrumentEditId">
+                <div class="instrument-dialog-grid">
+                    <div><label for="instrumentTicker">Ticker / Name</label><input id="instrumentTicker" type="text" placeholder="e.g. 弘信电子"></div>
+                    <div><label for="instrumentCode">Code (optional)</label><input id="instrumentCode" type="text" placeholder="e.g. 300657"></div>
+                    <div><label for="instrumentMarket">Market</label><select id="instrumentMarket"><option value="CN-A">A Share</option><option value="HK">Hong Kong</option><option value="US">US</option><option value="INDEX">Index</option><option value="OTHER">Other</option></select></div>
+                </div>
+                <div class="note-modal-hint">Ticker可以修改；永久ID由系统生成且不会因改名或排序改变。</div>
+            </div>
+            <div class="note-modal-footer">
+                <button type="button" class="btn-util" onclick="closeInstrumentDialog()">Cancel</button>
+                <button type="button" class="btn-util btn-note-save" onclick="saveInstrumentDialog()"><span class="material-icons" style="font-size:16px;">save</span> Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ================= Supabase 配置区域 =================
+            // ⚠️ 请在这里填入你的真实数据
+            const supabaseUrl = 'https://azquoojnwadtekkhxhui.supabase.co';
+            const supabaseKey = 'sb_publishable_uj_ViNAQS0Bv6Oy6qGzUmA_n7WAFsZc';
+
+            // 🚨 修复点 1：把变量名从 supabase 改成 supabaseClient
+            const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+            // ================= 🆕 新增：路由守卫 (禁止单独访问) =================
+            async function checkAuth() {
+                // 复用上面的 supabaseClient 获取当前登录状态
+                const { data: { session } } = await supabaseClient.auth.getSession();
+    
+                // 如果没有 session (未登录)，立刻踢回登录页
+                if (!session) {
+                    alert('未授权访问！请先登录。');
+                    window.location.replace('https://gaman-cheung.github.io/Fibo-Tradingviewer/TradingViewerDoubleSys.html'); 
+                }
+            }
+            // 页面一加载就执行检查
+            checkAuth();
+            // ===============================================================
+        
+            function showLoader(text) {
+                const loader = document.getElementById('loader');
+                loader.innerText = text;
+                loader.style.display = 'block';
+            }
+            function hideLoader() { document.getElementById('loader').style.display = 'none'; }
+
+            // ================= 全新多用户云端同步逻辑 =================
+            async function saveToCloud() {
+                showLoader('Pushing to Cloud...');
+                const v6Data = JSON.parse(localStorage.getItem('tv_lookfirst_data_v3') || '[]');
+                const v7Data = JSON.parse(localStorage.getItem('tv_thenleap_data_v3') || '[]');
+                const headerNotes = {
+                    marquee: localStorage.getItem('tv_header_marquee_v1') || '',
+                    tips: localStorage.getItem('tv_header_tips_v1') || ''
+                };
+                const instrumentPool = loadInstrumentPool();
+                // 复用 v6_data JSON 保存界面元数据，不新增 Supabase 字段；旧版本会自动忽略额外属性。
+                const v6CloudData = v6Data.length
+                    ? v6Data.map((row, index) => index === 0 ? { ...row, __header_notes_v1: headerNotes, __instrument_pool_v1: instrumentPool } : row)
+                    : [{ __header_notes_v1: headerNotes, __instrument_pool_v1: instrumentPool }];
+
+                // 1. 动态获取当前正在操作的“打碟宇航员”是谁
+                const { data: { user } } = await supabaseClient.auth.getUser();
+            
+                if (!user) {
+                    hideLoader();
+                    return alert("未检测到登录状态，请刷新页面或重新登录！");
+                }
+
+                const { data: existingCloudRow } = await supabaseClient
+                    .from('fibo_data')
+                    .select('wp_data')
+                    .eq('user_id', user.id)
+                    .single();
+                const mergedWpData = { ...(existingCloudRow?.wp_data || {}), instrumentPool };
+                if (Array.isArray(mergedWpData.tabs)) {
+                    const validInstrumentIds = new Set(instrumentPool.items.map(item => item.id));
+                    const deletedInstrumentIds = new Set((instrumentPool.tombstones || []).map(item => item.id));
+                    mergedWpData.tabs = mergedWpData.tabs.filter(tab => !tab.instrumentId || (validInstrumentIds.has(tab.instrumentId) && !deletedInstrumentIds.has(tab.instrumentId)));
+                }
+
+                // 2. 将数据连同他的专属 user_id 一起推上云端
+                // (因为去掉了 id:1，现在直接根据 user_id 自动匹配他的专属行)
+                const { data, error } = await supabaseClient
+                    .from('fibo_data')
+                    .upsert({ 
+                        user_id: user.id, // 👈 核心改变：绑定当前用户的真实 ID
+                        v6_data: v6CloudData, 
+                        v7_data: v7Data,
+                        wp_data: mergedWpData
+                    }, { onConflict: 'user_id' });
+
+                hideLoader();
+                if (error) {
+                    alert("❌ Cloud Sync Failed: " + error.message);
+                } else {
+                    const btn = document.getElementById('btn-push');
+                    const orig = btn.innerHTML;
+                    btn.innerHTML = '<span class="material-icons" style="font-size:16px;">check</span> Saved to Cloud';
+                    setTimeout(() => btn.innerHTML = orig, 2000);
+                }
+            }
+
+            async function loadFromCloud() {
+                showLoader('Pulling from Cloud...');
+
+                const { data: { user } } = await supabaseClient.auth.getUser();
+                if (!user) {
+                    hideLoader();
+                    return alert("未检测到登录状态，请刷新页面或重新登录！");
+                }
+            
+                // 3. 直接请求！有了 RLS 的保护，这句代码在云端会自动被过滤，
+                // 保证只返回当前登录用户自己的那一行数据，绝对拿不到别人的。
+                const { data, error } = await supabaseClient
+                    .from('fibo_data')
+                    .select('*')
+                    .eq('user_id', user.id)
+                    .single(); 
+
+                hideLoader();
+                // PGRST116 是 Supabase 的一个特定状态码，意思是"找不到数据"
+                // 这对新注册、还没点过 push 的用户是正常现象，我们予以放行
+                if (error && error.code !== 'PGRST116') { 
+                    alert("❌ Load Failed: " + error.message);
+                    return;
+                }
+
+                if (data) {
+                    if (data.v6_data) {
+                        const cloudV6Data = Array.isArray(data.v6_data) ? data.v6_data : [];
+                        const noteCarrier = cloudV6Data.find(item => item && typeof item === 'object' && item.__header_notes_v1);
+                        const cloudNotes = noteCarrier?.__header_notes_v1;
+                        const poolCarrier = cloudV6Data.find(item => item && typeof item === 'object' && item.__instrument_pool_v1);
+                        const mergedCloudPool = mergeInstrumentPools(loadInstrumentPool(), poolCarrier?.__instrument_pool_v1, data.wp_data?.instrumentPool);
+                        if (mergedCloudPool.items.length) saveInstrumentPool(mergedCloudPool);
+                        if (cloudNotes && Object.prototype.hasOwnProperty.call(cloudNotes, 'marquee')) localStorage.setItem('tv_header_marquee_v1', cloudNotes.marquee || '');
+                        if (cloudNotes && Object.prototype.hasOwnProperty.call(cloudNotes, 'tips')) localStorage.setItem('tv_header_tips_v1', cloudNotes.tips || '');
+                        const cleanV6Data = cloudV6Data
+                            .filter(item => item && typeof item === 'object')
+                            .map(item => {
+                                const cleanRow = { ...item };
+                                delete cleanRow.__header_notes_v1;
+                                delete cleanRow.__instrument_pool_v1;
+                                return cleanRow;
+                            })
+                            .filter(item => ['n','h','l','c'].some(key => Object.prototype.hasOwnProperty.call(item, key)));
+                        localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify(cleanV6Data));
+                    }
+                    if (!data.v6_data && data.wp_data?.instrumentPool?.items) saveInstrumentPool(mergeInstrumentPools(loadInstrumentPool(), data.wp_data.instrumentPool));
+                    if (data.v7_data) localStorage.setItem('tv_thenleap_data_v3', JSON.stringify(data.v7_data));
+                
+                    const btn = document.getElementById('btn-pull');
+                    const orig = btn.innerHTML;
+                    btn.innerHTML = '<span class="material-icons" style="font-size:16px;">check</span> Up to Date';
+                    setTimeout(() => { btn.innerHTML = orig; location.reload(); }, 1000);
+                } else {
+                    alert("云端还没有你的数据记录哦！请先在页面上添加几行 K 线数据，然后点击 Push to Cloud ☁️。");
+                }
+            }
+
+        // ================= Instrument Pool / Permanent IDs =================
+        const INSTRUMENT_POOL_KEY = 'tv_instrument_pool_v1';
+        const ACTIVE_INSTRUMENT_KEY = 'tv_active_instrument_id';
+
+        function normalizeInstrumentName(value) {
+            return String(value || '').trim().toUpperCase();
+        }
+
+        function createInstrumentId() {
+            if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+            return `inst_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+        }
+
+        function loadInstrumentPool() {
+            try {
+                const parsed = JSON.parse(localStorage.getItem(INSTRUMENT_POOL_KEY) || '{}');
+                if (!Array.isArray(parsed.items)) parsed.items = [];
+                if (!Array.isArray(parsed.tombstones)) parsed.tombstones = [];
+                parsed.version = 1;
+                return parsed;
+            } catch (e) {
+                return { version:1, items:[], tombstones:[] };
+            }
+        }
+
+        function mergeInstrumentPools(...pools) {
+            const byId = new Map();
+            const tombstones = new Map();
+            pools.filter(pool => pool && Array.isArray(pool.tombstones)).forEach(pool => pool.tombstones.forEach(entry => {
+                if (!entry?.id) return;
+                const existing = tombstones.get(entry.id);
+                if (!existing || Date.parse(entry.deletedAt || 0) >= Date.parse(existing.deletedAt || 0)) tombstones.set(entry.id, entry);
+            }));
+            pools.filter(pool => pool && Array.isArray(pool.items)).forEach(pool => pool.items.forEach(item => {
+                if (!item?.id) return;
+                const existing = byId.get(item.id);
+                const existingTime = Date.parse(existing?.updatedAt || existing?.createdAt || 0) || 0;
+                const itemTime = Date.parse(item.updatedAt || item.createdAt || 0) || 0;
+                if (!existing || itemTime >= existingTime) byId.set(item.id, { ...existing, ...item });
+            }));
+            tombstones.forEach((entry,id) => {
+                const item = byId.get(id);
+                if (!item || (Date.parse(entry.deletedAt || 0) || 0) >= (Date.parse(item.updatedAt || item.createdAt || 0) || 0)) byId.delete(id);
+            });
+            return { version:1, items:[...byId.values()], tombstones:[...tombstones.values()] };
+        }
+
+        function saveInstrumentPool(pool) {
+            if (!Array.isArray(pool.tombstones)) pool.tombstones = [];
+            localStorage.setItem(INSTRUMENT_POOL_KEY, JSON.stringify(pool));
+        }
+
+        function getInstrumentById(id) {
+            return loadInstrumentPool().items.find(item => item.id === id) || null;
+        }
+
+        function isInstrumentActive(id) {
+            const item = getInstrumentById(id);
+            return !item || item.status !== 'archived';
+        }
+
+        function migrateInstrumentIdentity(v6Data, v7Data) {
+            const pool = loadInstrumentPool();
+            const byId = new Map(pool.items.map(item => [item.id, item]));
+            const byTicker = new Map(pool.items.map(item => [normalizeInstrumentName(item.ticker), item]));
+            const now = new Date().toISOString();
+
+            v6Data.forEach((row, index) => {
+                const tickerKey = normalizeInstrumentName(row.n);
+                let item = row.id ? byId.get(row.id) : null;
+                if (!item && tickerKey) item = byTicker.get(tickerKey);
+                if (!item) {
+                    item = { id:createInstrumentId(), ticker:String(row.n || '').trim() || `Instrument ${index + 1}`, code:'', market:'CN-A', order:index, status:'active', createdAt:now, updatedAt:now, deletedAt:null };
+                    pool.items.push(item);
+                    byId.set(item.id, item);
+                    byTicker.set(normalizeInstrumentName(item.ticker), item);
+                }
+                row.id = item.id;
+                if (String(row.n || '').trim()) item.ticker = String(row.n).trim();
+                if (item.status !== 'archived') item.order = index;
+            });
+
+            const v6ByTicker = new Map(v6Data.map(row => [normalizeInstrumentName(row.n), row.id]));
+            v7Data.forEach((row, index) => {
+                if (!row.id) row.id = v6ByTicker.get(normalizeInstrumentName(row.n)) || byTicker.get(normalizeInstrumentName(row.n))?.id || '';
+                if (!row.id && normalizeInstrumentName(row.n)) {
+                    const item = { id:createInstrumentId(), ticker:String(row.n).trim(), code:'', market:'CN-A', order:pool.items.length + index, status:'active', createdAt:now, updatedAt:now, deletedAt:null };
+                    pool.items.push(item);
+                    byId.set(item.id, item);
+                    byTicker.set(normalizeInstrumentName(item.ticker), item);
+                    row.id = item.id;
+                }
+            });
+
+            pool.items.forEach((item, index) => {
+                if (!Number.isFinite(Number(item.order))) item.order = index;
+                if (!item.status) item.status = 'active';
+            });
+            saveInstrumentPool(pool);
+            localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify(v6Data));
+            localStorage.setItem('tv_thenleap_data_v3', JSON.stringify(v7Data));
+            return { v6Data, v7Data, pool };
+        }
+
+        function escapePoolHtml(value) {
+            return String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[char]));
+        }
+
+        function readStoredRows(key) {
+            try { const rows = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(rows) ? rows : []; }
+            catch (e) { return []; }
+        }
+
+        function mergeRowsWithHiddenInstruments(key, liveRows) {
+            const poolIds = new Set(loadInstrumentPool().items.map(item => item.id));
+            const liveIds = new Set(liveRows.map(row => row.id).filter(Boolean));
+            const retained = readStoredRows(key).filter(row => row?.id && poolIds.has(row.id) && !liveIds.has(row.id));
+            return [...liveRows, ...retained];
+        }
+
+        function renderInstrumentPool() {
+            const grid = document.getElementById('instrumentPoolGrid');
+            if (!grid) return;
+            const pool = loadInstrumentPool();
+            const query = normalizeInstrumentName(document.getElementById('poolSearch')?.value);
+            const v6Map = new Map(readStoredRows('tv_lookfirst_data_v3').map(row => [row.id, row]));
+            const v7Map = new Map(readStoredRows('tv_thenleap_data_v3').map(row => [row.id, row]));
+            const active = pool.items.filter(item => item.status !== 'archived').sort((a,b) => Number(a.order) - Number(b.order));
+            const visible = active.filter(item => !query || normalizeInstrumentName(`${item.ticker} ${item.code}`).includes(query));
+            document.getElementById('poolCount').textContent = `${active.length} instrument${active.length === 1 ? '' : 's'}`;
+
+            grid.innerHTML = visible.length ? visible.map(item => {
+                const lf = v6Map.get(item.id) || {};
+                const tl = v7Map.get(item.id) || {};
+                const lfReady = Number.isFinite(parseFloat(lf.h)) && Number.isFinite(parseFloat(lf.l)) && Number.isFinite(parseFloat(lf.c));
+                const tlReady = !!(tl.r || tl.s || tl.p || tl.v || (tl.t && tl.t !== 'sideways') || (tl.m && tl.m !== 'neutral'));
+                return `<article class="instrument-card" draggable="${query ? 'false' : 'true'}" data-instrument-id="${escapePoolHtml(item.id)}">
+                    <div class="instrument-head"><div><div class="instrument-name">${escapePoolHtml(item.ticker || 'Untitled Instrument')}</div><div class="instrument-code">${escapePoolHtml([item.code,item.market].filter(Boolean).join(' · '))}</div></div><span class="material-icons pool-drag" title="Drag to reorder">drag_indicator</span></div>
+                    <div class="instrument-meta"><div>Current<strong>${lf.c || '--'}</strong></div><div>Look First<strong>${lfReady ? 'Ready' : 'Pending'}</strong></div><div>Then Leap<strong>${tlReady ? 'Ready' : 'Pending'}</strong></div></div>
+                    <div class="instrument-actions"><button class="pool-action" onclick="openInstrument('${item.id}')">Look First</button><button class="pool-action" onclick="openInstrumentWave('${item.id}')">Wave</button><button class="pool-action" onclick="openInstrumentDialog('${item.id}')">Edit</button><button class="pool-action danger" onclick="archiveInstrument('${item.id}')">Remove</button></div>
+                </article>`;
+            }).join('') : '<div class="pool-empty">No instruments found. Add your first instrument to begin.</div>';
+
+            const archived = pool.items.filter(item => item.status === 'archived').sort((a,b) => String(b.deletedAt).localeCompare(String(a.deletedAt)));
+            document.getElementById('trashCount').textContent = archived.length ? `(${archived.length})` : '';
+            document.getElementById('instrumentTrashList').innerHTML = archived.length ? archived.map(item => `<div class="trash-item"><span><strong>${escapePoolHtml(item.ticker)}</strong><small style="display:block;color:var(--text-secondary);">Removed ${escapePoolHtml(item.deletedAt?.slice(0,10) || '')}</small></span><span><button class="pool-action" onclick="restoreInstrument('${item.id}')">Restore</button> <button class="pool-action danger" onclick="permanentlyDeleteInstrument('${item.id}')">Delete forever</button></span></div>`).join('') : '<div style="color:var(--text-secondary);font-size:12px;">Trash is empty.</div>';
+            initPoolDrag();
+        }
+
+        function initPoolDrag() {
+            const grid = document.getElementById('instrumentPoolGrid');
+            if (!grid || normalizeInstrumentName(document.getElementById('poolSearch')?.value)) return;
+            let dragged = null;
+            grid.querySelectorAll('.instrument-card').forEach(card => {
+                card.addEventListener('dragstart', () => { dragged = card; card.classList.add('dragging'); });
+                card.addEventListener('dragend', () => { card.classList.remove('dragging'); dragged = null; savePoolDomOrder(); });
+                card.addEventListener('dragover', event => {
+                    event.preventDefault();
+                    if (!dragged || dragged === card) return;
+                    const box = card.getBoundingClientRect();
+                    grid.insertBefore(dragged, event.clientY < box.top + box.height / 2 ? card : card.nextSibling);
+                });
+            });
+        }
+
+        function savePoolDomOrder() {
+            const ids = [...document.querySelectorAll('#instrumentPoolGrid .instrument-card')].map(card => card.dataset.instrumentId);
+            const pool = loadInstrumentPool();
+            ids.forEach((id, order) => { const item = pool.items.find(entry => entry.id === id); if (item) item.order = order; });
+            saveInstrumentPool(pool);
+            reorderStoredRowsByPool();
+        }
+
+        function reorderStoredRowsByPool() {
+            const order = new Map(loadInstrumentPool().items.map(item => [item.id, Number(item.order)]));
+            for (const key of ['tv_lookfirst_data_v3','tv_thenleap_data_v3']) {
+                const rows = readStoredRows(key);
+                rows.sort((a,b) => (order.get(a.id) ?? 1e9) - (order.get(b.id) ?? 1e9));
+                localStorage.setItem(key, JSON.stringify(rows));
+            }
+        }
+
+        function createDesktopInstrumentRow() {
+            const pool = loadInstrumentPool();
+            const id = createInstrumentId();
+            const now = new Date().toISOString();
+            pool.items.push({ id, ticker:'', code:'', market:'CN-A', order:pool.items.filter(item => item.status !== 'archived').length, status:'active', createdAt:now, updatedAt:now, deletedAt:null });
+            saveInstrumentPool(pool);
+            addV6Row('', '', '', '', id);
+            saveLocalV6();
+            const input = document.querySelector(`#tableBodyV6 tr[data-instrument-id="${id}"] .name`);
+            input?.focus();
+        }
+
+        function handleDesktopTickerInput(input) {
+            const row = input.closest('tr');
+            const id = row?.dataset.instrumentId || '';
+            const ticker = input.value.trim();
+            const pool = loadInstrumentPool();
+            const item = pool.items.find(entry => entry.id === id);
+            if (item) { item.ticker = ticker; item.updatedAt = new Date().toISOString(); saveInstrumentPool(pool); }
+            const v7Rows = readStoredRows('tv_thenleap_data_v3');
+            v7Rows.forEach(entry => { if (entry.id === id) entry.n = ticker; });
+            localStorage.setItem('tv_thenleap_data_v3', JSON.stringify(v7Rows));
+            const v7Name = document.querySelector(`#tableBodyV7 tr[data-instrument-id="${id}"] .name`);
+            if (v7Name) v7Name.value = ticker;
+            saveLocalV6();
+        }
+
+        function openInstrumentDialog(id = '') {
+            const item = id ? getInstrumentById(id) : null;
+            document.getElementById('instrumentModalTitle').textContent = item ? 'Edit Instrument' : 'Add Instrument';
+            document.getElementById('instrumentEditId').value = item?.id || '';
+            document.getElementById('instrumentTicker').value = item?.ticker || '';
+            document.getElementById('instrumentCode').value = item?.code || '';
+            document.getElementById('instrumentMarket').value = item?.market || 'CN-A';
+            const backdrop = document.getElementById('instrumentModalBackdrop');
+            backdrop.classList.add('open'); backdrop.setAttribute('aria-hidden','false');
+            setTimeout(() => document.getElementById('instrumentTicker').focus(), 0);
+        }
+
+        function closeInstrumentDialog() {
+            const backdrop = document.getElementById('instrumentModalBackdrop');
+            backdrop.classList.remove('open'); backdrop.setAttribute('aria-hidden','true');
+        }
+
+        function handleInstrumentBackdrop(event) { if (event.target.id === 'instrumentModalBackdrop') closeInstrumentDialog(); }
+
+        function saveInstrumentDialog() {
+            const id = document.getElementById('instrumentEditId').value;
+            const ticker = document.getElementById('instrumentTicker').value.trim();
+            const code = document.getElementById('instrumentCode').value.trim();
+            const market = document.getElementById('instrumentMarket').value;
+            if (!ticker) return alert('Ticker / Name is required.');
+            const pool = loadInstrumentPool();
+            const duplicate = pool.items.find(item => item.status !== 'archived' && item.id !== id && (normalizeInstrumentName(item.ticker) === normalizeInstrumentName(ticker) || (code && item.code === code && item.market === market)));
+            if (duplicate) return alert('This instrument already exists in the pool.');
+            const now = new Date().toISOString();
+            if (id) {
+                const item = pool.items.find(entry => entry.id === id);
+                if (!item) return;
+                item.ticker = ticker; item.code = code; item.market = market; item.updatedAt = now;
+                for (const key of ['tv_lookfirst_data_v3','tv_thenleap_data_v3']) {
+                    const rows = readStoredRows(key); rows.forEach(row => { if (row.id === id) row.n = ticker; }); localStorage.setItem(key, JSON.stringify(rows));
+                }
+                document.querySelectorAll(`[data-instrument-id="${id}"] .name`).forEach(input => { input.value = ticker; });
+            } else {
+                const newId = createInstrumentId();
+                const activeCount = pool.items.filter(item => item.status !== 'archived').length;
+                pool.items.push({ id:newId, ticker, code, market, order:activeCount, status:'active', createdAt:now, updatedAt:now, deletedAt:null });
+                const rows = readStoredRows('tv_lookfirst_data_v3'); rows.push({ id:newId, n:ticker, h:'', l:'', c:'' }); localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify(rows));
+                localStorage.setItem(ACTIVE_INSTRUMENT_KEY, newId);
+                addV6Row(ticker, '', '', '', newId);
+            }
+            saveInstrumentPool(pool); closeInstrumentDialog(); renderInstrumentPool();
+        }
+
+        function openInstrument(id) {
+            localStorage.setItem(ACTIVE_INSTRUMENT_KEY, id);
+            switchTab('v6');
+            const row = document.querySelector(`#tableBodyV6 tr[data-instrument-id="${id}"]`);
+            row?.scrollIntoView({ behavior:'smooth', block:'center' });
+        }
+
+        function openInstrumentWave(id) {
+            localStorage.setItem(ACTIVE_INSTRUMENT_KEY, id);
+            window.location.href = 'https://gaman-cheung.github.io/Fibo-Tradingviewer/wavecalfullfinal.html';
+        }
+
+        function archiveInstrument(id) {
+            const item = getInstrumentById(id); if (!item || !confirm(`Remove “${item.ticker}” from the active pool? Its data can be restored from Recently Removed.`)) return;
+            saveLocalV6(); saveLocalV7();
+            const pool = loadInstrumentPool(); const target = pool.items.find(entry => entry.id === id);
+            target.status = 'archived'; target.deletedAt = new Date().toISOString(); target.updatedAt = target.deletedAt;
+            saveInstrumentPool(pool); localStorage.setItem('tv_active_tab','pool'); location.reload();
+        }
+
+        function removeInstrumentFromCurrentLayout(id) {
+            if (window.matchMedia('(max-width: 768px)').matches) archiveInstrument(id);
+            else permanentlyDeleteInstrument(id);
+        }
+
+        function restoreInstrument(id) {
+            const pool = loadInstrumentPool(); const target = pool.items.find(entry => entry.id === id); if (!target) return;
+            target.status = 'active'; target.deletedAt = null; target.updatedAt = new Date().toISOString();
+            target.order = pool.items.filter(item => item.status !== 'archived').length;
+            saveInstrumentPool(pool); reorderStoredRowsByPool(); localStorage.setItem('tv_active_tab','pool'); location.reload();
+        }
+
+        function permanentlyDeleteInstrument(id) {
+            const item = getInstrumentById(id); if (!item || !confirm(`Permanently delete “${item.ticker}” and all linked Look First / Then Leap data? This cannot be undone.`)) return;
+            const pool = loadInstrumentPool();
+            pool.items = pool.items.filter(entry => entry.id !== id);
+            pool.tombstones = [...(pool.tombstones || []).filter(entry => entry.id !== id), { id, deletedAt:new Date().toISOString() }];
+            saveInstrumentPool(pool);
+            for (const key of ['tv_lookfirst_data_v3','tv_thenleap_data_v3']) localStorage.setItem(key, JSON.stringify(readStoredRows(key).filter(row => row.id !== id)));
+            try {
+                const waveState = JSON.parse(localStorage.getItem('wave_matrix_tabs_v3') || 'null');
+                if (waveState?.tabs && Array.isArray(waveState.tabs)) {
+                    waveState.tabs = waveState.tabs.filter(tab => tab.instrumentId !== id);
+                    if (!waveState.tabs.some(tab => tab.id === waveState.activeTabId)) waveState.activeTabId = waveState.tabs[0]?.id || null;
+                    waveState.instrumentPool = pool;
+                    localStorage.setItem('wave_matrix_tabs_v3', JSON.stringify(waveState));
+                }
+            } catch (e) {}
+            if (window.matchMedia('(max-width: 768px)').matches) renderInstrumentPool();
+            else { localStorage.setItem('tv_active_tab','v6'); location.reload(); }
+        }
+
+        // ================= Tab & UI Logic =================
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById('tab-' + tabId).classList.add('active');
+            document.getElementById('btn-' + tabId).classList.add('active');
+            localStorage.setItem('tv_active_tab', tabId);
+            if (tabId === 'pool') renderInstrumentPool();
+            if (tabId === 'v7') {
+                syncV7withV6(true);
+                requestAnimationFrame(syncV7ScrollWidth);
+            }
+        }
+
+        function syncV7ScrollWidth() {
+            const table = document.getElementById('v7Table');
+            const inner = document.getElementById('v7TopScrollInner');
+            const topScroll = document.getElementById('v7TopScroll');
+            const tableCard = document.getElementById('v7TableCard');
+            if (table && inner) inner.style.width = table.scrollWidth + 'px';
+            if (table && topScroll && tableCard && tableCard.clientWidth > 0) {
+                topScroll.style.display = table.scrollWidth > tableCard.clientWidth + 1 ? 'block' : 'none';
+            }
+        }
+
+        function initV7TableUX() {
+            const topScroll = document.getElementById('v7TopScroll');
+            const tableCard = document.getElementById('v7TableCard');
+            if (!topScroll || !tableCard) return;
+
+            let syncing = false;
+            topScroll.addEventListener('scroll', () => {
+                if (syncing) return;
+                syncing = true;
+                tableCard.scrollLeft = topScroll.scrollLeft;
+                syncing = false;
+            });
+            tableCard.addEventListener('scroll', () => {
+                if (syncing) return;
+                syncing = true;
+                topScroll.scrollLeft = tableCard.scrollLeft;
+                syncing = false;
+            });
+
+            syncV7ScrollWidth();
+            if (window.ResizeObserver) new ResizeObserver(syncV7ScrollWidth).observe(document.getElementById('v7Table'));
+            window.addEventListener('resize', syncV7ScrollWidth);
+        }
+
+        function applyAutoHighlight(row, currentPrice, levelsDict) {
+            row.querySelectorAll('td.calc-result').forEach(td => {
+                td.classList.remove('highlight-cell');
+                const tags = td.querySelectorAll('.sr-tag');
+                tags.forEach(t => t.remove());
+            });
+
+            if (isNaN(currentPrice)) return;
+            let minDiff = Infinity; let closestKey = null; let closestValue = 0;
+
+            for (const [key, value] of Object.entries(levelsDict)) {
+                let diff = Math.abs(currentPrice - value);
+                if (diff < minDiff) { minDiff = diff; closestKey = key; closestValue = value; }
+            }
+
+            const diffPct = Math.abs(currentPrice) > 0 ? minDiff / Math.abs(currentPrice) : Infinity;
+            if (closestKey && diffPct <= 0.02) {
+                const targetCell = row.querySelector('.res-' + closestKey);
+                if(targetCell) {
+                    targetCell.classList.add('highlight-cell');
+                    const isSupport = currentPrice >= closestValue;
+                    const srHtml = isSupport ? '<div class="sr-tag sup">🛡️ Support</div>' : '<div class="sr-tag res">🧱 Resist</div>';
+                    targetCell.innerHTML = closestValue.toFixed(2) + srHtml;
+                }
+            }
+        }
+
+        // ================= Look first Core =================
+        const tBodyV6 = document.getElementById('tableBodyV6');
+
+        function updateV6Medals() {
+            const pctColumns = ['pct-1272', 'pct-1618', 'pct-2618'];
+            pctColumns.forEach(colClass => {
+                const cells = Array.from(document.querySelectorAll('#tableBodyV6 .' + colClass));
+                const data = cells.map(cell => {
+                    const val = parseFloat(cell.getAttribute('data-val'));
+                    return { cell, val: isNaN(val) ? -Infinity : val };
+                }).filter(item => item.val !== -Infinity);
+
+                data.sort((a, b) => b.val - a.val);
+
+                cells.forEach(cell => {
+                    if (cell.getAttribute('data-val')) cell.innerHTML = `+${parseFloat(cell.getAttribute('data-val')).toFixed(2)}%`;
+                    else cell.innerHTML = '-';
+                });
+
+                if (data[0]) data[0].cell.innerHTML = `🥇 +${data[0].val.toFixed(2)}%`;
+                if (data[1]) data[1].cell.innerHTML = `🥈 +${data[1].val.toFixed(2)}%`;
+                if (data[2]) data[2].cell.innerHTML = `🥉 +${data[2].val.toFixed(2)}%`;
+            });
+        }
+
+        function calcV6(el) {
+            const row = el.closest('tr');
+            const h = parseFloat(row.querySelector('.high').value);
+            const l = parseFloat(row.querySelector('.low').value);
+            const c = parseFloat(row.querySelector('.current').value);
+
+            if (!h || !l || h <= l) {
+                row.querySelectorAll('.calc-result').forEach(td => td.innerText = '-');
+                row.querySelectorAll('.profit-pct').forEach(td => { td.innerText = '-'; td.removeAttribute('data-val'); });
+                row.querySelector('.status-cell').innerHTML = '-';
+                updateV6Medals(); saveLocalV6(); return;
+            }
+
+            const diff = h - l;
+            const levels = { '236': h - diff * 0.236, '382': h - diff * 0.382, '500': h - diff * 0.5, '618': h - diff * 0.618, '786': h - diff * 0.786, '886': h - diff * 0.886 };
+            for (const key in levels) { row.querySelector('.res-' + key).innerText = levels[key].toFixed(2); }
+
+            const e1272 = l + diff * 1.272; const e1618 = l + diff * 1.618; const e2618 = l + diff * 2.618;
+            row.querySelector('.ext-1272').innerText = e1272.toFixed(2);
+            row.querySelector('.ext-1618').innerText = e1618.toFixed(2);
+            row.querySelector('.ext-2618').innerText = e2618.toFixed(2);
+
+            if (!isNaN(c) && c > 0) {
+                row.querySelector('.pct-1272').setAttribute('data-val', (e1272 - c) / c * 100);
+                row.querySelector('.pct-1618').setAttribute('data-val', (e1618 - c) / c * 100);
+                row.querySelector('.pct-2618').setAttribute('data-val', (e2618 - c) / c * 100);
+                applyAutoHighlight(row, c, levels);
+
+                let status = '-';
+                if (c >= h) status = '<span class="status-badge" style="background:#cce5ff;color:#004085;">📈 Breakout</span>';
+                else if (c >= levels['382']) status = '<span class="status-badge">⏳ Pullback</span>';
+                else if (c >= levels['618']) status = '<span class="status-badge">⚖️ Correction</span>';
+                else if (c >= levels['786']) status = '<span class="status-badge" style="background:#fff3cd;color:#856404;">💎 Golden Dip</span>';
+                else if (c >= levels['886']) status = '<span class="status-badge" style="background:#f8d7da;color:#721c24;">🚨 Danger Zone</span>';
+                else if (c >= l) status = '<span class="status-badge" style="background:#e2d9f3;color:#4a148c;">🧛 Harmonic</span>';
+                else status = '<span class="status-badge" style="background:#343a40;color:#fff;">💀 Dead</span>';
+                row.querySelector('.status-cell').innerHTML = status;
+            } else {
+                row.querySelectorAll('.profit-pct').forEach(td => td.removeAttribute('data-val'));
+            }
+            updateV6Medals(); saveLocalV6();
+        }
+
+        function addV6Row(n='', h='', l='', c='', instrumentId='') {
+            const tr = document.createElement('tr');
+            tr.dataset.instrumentId = instrumentId;
+            tr.innerHTML = `
+                <td><input type="text" class="input-name name" value="${escapePoolHtml(n)}" placeholder="TICKER" oninput="handleDesktopTickerInput(this)"></td>
+                <td><input type="number" class="high" value="${h}" oninput="calcV6(this)"></td>
+                <td><input type="number" class="low" value="${l}" oninput="calcV6(this)"></td>
+                <td><input type="number" class="current" value="${c}" oninput="calcV6(this)"></td>
+                <td class="calc-result res-236">-</td><td class="calc-result res-382">-</td><td class="calc-result res-500">-</td>
+                <td class="calc-result res-618">-</td><td class="calc-result res-786">-</td><td class="calc-result res-886">-</td>
+                <td class="calc-result ext-1272" style="font-weight:bold;">-</td><td class="profit-pct pct-1272">-</td>
+                <td class="calc-result ext-1618" style="font-weight:bold;">-</td><td class="profit-pct pct-1618">-</td>
+                <td class="calc-result ext-2618" style="font-weight:bold;">-</td><td class="profit-pct pct-2618">-</td>
+                <td class="status-cell">-</td>
+                <td class="action-cell">
+                    <span class="material-icons btn-icon btn-delete" onclick="removeInstrumentFromCurrentLayout('${instrumentId}')" title="Delete instrument">delete</span>
+                    <span class="material-icons btn-icon drag-handle">drag_indicator</span>
+                </td>
+            `;
+            tBodyV6.appendChild(tr); makeRowDraggable(tr, saveLocalV6); if(h && l) calcV6(tr.querySelector('.high'));
+        }
+
+        // ================= Then leap Core =================
+        const tBodyV7 = document.getElementById('tableBodyV7');
+
+        function mergeLookFirstRecords(items) {
+            const map = new Map();
+            items.forEach(item => {
+                const ticker = String(item?.n || '').trim().toUpperCase();
+                if (!ticker) return;
+                const id = String(item?.id || '').trim();
+                if (id && !isInstrumentActive(id)) return;
+                const key = id ? `id:${id}` : `ticker:${ticker}`;
+                if (!map.has(key)) map.set(key, { id, n:ticker, h:'', l:'', c:'' });
+                const record = map.get(key);
+                const h = parseFloat(item?.h), l = parseFloat(item?.l), c = parseFloat(item?.c);
+                if (Number.isFinite(h) && Number.isFinite(l) && h > l) {
+                    record.h = item.h;
+                    record.l = item.l;
+                }
+                if (Number.isFinite(c)) record.c = item.c;
+            });
+            return [...map.values()].filter(item => {
+                const h = parseFloat(item.h), l = parseFloat(item.l), c = parseFloat(item.c);
+                return Number.isFinite(h) && Number.isFinite(l) && Number.isFinite(c) && h > l;
+            });
+        }
+
+        function collectLookFirstRecords() {
+            const domItems = [...document.querySelectorAll('#tableBodyV6 tr')].map(row => ({
+                id:row.dataset.instrumentId || '',
+                n:row.querySelector('.name')?.value || '',
+                h:row.querySelector('.high')?.value || '',
+                l:row.querySelector('.low')?.value || '',
+                c:row.querySelector('.current')?.value || ''
+            }));
+            let savedItems = [];
+            try {
+                savedItems = JSON.parse(localStorage.getItem('tv_lookfirst_data_v3') || '[]');
+            } catch (e) {
+                savedItems = [];
+            }
+            // 先读已保存值，再用当前DOM覆盖，兼容某个来源暂时缺少Current的情况。
+            savedItems = savedItems.filter(item => !item?.id || isInstrumentActive(item.id));
+            return mergeLookFirstRecords([...savedItems, ...domItems]);
+        }
+
+        function updateLookFirstCurrent(instrumentId, ticker, value) {
+            let updated = false;
+            document.querySelectorAll('#tableBodyV6 tr').forEach(row => {
+                const sourceTicker = (row.querySelector('.name')?.value || '').trim().toUpperCase();
+                const currentInput = row.querySelector('.current');
+                const idMatches = instrumentId && row.dataset.instrumentId === instrumentId;
+                if ((idMatches || (!instrumentId && sourceTicker === ticker)) && currentInput) {
+                    currentInput.value = value;
+                    calcV6(currentInput);
+                    updated = true;
+                }
+            });
+            return updated;
+        }
+
+        function syncV7withV6(silent = false, seedData = null) {
+            const v7Cache = {};
+            if (Array.isArray(seedData)) {
+                seedData.forEach(item => {
+                    const ticker = String(item?.n || '').trim().toUpperCase();
+                    const cacheKey = item?.id ? `id:${item.id}` : `ticker:${ticker}`;
+                    if (ticker) v7Cache[cacheKey] = {
+                        t:item.t || 'sideways', r:item.r || '', m:item.m || 'neutral',
+                        s:item.s || '', g:item.g || '', g1:item.g1 || '',
+                        p:item.p || '', v:item.v || '', b:item.b || 'current'
+                    };
+                });
+            } else {
+                document.querySelectorAll('#tableBodyV7 tr').forEach(tr => {
+                    const read = (selector, fallback = '') => tr.querySelector(selector)?.value ?? fallback;
+                    const ticker = read('.name').trim().toUpperCase();
+                    const instrumentId = tr.dataset.instrumentId || '';
+                    const cacheKey = instrumentId ? `id:${instrumentId}` : `ticker:${ticker}`;
+                    if(ticker) v7Cache[cacheKey] = {
+                        t: read('.trend', 'sideways'), r: read('.rsi'), m: read('.macd', 'neutral'),
+                        s: read('.stop'), g: read('.target'), g1: read('.target1'),
+                        p: read('.previous'), v: read('.volume-ratio'), b: read('.baseline', 'current')
+                    };
+                });
+            }
+
+            tBodyV7.innerHTML = '';
+            collectLookFirstRecords().forEach(source => {
+                const ticker = source.n;
+                const cacheKey = source.id ? `id:${source.id}` : `ticker:${ticker}`;
+                const cached = v7Cache[cacheKey] || { t:'sideways', r:'', m:'neutral', s:'', g:'', g1:'', p:'', v:'', b:'current' };
+                addV7Row(ticker, cached.t, cached.r, cached.m, cached.s, cached.g, cached.p, cached.v, cached.g1, cached.b, source.id);
+            });
+
+            saveLocalV7();
+            requestAnimationFrame(syncV7ScrollWidth);
+            if (!silent) {
+                const syncBtn = document.querySelector('#tab-v7 .btn-sync');
+                if (!syncBtn) return;
+                const originalHtml = syncBtn.innerHTML;
+                syncBtn.innerHTML = '<span class="material-icons">check_circle</span> 已自动引用 Look first';
+                setTimeout(() => { syncBtn.innerHTML = originalHtml; }, 1600);
+            }
+        }
+
+        function getAutoPlan(h, l, c) {
+            const diff = h - l;
+            const fibs = [
+                { label:'23.6%', price:h - diff * 0.236 }, { label:'38.2%', price:h - diff * 0.382 },
+                { label:'50%', price:h - diff * 0.5 }, { label:'61.8%', price:h - diff * 0.618 },
+                { label:'78.6%', price:h - diff * 0.786 }, { label:'88.6%', price:h - diff * 0.886 }
+            ];
+            const extensions = [
+                { label:'1.272延伸', price:l + diff * 1.272 },
+                { label:'1.618延伸', price:l + diff * 1.618 },
+                { label:'2.618延伸', price:l + diff * 2.618 }
+            ];
+            const supports = [...fibs, { label:'前低', price:l }];
+            if (c >= h) supports.push({ label:'前高回踩', price:h });
+            const support = supports.filter(x => x.price <= c).sort((a,b) => b.price - a.price)[0] || { label:'前低', price:l };
+            const fibPressure = fibs.filter(x => x.price > c).sort((a,b) => a.price - b.price)[0] || null;
+            const nearHigh = c < h && (h - c) / Math.abs(h || 1) <= 0.01;
+            let pressure, t1, t2, stage;
+
+            if (c < h && !nearHigh && fibPressure) {
+                stage = 'recovery';
+                pressure = fibPressure;
+                t1 = fibPressure;
+                t2 = { label:'前高', price:h };
+            } else if (c < h) {
+                stage = 'nearHigh';
+                pressure = { label:'前高突破', price:h };
+                t1 = pressure;
+                t2 = extensions[0];
+            } else {
+                stage = 'breakout';
+                const future = extensions.filter(x => x.price > c).sort((a,b) => a.price - b.price);
+                pressure = future[0] || { label:'已超2.618', price:extensions[2].price };
+                t1 = future[0] || null;
+                t2 = future[1] || future[0] || null;
+            }
+            return { fibs, extensions, support, pressure, t1, t2, stage };
+        }
+
+        function movePct(price, base) {
+            return Number.isFinite(price) && Number.isFinite(base) && base !== 0 ? (price - base) / base * 100 : null;
+        }
+
+        function levelHtml(level, base, fallback = '暂无') {
+            if (!level || !Number.isFinite(level.price)) return `<span style="color:var(--text-secondary);">${fallback}</span>`;
+            const pct = movePct(level.price, base);
+            const cls = pct !== null && pct < 0 ? 'down' : 'up';
+            const pctText = pct === null ? '--' : `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+            return `<div class="price">${level.price.toFixed(2)}</div><div class="${cls}">${pctText}</div><small>${level.label}</small>`;
+        }
+
+        function calcV7(el) {
+            const row = el?.closest?.('tr');
+            if (!row) return;
+            const requiredCells = ['.market-cell','.market-summary','.support-cell','.pressure-cell','.t1-cell','.t2-cell','.rr-cell','.ai-cell'];
+            if (requiredCells.some(selector => !row.querySelector(selector))) {
+                syncV7withV6(true);
+                return;
+            }
+            const read = (selector, fallback = '') => row.querySelector(selector)?.value ?? fallback;
+            // 计算时直接读取 Look first 唯一数据源，不保留价格副本。
+            const ticker = read('.name').trim().toUpperCase();
+            const instrumentId = row.dataset.instrumentId || '';
+            if (el?.classList?.contains('current-proxy')) {
+                updateLookFirstCurrent(instrumentId, ticker, el.value);
+            }
+            const sourceRecords = collectLookFirstRecords();
+            const liveSource = (instrumentId ? sourceRecords.find(item => item.id === instrumentId) : null)
+                || sourceRecords.find(item => item.n === ticker) || null;
+            const h = parseFloat(liveSource?.h);
+            const l = parseFloat(liveSource?.l);
+            const c = parseFloat(liveSource?.c);
+            const previous = parseFloat(read('.previous'));
+            const volumeRatio = parseFloat(read('.volume-ratio'));
+            const stop = parseFloat(read('.stop'));
+            const override1 = parseFloat(read('.target1'));
+            const override2 = parseFloat(read('.target'));
+            const baselineMode = read('.baseline', 'current');
+            const trend = read('.trend', 'sideways');
+            const rsi = parseFloat(read('.rsi'));
+            const macd = read('.macd', 'neutral');
+
+            if (!Number.isFinite(h) || !Number.isFinite(l) || !Number.isFinite(c) || h <= l) {
+                row.querySelector('.market-summary').innerHTML = `<span class="risk-bad">Look first 数据不完整</span><br><small>H:${Number.isFinite(h)?h:'--'} L:${Number.isFinite(l)?l:'--'} C:${Number.isFinite(c)?c:'--'}</small>`;
+                ['support-cell','pressure-cell','t1-cell','t2-cell','rr-cell','ai-cell'].forEach(cls => row.querySelector('.' + cls).innerHTML = '-');
+                return;
+            }
+
+            const plan = getAutoPlan(h, l, c);
+            const invalidOverride1 = Number.isFinite(override1) && override1 <= c;
+            const invalidOverride2 = Number.isFinite(override2) && override2 <= c;
+            const effectiveT1 = Number.isFinite(override1) && !invalidOverride1 ? { label:'人工覆盖 T1', price:override1 } : plan.t1;
+            const effectiveT2 = Number.isFinite(override2) && !invalidOverride2 ? { label:'人工覆盖 T2', price:override2 } : plan.t2;
+            const base = baselineMode === 'previous' && Number.isFinite(previous) && previous > 0 ? previous : c;
+            const baseName = base === c ? 'Current' : 'Prev Close';
+
+            let zone, fiboScore;
+            const levels = Object.fromEntries(plan.fibs.map(x => [x.label, x.price]));
+            if (c >= h) { zone = '📈 Breakout'; fiboScore = 0; }
+            else if (c >= levels['38.2%']) { zone = '⏳ Pullback'; fiboScore = 0; }
+            else if (c >= levels['61.8%']) { zone = '⚖️ Correction'; fiboScore = 1; }
+            else if (c >= levels['78.6%']) { zone = '💎 Golden Dip'; fiboScore = 4; }
+            else if (c >= levels['88.6%']) { zone = '🚨 Danger Zone'; fiboScore = 3; }
+            else if (c >= l) { zone = '🧛 Harmonic'; fiboScore = 2; }
+            else { zone = '💀 Structure Broken'; fiboScore = -5; }
+
+            const dayMove = Number.isFinite(previous) && previous > 0 ? movePct(c, previous) : null;
+            const currentProxy = row.querySelector('.current-proxy');
+            if (currentProxy && document.activeElement !== currentProxy) currentProxy.value = c;
+            row.querySelector('.market-summary').innerHTML = `<small>${zone}</small>${dayMove === null ? '' : `<br><span class="${dayMove < 0 ? 'risk-bad' : 'risk-ok'}">vs Prev ${dayMove >= 0 ? '+' : ''}${dayMove.toFixed(2)}%</span>`}`;
+            row.querySelector('.support-cell').innerHTML = levelHtml(plan.support, base);
+            row.querySelector('.pressure-cell').innerHTML = levelHtml(plan.pressure, base);
+            row.querySelector('.t1-cell').innerHTML = invalidOverride1
+                ? `<span class="risk-bad">覆盖值须高于 Current</span><small>暂用自动 T1</small>${levelHtml(plan.t1, base)}`
+                : levelHtml(effectiveT1, base);
+            row.querySelector('.t2-cell').innerHTML = invalidOverride2
+                ? `<span class="risk-bad">覆盖值须高于 Current</span><small>暂用自动 T2</small>${levelHtml(plan.t2, base)}`
+                : levelHtml(effectiveT2, base);
+            [row.querySelector('.support-cell'), row.querySelector('.pressure-cell'), row.querySelector('.t1-cell'), row.querySelector('.t2-cell')]
+                .forEach(cell => cell.title = `涨跌幅基准：${baseName}`);
+
+            const trendScore = trend === 'uptrend' ? 2 : (trend === 'downtrend' ? -3 : 0);
+            let rsiScore = 0;
+            if (Number.isFinite(rsi)) {
+                if (rsi <= 30) rsiScore = 2;
+                else if (rsi <= 45) rsiScore = 1;
+                else if (rsi >= 70) rsiScore = -2;
+            }
+            const macdScore = macd === 'divergence' ? 2 : (macd === 'bullish' ? 1 : (macd === 'bearish' ? -1 : 0));
+            const momentumScore = Math.min(3, rsiScore + macdScore);
+
+            let volumeScore = 0;
+            let volumeText = '5日量比未填';
+            if (Number.isFinite(previous) && previous > 0 && Number.isFinite(volumeRatio) && volumeRatio > 0) {
+                const move = (c - previous) / previous;
+                if (volumeRatio >= 2.5) {
+                    if (move > 0.002) { volumeScore = 1; volumeText = '异常放量上涨：加速 / 强分歧'; }
+                    else if (move < -0.002) { volumeScore = -2; volumeText = '异常放量下跌：恐慌 / 出货风险'; }
+                    else { volumeScore = 0; volumeText = '异常放量：等待方向确认'; }
+                } else if (move > 0.002 && volumeRatio >= 1.5) { volumeScore = 1; volumeText = '明显放量上涨确认'; }
+                else if (move > 0.002 && volumeRatio <= 0.8) { volumeScore = -1; volumeText = '缩量反弹'; }
+                else if (move < -0.002 && volumeRatio >= 1.5) { volumeScore = -2; volumeText = '明显放量下跌风险'; }
+                else if (move < -0.002 && volumeRatio <= 0.8) { volumeScore = 1; volumeText = '缩量回调'; }
+                else if (volumeRatio >= 1.2) volumeText = `温和放量 (${volumeRatio.toFixed(2)}x)`;
+                else volumeText = `正常量能 (${volumeRatio.toFixed(2)}x)`;
+            } else if (Number.isFinite(volumeRatio) && volumeRatio > 0) {
+                if (volumeRatio >= 2.5) volumeText = '异常放量：缺少 Prev Close，等待方向确认';
+                else if (volumeRatio >= 1.5) volumeText = '明显放量：缺少 Prev Close';
+                else if (volumeRatio >= 1.2) volumeText = '温和放量：缺少 Prev Close';
+                else if (volumeRatio <= 0.8) volumeText = '明显缩量：缺少 Prev Close';
+                else volumeText = '正常量能：缺少 Prev Close';
+            }
+            let strengthBonus = 0;
+            if (trend === 'uptrend' && c >= h && (macd === 'bullish' || volumeScore > 0)) strengthBonus = 2;
+            else if (trend === 'uptrend' && c >= levels['38.2%']) strengthBonus = 1;
+            const totalScore = fiboScore + trendScore + momentumScore + volumeScore + strengthBonus;
+
+            let rr1 = null, rr2 = null;
+            const riskValid = Number.isFinite(stop) && stop < c && effectiveT2 && Number.isFinite(effectiveT2.price) && effectiveT2.price > c;
+            if (Number.isFinite(stop) && stop < c) {
+                if (effectiveT1 && effectiveT1.price > c) rr1 = (effectiveT1.price - c) / (c - stop);
+                if (effectiveT2 && effectiveT2.price > c) rr2 = (effectiveT2.price - c) / (c - stop);
+            }
+            if (!Number.isFinite(stop)) row.querySelector('.rr-cell').innerHTML = '<span class="risk-warn">待设 Stop</span>';
+            else if (!riskValid) row.querySelector('.rr-cell').innerHTML = '<span class="risk-bad">风险计划无效</span>';
+            else {
+                const riskPct = (c - stop) / c * 100;
+                row.querySelector('.rr-cell').innerHTML = `${Number.isFinite(rr1) ? `T1 ${rr1.toFixed(2)}R<br>` : ''}<span class="${rr2 >= 2 ? 'risk-ok' : (rr2 >= 1.3 ? 'risk-warn' : 'risk-bad')}">T2 ${rr2.toFixed(2)}R</span><br><small>风险 ${riskPct.toFixed(1)}%</small>`;
+            }
+
+            const structureBroken = c < l;
+            const firstBarrierTight = plan.stage === 'recovery' && Number.isFinite(rr1) && rr1 < 0.5;
+            const sniperAllowed = trend !== 'downtrend' && riskValid && rr2 >= 2 && !firstBarrierTight;
+            const technicalLabel = totalScore >= 6 ? 'Strong Setup' : (totalScore >= 3 ? 'Good Structure' : (totalScore >= 1 ? 'Watch Structure' : 'Weak Structure'));
+            const entryLabel = !Number.isFinite(stop) ? 'Risk Pending' : (!riskValid ? 'Invalid Plan' : (rr2 >= 2 ? 'Good Entry' : (rr2 >= 1.3 ? 'Acceptable Entry' : 'Poor Entry')));
+
+            let aiHtml = '';
+            if (structureBroken) aiHtml = '<span class="ai-badge" style="background:#e0e0e0;color:#757575;">🛑 Structure Invalid</span>';
+            else if (totalScore >= 6 && sniperAllowed) aiHtml = '<span class="ai-badge" style="background:#d50000;color:white;">🔥 Sniper Buy</span>';
+            else if (totalScore >= 3 && firstBarrierTight) aiHtml = '<span class="ai-badge" style="background:#ffb300;color:#333;">⏳ Wait Reclaim</span>';
+            else if (totalScore >= 3 && riskValid && rr2 >= 1.3) aiHtml = '<span class="ai-badge" style="background:#00c853;color:white;">🟢 Good Setup</span>';
+            else if (totalScore >= 3) aiHtml = '<span class="ai-badge" style="background:#ffb300;color:#333;">⏳ Wait Better Entry</span>';
+            else if (totalScore >= 1) aiHtml = '<span class="ai-badge" style="background:#ffd600;color:#333;">👀 Watch</span>';
+            else aiHtml = '<span class="ai-badge" style="background:#e0e0e0;color:#757575;">🛑 Avoid</span>';
+            aiHtml += `<div style="font-size:10px;margin-top:4px;color:#5f6368;">${technicalLabel} / ${entryLabel}</div>`;
+            aiHtml += `<div style="font-size:10px;color:#5f6368;">F${fiboScore}+T${trendScore}+M${momentumScore}+V${volumeScore}+S${strengthBonus}=${totalScore}</div>`;
+            aiHtml += `<div style="font-size:10px;color:${volumeScore < 0 ? '#c5221f' : '#5f6368'};">${firstBarrierTight ? '第一压力过近；' : ''}${volumeText}</div>`;
+            row.querySelector('.ai-cell').innerHTML = aiHtml;
+            saveLocalV7();
+        }
+
+        function addV7Row(n='', t='sideways', r='', m='neutral', s='', g='', p='', v='', g1='', b='current', instrumentId='') {
+            const tr = document.createElement('tr');
+            tr.dataset.instrumentId = instrumentId;
+            tr.innerHTML = `
+                <td>
+                    <input type="text" class="input-name name" value="${escapePoolHtml(n)}" readonly title="标的来自 Instrument Pool">
+                </td>
+                <td class="market-cell"><input type="number" class="current-proxy" placeholder="Current"><div class="market-summary">-</div></td>
+                <td class="support-cell auto-level">-</td>
+                <td class="pressure-cell auto-level">-</td>
+                <td class="t1-cell auto-level">-</td>
+                <td class="t2-cell auto-level">-</td>
+                <td class="rr-cell">-</td>
+                <td class="detail-col"><input type="number" class="input-risk previous" value="${p}" placeholder="Prev" oninput="calcV7(this)"></td>
+                <td class="detail-col"><input type="number" step="0.01" class="input-risk volume-ratio" value="${v}" placeholder="VR" oninput="calcV7(this)"></td>
+                <td class="detail-col"><input type="number" class="input-risk stop" value="${s}" placeholder="止损" oninput="calcV7(this)"></td>
+                <td class="detail-col"><input type="number" class="input-risk target1" value="${g1}" placeholder="自动"></td>
+                <td class="detail-col"><input type="number" class="input-risk target" value="${g}" placeholder="自动"></td>
+                <td class="detail-col"><select class="baseline" onchange="calcV7(this)"><option value="current" ${b!=='previous'?'selected':''}>Current</option><option value="previous" ${b==='previous'?'selected':''}>Prev Close</option></select></td>
+                <td class="detail-col"><select class="trend" onchange="calcV7(this)"><option value="uptrend" ${t==='uptrend'?'selected':''}>📈 Uptrend (+2)</option><option value="sideways" ${t==='sideways'?'selected':''}>➖ Sideways (+0)</option><option value="downtrend" ${t==='downtrend'?'selected':''}>📉 Downtrend (-3)</option></select></td>
+                <td class="detail-col"><input type="number" class="input-rsi rsi" value="${r}" placeholder="RSI" oninput="calcV7(this)"></td>
+                <td class="detail-col"><select class="macd" onchange="calcV7(this)"><option value="neutral" ${m==='neutral'?'selected':''}>Wait/Flat</option><option value="bullish" ${m==='bullish'?'selected':''}>📈 Bullish</option><option value="bearish" ${m==='bearish'?'selected':''}>📉 Bearish</option><option value="divergence" ${m==='divergence'?'selected':''}>⭐ Divergence</option></select></td>
+                <td class="ai-cell" style="background:#fff3e0;">-</td>
+                <td class="action-cell"><span class="material-icons btn-icon" title="Order is managed in Instrument Pool">lock</span></td>
+            `;
+            tBodyV7.appendChild(tr);
+            const recalcTarget = event => calcV7(event.target);
+            tr.querySelectorAll('.target1, .target, .current-proxy').forEach(input => {
+                input.addEventListener('input', recalcTarget);
+                input.addEventListener('change', recalcTarget);
+            });
+            calcV7(tr.querySelector('.name'));
+        }
+
+        // ================= Drag & Drop / Data Save =================
+        let draggedRow = null;
+        function makeRowDraggable(tr, saveCallback) {
+            const handle = tr.querySelector('.drag-handle');
+            handle.addEventListener('mousedown', () => tr.setAttribute('draggable', 'true'));
+            handle.addEventListener('mouseup', () => tr.removeAttribute('draggable'));
+            tr.addEventListener('dragstart', () => { draggedRow = tr; setTimeout(() => tr.classList.add('dragging'), 0); });
+            tr.addEventListener('dragend', () => { tr.classList.remove('dragging'); tr.removeAttribute('draggable'); draggedRow = null; saveCallback(); });
+            tr.addEventListener('dragover', (e) => {
+                e.preventDefault(); const tbody = tr.closest('tbody');
+                const afterEl = getDragAfterElement(tbody, e.clientY);
+                if (afterEl == null) tbody.appendChild(draggedRow); else tbody.insertBefore(draggedRow, afterEl);
+            });
+        }
+        function getDragAfterElement(container, y) {
+            const draggableEls = [...container.querySelectorAll('tr:not(.dragging)')];
+            return draggableEls.reduce((closest, child) => {
+                const box = child.getBoundingClientRect(); const offset = y - box.top - box.height / 2;
+                if (offset < 0 && offset > closest.offset) return { offset: offset, element: child }; else return closest;
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+
+        function saveLocalV6() {
+            const data = [];
+            document.querySelectorAll('#tableBodyV6 tr').forEach(tr => {
+                data.push({ id:tr.dataset.instrumentId || '', n: tr.querySelector('.name').value, h: tr.querySelector('.high').value, l: tr.querySelector('.low').value, c: tr.querySelector('.current').value });
+            });
+            const merged = mergeRowsWithHiddenInstruments('tv_lookfirst_data_v3', data);
+            localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify(merged));
+            const pool = loadInstrumentPool();
+            data.forEach((row, order) => { const item = pool.items.find(entry => entry.id === row.id); if (item) item.order = order; });
+            saveInstrumentPool(pool);
+            reorderStoredRowsByPool();
+        }
+        function saveLocalV7() {
+            const data = [];
+            document.querySelectorAll('#tableBodyV7 tr').forEach(tr => {
+                const read = (selector, fallback = '') => tr.querySelector(selector)?.value ?? fallback;
+                data.push({
+                    id: tr.dataset.instrumentId || '',
+                    n: read('.name'),
+                    t: read('.trend', 'sideways'),
+                    r: read('.rsi'),
+                    m: read('.macd', 'neutral'),
+                    s: read('.stop'),
+                    g: read('.target'),
+                    g1: read('.target1'),
+                    p: read('.previous'),
+                    v: read('.volume-ratio'),
+                    b: read('.baseline', 'current')
+                });
+            });
+            localStorage.setItem('tv_thenleap_data_v3', JSON.stringify(mergeRowsWithHiddenInstruments('tv_thenleap_data_v3', data)));
+        }
+
+        const HEADER_NOTE_KEYS = {
+            marquee: 'tv_header_marquee_v1',
+            tips: 'tv_header_tips_v1'
+        };
+        let noteEditorMode = 'tips';
+
+        function renderHeaderMarquee() {
+            const track = document.getElementById('reminderMarqueeText');
+            if (!track) return;
+            const savedText = localStorage.getItem(HEADER_NOTE_KEYS.marquee) || '';
+            const displayText = savedText.trim() || '点击右侧铅笔，添加你的交易纪律或盘前提醒';
+            track.textContent = displayText;
+            const duration = Math.max(30, Math.min(120, 26 + displayText.length * 0.42));
+            track.style.setProperty('--marquee-duration', `${duration}s`);
+            track.style.animation = 'none';
+            void track.offsetWidth;
+            track.style.animation = '';
+        }
+
+        function openNoteEditor(mode) {
+            noteEditorMode = mode === 'marquee' ? 'marquee' : 'tips';
+            const backdrop = document.getElementById('noteModalBackdrop');
+            const editor = document.getElementById('noteEditorText');
+            const title = document.getElementById('noteModalTitle');
+            const hint = document.getElementById('noteModalHint');
+            const isMarquee = noteEditorMode === 'marquee';
+            title.textContent = isMarquee ? '编辑滚动提醒' : 'Pro Tips';
+            editor.value = localStorage.getItem(HEADER_NOTE_KEYS[noteEditorMode]) || '';
+            editor.placeholder = isMarquee ? '例如：不追高，不重仓猜底；先看指数，再看板块，最后看个股。' : '在这里记录交易原则、操作说明、复盘提示或名言警句……';
+            editor.style.minHeight = isMarquee ? '140px' : '340px';
+            hint.textContent = isMarquee
+                ? '保存后会在顶部慢速滚动；鼠标悬停可以暂停。Local Backup 与 Push to Cloud 均会保存。'
+                : '支持长文字和换行；Local Backup 与 Push to Cloud 均会保存。';
+            backdrop.classList.add('open');
+            backdrop.setAttribute('aria-hidden', 'false');
+            setTimeout(() => editor.focus(), 0);
+        }
+
+        function closeNoteEditor() {
+            const backdrop = document.getElementById('noteModalBackdrop');
+            backdrop.classList.remove('open');
+            backdrop.setAttribute('aria-hidden', 'true');
+        }
+
+        function saveNoteEditor() {
+            const editor = document.getElementById('noteEditorText');
+            localStorage.setItem(HEADER_NOTE_KEYS[noteEditorMode], editor.value);
+            if (noteEditorMode === 'marquee') renderHeaderMarquee();
+            closeNoteEditor();
+        }
+
+        function handleNoteBackdrop(event) {
+            if (event.target.id === 'noteModalBackdrop') closeNoteEditor();
+        }
+
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && document.getElementById('noteModalBackdrop')?.classList.contains('open')) closeNoteEditor();
+        });
+
+        function exportData() {
+            const combinedData = {
+                v6: JSON.parse(localStorage.getItem('tv_lookfirst_data_v3') || '[]'),
+                v7: JSON.parse(localStorage.getItem('tv_thenleap_data_v3') || '[]'),
+                headerNotes: {
+                    marquee: localStorage.getItem(HEADER_NOTE_KEYS.marquee) || '',
+                    tips: localStorage.getItem(HEADER_NOTE_KEYS.tips) || ''
+                },
+                instrumentPool: loadInstrumentPool()
+            };
+            const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(combinedData, null, 2)], { type: "application/json" }));
+            a.download = `Fibo_System_Backup_${new Date().toISOString().slice(0, 10)}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        }
+
+        function importData(event) {
+            const file = event.target.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.v6) localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify(data.v6));
+                    if (data.v7) localStorage.setItem('tv_thenleap_data_v3', JSON.stringify(data.v7));
+                    if (data.headerNotes && Object.prototype.hasOwnProperty.call(data.headerNotes, 'marquee')) localStorage.setItem(HEADER_NOTE_KEYS.marquee, data.headerNotes.marquee || '');
+                    if (data.headerNotes && Object.prototype.hasOwnProperty.call(data.headerNotes, 'tips')) localStorage.setItem(HEADER_NOTE_KEYS.tips, data.headerNotes.tips || '');
+                    if (data.instrumentPool?.items && Array.isArray(data.instrumentPool.items)) saveInstrumentPool(data.instrumentPool);
+                    location.reload();
+                } catch (err) { alert("❌ Invalid backup file."); }
+            };
+            reader.readAsText(file);
+        }
+
+        window.onload = () => {
+            renderHeaderMarquee();
+            let savedV6Data = readStoredRows('tv_lookfirst_data_v3');
+            let savedV7Data = readStoredRows('tv_thenleap_data_v3');
+            const migrated = migrateInstrumentIdentity(savedV6Data, savedV7Data);
+            savedV6Data = migrated.v6Data;
+            savedV7Data = migrated.v7Data;
+            const existingV6Ids = new Set(savedV6Data.map(row => row.id));
+            migrated.pool.items.filter(item => item.status !== 'archived' && !existingV6Ids.has(item.id)).forEach(item => savedV6Data.push({ id:item.id, n:item.ticker, h:'', l:'', c:'' }));
+            localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify(savedV6Data));
+            const orderMap = new Map(migrated.pool.items.map(item => [item.id, Number(item.order)]));
+            savedV6Data.filter(d => isInstrumentActive(d.id)).sort((a,b) => (orderMap.get(a.id) ?? 1e9) - (orderMap.get(b.id) ?? 1e9)).forEach(d => addV6Row(d.n, d.h, d.l, d.c, d.id));
+            // 直接用 Look first 价格与 V7 附加字段合并建表，避免先生成空价格行。
+            syncV7withV6(true, savedV7Data);
+            initV7TableUX();
+            renderInstrumentPool();
+            const savedTab = localStorage.getItem('tv_active_tab');
+            const requestedTab = new URLSearchParams(window.location.search).get('tab');
+            const navigationEntry = window.performance?.getEntriesByType?.('navigation')?.[0];
+            const isReload = navigationEntry?.type === 'reload';
+            const cameFromLogin = document.referrer.includes('TradingViewerDoubleSys.html');
+            const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
+            // Pool是移动端入口；桌面端保持原来的 Look First / Then Leap 工作流。
+            const allowedTabs = isMobileLayout ? ['pool','v6','v7'] : ['v6','v7'];
+            const fallbackTab = isMobileLayout ? 'pool' : 'v6';
+            const validSavedTab = allowedTabs.includes(requestedTab) ? requestedTab : (allowedTabs.includes(savedTab) ? savedTab : fallbackTab);
+            const initialTab = cameFromLogin && !isReload ? fallbackTab : validSavedTab;
+            switchTab(initialTab);
+        };
+        // ================= 🆕 新增：登出逻辑 =================
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            // 同样复用已经声明好的 supabaseClient
+            const { error } = await supabaseClient.auth.signOut();
+    
+            if (error) {
+                alert('登出失败: ' + error.message);
+            } else {
+                alert('已安全登出！');
+                localStorage.setItem('tv_active_tab', 'v6');
+                // 踢回登录页
+                window.location.replace('https://gaman-cheung.github.io/Fibo-Tradingviewer/TradingViewerDoubleSys.html');
+            }
+        });
+    </script>
+</body>
+</html>
