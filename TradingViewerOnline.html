@@ -278,8 +278,15 @@
             }
             #tab-v6 td::before, #tab-v7 td::before { color:var(--text-secondary); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.35px; }
             #tab-v6 input, #tab-v7 input, #tab-v7 select { box-sizing:border-box; width:100%; min-height:42px; text-align:center; font-size:16px; background:white; }
-            #tab-v6 td:first-child, #tab-v7 td:first-child, #tab-v7 td:nth-child(17), #tab-v6 td:nth-child(17) { grid-column:1/-1; }
-            #tab-v6 td:first-child input, #tab-v7 td:first-child input { font-size:19px; text-align:left; border:0; background:transparent; padding-left:0; }
+            #tab-v6 td:first-child, #tab-v7 td:first-child, #tab-v6 td:nth-child(17) { grid-column:1/-1; }
+            #tab-v6 td:first-child, #tab-v7 td:first-child { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; column-gap:12px; }
+            #tab-v6 td:first-child::before, #tab-v7 td:first-child::before { grid-column:1/-1; }
+            #tab-v6 td:first-child input, #tab-v7 td:first-child input { grid-column:1; font-size:19px; text-align:left; border:0; background:transparent; padding-left:0; }
+            .mobile-card-controls { grid-column:2; grid-row:2; display:flex !important; flex-direction:column; align-items:stretch; gap:7px; min-width:116px; }
+            .mobile-signal-summary { display:flex; flex-direction:column; align-items:stretch; gap:3px; min-width:126px; }
+            .mobile-signal-summary small { color:var(--text-secondary); font-size:9px; font-weight:800; text-transform:uppercase; }
+            .mobile-signal-summary .ai-badge { min-width:0; padding:6px 9px; text-align:center; font-size:11px; }
+            .mobile-signal-summary .signal-caption { max-width:150px; color:var(--text-secondary); font-size:9px; line-height:1.25; text-align:center; }
             #tab-v6 td:nth-child(1)::before, #tab-v7 td:nth-child(1)::before { content:'Instrument'; }
             #tab-v6 td:nth-child(2)::before { content:'High'; } #tab-v6 td:nth-child(3)::before { content:'Low'; } #tab-v6 td:nth-child(4)::before { content:'Current'; }
             #tab-v6 td:nth-child(5)::before { content:'23.6%'; } #tab-v6 td:nth-child(6)::before { content:'38.2%'; } #tab-v6 td:nth-child(7)::before { content:'50%'; }
@@ -297,7 +304,8 @@
             #tab-v7 .market-cell, #tab-v7 .auto-level { min-width:0; }
             #tab-v6 tr.mobile-current:not(.mobile-expanded) td:nth-child(n+5):nth-child(-n+16),
             #tab-v7 tr.mobile-current:not(.mobile-expanded) td:nth-child(n+8):nth-child(-n+16) { display:none; }
-            .mobile-detail-toggle { width:100%; min-height:42px; border:1px solid #d8e2f3; border-radius:12px; background:#e8f0fe; color:#174ea6; font-weight:700; }
+            .mobile-detail-toggle { min-height:36px; padding:6px 9px; border:1px solid #d8e2f3; border-radius:11px; background:#e8f0fe; color:#174ea6; font-size:11px; font-weight:700; white-space:nowrap; }
+            #tab-v6 td:nth-child(18), #tab-v7 td:nth-child(17), #tab-v7 td:nth-child(18) { display:none !important; }
             #tab-v7 .action-bar, #tab-v6 > .btn-add { display:none; }
             #tab-v7 > div:last-child { margin-bottom:12px; }
 
@@ -563,7 +571,7 @@
                     .select('wp_data')
                     .eq('user_id', user.id)
                     .single();
-                const mergedWpData = { ...(existingCloudRow?.wp_data || {}), instrumentPool };
+                const mergedWpData = { ...(existingCloudRow?.wp_data || {}), instrumentPool, uiNotes:headerNotes };
                 if (Array.isArray(mergedWpData.tabs)) {
                     const validInstrumentIds = new Set(instrumentPool.items.map(item => item.id));
                     const deletedInstrumentIds = new Set((instrumentPool.tombstones || []).map(item => item.id));
@@ -621,7 +629,7 @@
                     if (data.v6_data) {
                         const cloudV6Data = Array.isArray(data.v6_data) ? data.v6_data : [];
                         const noteCarrier = cloudV6Data.find(item => item && typeof item === 'object' && item.__header_notes_v1);
-                        const cloudNotes = noteCarrier?.__header_notes_v1;
+                        const cloudNotes = data.wp_data?.uiNotes || noteCarrier?.__header_notes_v1;
                         const poolCarrier = cloudV6Data.find(item => item && typeof item === 'object' && item.__instrument_pool_v1);
                         const mergedCloudPool = mergeInstrumentPools(loadInstrumentPool(), poolCarrier?.__instrument_pool_v1, data.wp_data?.instrumentPool);
                         if (mergedCloudPool.items.length) saveInstrumentPool(mergedCloudPool);
@@ -637,6 +645,10 @@
                             })
                             .filter(item => ['n','h','l','c'].some(key => Object.prototype.hasOwnProperty.call(item, key)));
                         localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify(cleanV6Data));
+                    }
+                    if (!data.v6_data && data.wp_data?.uiNotes) {
+                        localStorage.setItem('tv_header_marquee_v1', data.wp_data.uiNotes.marquee || '');
+                        localStorage.setItem('tv_header_tips_v1', data.wp_data.uiNotes.tips || '');
                     }
                     if (!data.v6_data && data.wp_data?.instrumentPool?.items) saveInstrumentPool(mergeInstrumentPools(loadInstrumentPool(), data.wp_data.instrumentPool));
                     if (data.v7_data) localStorage.setItem('tv_thenleap_data_v3', JSON.stringify(data.v7_data));
@@ -988,6 +1000,34 @@
             document.getElementById('mobileNavTerminal')?.classList.toggle('active', tabId === 'v6' || tabId === 'v7');
         }
 
+        function ensureMobileCardControls(row) {
+            const firstCell = row.querySelector('td:first-child');
+            if (!firstCell) return null;
+            let controls = firstCell.querySelector('.mobile-card-controls');
+            if (!controls) {
+                controls = document.createElement('div');
+                controls.className = 'mobile-card-controls mobile-only';
+                firstCell.appendChild(controls);
+            }
+            return controls;
+        }
+
+        function syncMobileCompositeSignal(row) {
+            if (!window.matchMedia('(max-width: 768px)').matches || !row?.closest('#tableBodyV7')) return;
+            const controls = ensureMobileCardControls(row);
+            const source = row.querySelector('.ai-cell');
+            if (!controls || !source) return;
+            let summary = controls.querySelector('.mobile-signal-summary');
+            if (!summary) {
+                summary = document.createElement('div');
+                summary.className = 'mobile-signal-summary';
+                controls.prepend(summary);
+            }
+            const badge = source.querySelector('.ai-badge');
+            const caption = source.querySelector('div')?.textContent || '';
+            summary.innerHTML = `<small>Composite Signal</small>${badge ? badge.outerHTML : '<span>-</span>'}${caption ? `<span class="signal-caption">${escapePoolHtml(caption)}</span>` : ''}`;
+        }
+
         function applyMobileActiveInstrument() {
             if (!window.matchMedia('(max-width: 768px)').matches) return;
             const pool = loadInstrumentPool();
@@ -1000,14 +1040,16 @@
                 const isCurrent = !!activeId && row.dataset.instrumentId === activeId;
                 row.classList.toggle('mobile-current', isCurrent);
                 if (isCurrent && !row.querySelector('.mobile-detail-toggle')) {
+                    const controls = ensureMobileCardControls(row);
                     const button = document.createElement('button');
-                    button.type = 'button'; button.className = 'mobile-detail-toggle mobile-only'; button.textContent = 'Show All Details';
+                    button.type = 'button'; button.className = 'mobile-detail-toggle mobile-only'; button.textContent = 'Show Details';
                     button.addEventListener('click', () => {
                         row.classList.toggle('mobile-expanded');
-                        button.textContent = row.classList.contains('mobile-expanded') ? 'Collapse Details' : 'Show All Details';
+                        button.textContent = row.classList.contains('mobile-expanded') ? 'Collapse' : 'Show Details';
                     });
-                    row.querySelector('.action-cell')?.appendChild(button);
+                    controls?.appendChild(button);
                 }
+                if (isCurrent) syncMobileCompositeSignal(row);
             });
         }
 
@@ -1466,6 +1508,7 @@
             aiHtml += `<div style="font-size:10px;color:#5f6368;">F${fiboScore}+T${trendScore}+M${momentumScore}+V${volumeScore}+S${strengthBonus}=${totalScore}</div>`;
             aiHtml += `<div style="font-size:10px;color:${volumeScore < 0 ? '#c5221f' : '#5f6368'};">${firstBarrierTight ? '第一压力过近；' : ''}${volumeText}</div>`;
             row.querySelector('.ai-cell').innerHTML = aiHtml;
+            syncMobileCompositeSignal(row);
             saveLocalV7();
         }
 

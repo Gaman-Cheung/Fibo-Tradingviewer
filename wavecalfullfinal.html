@@ -239,6 +239,14 @@ header h1 {
     white-space: nowrap;
 }
 .tab-add:hover { background: #e8f0fe; }
+.mobile-wave-selector { width:100%; min-height:46px; align-items:center; justify-content:flex-start; gap:9px; padding:0 14px; border:1px solid rgba(255,255,255,.82); border-radius:13px; background:rgba(255,255,255,.9); color:var(--text); font-weight:800; box-shadow:0 2px 8px rgba(31,35,41,.08); }
+.mobile-wave-selector span:nth-child(2) { flex:1; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wave-picker-list { display:grid; gap:8px; }
+.wave-picker-item { width:100%; min-height:54px; display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--border); border-radius:13px; background:#f8f9fa; color:var(--text); text-align:left; }
+.wave-picker-item .picker-main { flex:1; }
+.wave-picker-item strong { display:block; font-size:15px; }
+.wave-picker-item small { color:var(--muted); }
+.wave-picker-item.active { border-color:var(--primary); background:#e8f0fe; color:var(--primary-dark); }
 
 .container {
     max-width: 1800px;
@@ -727,9 +735,10 @@ td {
     .marquee-viewport { height:30px; }
     .marquee-edit { flex-basis:30px; }
     .tab-bar { padding:5px; margin-bottom:12px; border-radius:16px; background:rgba(232,234,237,.78); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); }
-    .tabs { padding:3px; }
+    .tabs { display:none; }
     .tab { min-height:38px; padding:7px 11px; }
     .tab-add { display:none; }
+    aside > .card:first-child > .input-group:first-of-type { display:none; }
     .container { display:block; padding:0; }
     .card, canvas, .chart-controls, .section { border-radius:18px; }
     .card { padding:17px; margin-bottom:14px; }
@@ -858,7 +867,16 @@ td {
     <button onclick="openWaveNoteEditor('tips')"><span class="material-icons">menu_book</span><span>Pro Tips</span></button>
 </nav>
 
+<div class="note-modal-backdrop" id="waveInstrumentPickerBackdrop" onclick="handleWaveInstrumentPickerBackdrop(event)" aria-hidden="true">
+    <div class="note-modal" role="dialog" aria-modal="true" aria-labelledby="waveInstrumentPickerTitle">
+        <div class="note-modal-header"><h2 id="waveInstrumentPickerTitle">Select Instrument</h2><button type="button" class="note-modal-close" onclick="closeWaveInstrumentPicker()"><span class="material-icons">close</span></button></div>
+        <div class="note-modal-body"><input id="waveInstrumentSearch" type="search" placeholder="Search ticker / code" oninput="renderWaveInstrumentPicker()" style="box-sizing:border-box;width:100%;min-height:46px;margin-bottom:12px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;"><div id="waveInstrumentPickerList" class="wave-picker-list"></div></div>
+        <div class="note-modal-footer"><button type="button" class="btn-util" onclick="openSharedInstrumentPool()"><span class="material-icons" style="font-size:16px;">inventory_2</span> Manage Pool</button></div>
+    </div>
+</div>
+
 <div class="tab-bar">
+    <button type="button" class="mobile-wave-selector mobile-only" onclick="openWaveInstrumentPicker()"><span class="material-icons">show_chart</span><span id="mobileWaveSelectorName">Select Instrument</span><span class="material-icons">expand_more</span></button>
     <div id="tabs" class="tabs"></div>
     <button class="tab-add" onclick="createNewTab()">＋ 新建标的</button>
 </div>
@@ -1160,6 +1178,8 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const STORAGE_KEY = "wave_matrix_tabs_v3";
 const SHARED_INSTRUMENT_POOL_KEY = "tv_instrument_pool_v1";
 const SHARED_ACTIVE_INSTRUMENT_KEY = "tv_active_instrument_id";
+const SHARED_MARQUEE_KEY = "tv_header_marquee_v1";
+const SHARED_TIPS_KEY = "tv_header_tips_v1";
 
 const DEFAULT_ACTIVE_RETRACE = ["0.236", "0.382", "0.5", "0.618", "0.786", "0.886"];
 const DEFAULT_ACTIVE_EXTEND = ["1", "1.272", "1.382", "1.618", "2", "2.618", "4.236"];
@@ -1307,6 +1327,53 @@ function openSharedInstrumentPool() {
     window.location.href = 'https://gaman-cheung.github.io/Fibo-Tradingviewer/TradingViewerOnline.html?tab=pool';
 }
 
+function updateMobileWaveSelector() {
+    const label = document.getElementById('mobileWaveSelectorName');
+    const tab = activeTab();
+    if (label) label.textContent = tab?.name || 'Select Instrument';
+}
+
+function openWaveInstrumentPicker() {
+    renderWaveInstrumentPicker();
+    const backdrop = document.getElementById('waveInstrumentPickerBackdrop');
+    backdrop.classList.add('open'); backdrop.setAttribute('aria-hidden','false');
+}
+
+function closeWaveInstrumentPicker() {
+    const backdrop = document.getElementById('waveInstrumentPickerBackdrop');
+    backdrop.classList.remove('open'); backdrop.setAttribute('aria-hidden','true');
+}
+
+function handleWaveInstrumentPickerBackdrop(event) {
+    if (event.target.id === 'waveInstrumentPickerBackdrop') closeWaveInstrumentPicker();
+}
+
+function renderWaveInstrumentPicker() {
+    const list = document.getElementById('waveInstrumentPickerList');
+    if (!list) return;
+    const query = normalizeSharedTicker(document.getElementById('waveInstrumentSearch')?.value);
+    const pool = loadSharedInstrumentPool();
+    const currentId = activeTab()?.instrumentId;
+    const items = pool.items.filter(item => item.status !== 'archived' && (!query || normalizeSharedTicker(`${item.ticker} ${item.code}`).includes(query))).sort((a,b) => Number(a.order)-Number(b.order));
+    list.innerHTML = items.length ? items.map(item => `<button type="button" class="wave-picker-item ${item.id === currentId ? 'active' : ''}" onclick="selectWaveInstrument('${item.id}')"><span class="material-icons">${item.id === currentId ? 'check_circle' : 'radio_button_unchecked'}</span><span class="picker-main"><strong>${escapeHtml(item.ticker || 'Untitled Instrument')}</strong><small>${escapeHtml([item.code,item.market].filter(Boolean).join(' · '))}</small></span></button>`).join('') : '<div class="empty">No instruments found.</div>';
+}
+
+function selectWaveInstrument(instrumentId) {
+    saveCurrentTab();
+    const pool = loadSharedInstrumentPool();
+    const item = pool.items.find(entry => entry.id === instrumentId && entry.status !== 'archived');
+    if (!item) return;
+    let tab = appState.tabs.find(entry => entry.instrumentId === instrumentId);
+    if (!tab) {
+        tab = createEmptyTab(item.ticker);
+        tab.instrumentId = instrumentId;
+        appState.tabs.push(tab);
+    }
+    appState.activeTabId = tab.id;
+    localStorage.setItem(SHARED_ACTIVE_INSTRUMENT_KEY, instrumentId);
+    persistTabs(); renderTabs(); loadTabToForm(tab); calculateAll(); updateMobileWaveSelector(); closeWaveInstrumentPicker(); initWaveMobileAccordions();
+}
+
 function persistTabs() {
     ensureWaveUiNotes();
     appState.instrumentPool = loadSharedInstrumentPool();
@@ -1317,6 +1384,12 @@ function ensureWaveUiNotes() {
     if (!appState.uiNotes || typeof appState.uiNotes !== "object") appState.uiNotes = {};
     if (typeof appState.uiNotes.marquee !== "string") appState.uiNotes.marquee = "";
     if (typeof appState.uiNotes.tips !== "string") appState.uiNotes.tips = "";
+    const sharedMarquee = localStorage.getItem(SHARED_MARQUEE_KEY);
+    const sharedTips = localStorage.getItem(SHARED_TIPS_KEY);
+    if (sharedMarquee !== null) appState.uiNotes.marquee = sharedMarquee;
+    else localStorage.setItem(SHARED_MARQUEE_KEY, appState.uiNotes.marquee);
+    if (sharedTips !== null) appState.uiNotes.tips = sharedTips;
+    else localStorage.setItem(SHARED_TIPS_KEY, appState.uiNotes.tips);
     return appState.uiNotes;
 }
 
@@ -1356,7 +1429,7 @@ function renderWaveHeaderMarquee() {
     const track = document.getElementById("waveReminderMarqueeText");
     if (!track) return;
     const notes = ensureWaveUiNotes();
-    const displayText = notes.marquee.trim() || "点击右侧铅笔，添加波浪推演纪律或盘前提醒";
+    const displayText = notes.marquee.trim() || "点击右侧铅笔，添加你的交易纪律或盘前提醒";
     track.textContent = displayText;
     const duration = Math.max(30, Math.min(120, 26 + displayText.length * 0.42));
     track.style.setProperty("--marquee-duration", `${duration}s`);
@@ -1396,6 +1469,7 @@ function closeWaveNoteEditor() {
 function saveWaveNoteEditor() {
     const notes = ensureWaveUiNotes();
     notes[waveNoteEditorMode] = document.getElementById("waveNoteEditorText").value;
+    localStorage.setItem(waveNoteEditorMode === "marquee" ? SHARED_MARQUEE_KEY : SHARED_TIPS_KEY, notes[waveNoteEditorMode]);
     persistTabs();
     if (waveNoteEditorMode === "marquee") renderWaveHeaderMarquee();
     closeWaveNoteEditor();
@@ -1458,6 +1532,7 @@ function renderTabs() {
             <span class="close" onclick="event.stopPropagation(); closeTab('${tab.id}')">×</span>
         </div>
     `).join("");
+    updateMobileWaveSelector();
 }
 
 function createNewTab() {
@@ -1750,6 +1825,10 @@ async function pullFromCloud() {
     if (data && data.wp_data) {
         appState = data.wp_data;
         const v6PoolCarrier = Array.isArray(data.v6_data) ? data.v6_data.find(item => item?.__instrument_pool_v1?.items) : null;
+        const v6NoteCarrier = Array.isArray(data.v6_data) ? data.v6_data.find(item => item?.__header_notes_v1) : null;
+        const pulledNotes = appState.uiNotes || v6NoteCarrier?.__header_notes_v1;
+        if (pulledNotes && Object.prototype.hasOwnProperty.call(pulledNotes, 'marquee')) localStorage.setItem(SHARED_MARQUEE_KEY, pulledNotes.marquee || '');
+        if (pulledNotes && Object.prototype.hasOwnProperty.call(pulledNotes, 'tips')) localStorage.setItem(SHARED_TIPS_KEY, pulledNotes.tips || '');
         if (v6PoolCarrier?.__instrument_pool_v1?.items) {
             const embeddedItems = Array.isArray(appState.instrumentPool?.items) ? appState.instrumentPool.items : [];
             const embeddedTombstones = Array.isArray(appState.instrumentPool?.tombstones) ? appState.instrumentPool.tombstones : [];
