@@ -334,7 +334,7 @@
             #tab-v7 td:nth-child(8)::before { content:'VR (5D)'; } #tab-v7 td:nth-child(9)::before { content:'Stop'; }
             #tab-v7 td:nth-child(10)::before { content:'T1 Override'; } #tab-v7 td:nth-child(11)::before { content:'T2 Override'; }
             #tab-v7 td:nth-child(12)::before { content:'Trend'; } #tab-v7 td:nth-child(13)::before { content:'RSI'; } #tab-v7 td:nth-child(14)::before { content:'MACD'; }
-            #tab-v7 td:nth-child(15)::before { content:'Composite Signal'; } #tab-v7 td:nth-child(16)::before { content:'Order'; }
+            #tab-v7 td:nth-child(15)::before { content:'Composite Signal'; }
             #tab-v7 .market-cell, #tab-v7 .auto-level { min-width:0; }
             #tab-v7 td.rr-cell { grid-column:1/-1; min-width:0; }
             #tab-v7 .rr-panel { gap:10px; }
@@ -344,7 +344,7 @@
             #tab-v6 tr.mobile-current:not(.mobile-expanded) td:nth-child(n+8):nth-child(-n+17),
             #tab-v7 tr.mobile-current:not(.mobile-expanded) td:nth-child(n+8):nth-child(-n+14) { display:none; }
             .mobile-detail-toggle { min-height:36px; padding:6px 9px; border:1px solid #d8e2f3; border-radius:11px; background:#e8f0fe; color:#174ea6; font-size:11px; font-weight:700; white-space:nowrap; }
-            #tab-v6 td:nth-child(19), #tab-v7 td:nth-child(15), #tab-v7 td:nth-child(16) { display:none !important; }
+            #tab-v6 td:nth-child(19), #tab-v7 td:nth-child(15) { display:none !important; }
             #tab-v7 .action-bar, #tab-v6 > .btn-add { display:none; }
             #tab-v7 > div:last-child { margin-bottom:12px; }
 
@@ -476,7 +476,6 @@
                         <th class="col-indicator detail-col">RSI (14) <button class="help-icon" onclick="openHelp('rsi')">?</button></th>
                         <th class="col-indicator detail-col">MACD Trend <button class="help-icon" onclick="openHelp('macd')">?</button></th>
                         <th class="col-ai">🎯 Composite Signal <button class="help-icon" onclick="openHelp('composite')" title="Composite Signal 说明">?</button></th>
-                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody id="tableBodyV7"></tbody>
@@ -1677,7 +1676,6 @@
                 <td class="detail-col"><input type="number" class="input-rsi rsi" value="${r}" placeholder="RSI" oninput="calcV7(this)"></td>
                 <td class="detail-col"><select class="macd" onchange="calcV7(this)"><option value="neutral" ${m==='neutral'?'selected':''}>Wait/Flat</option><option value="bullish" ${m==='bullish'?'selected':''}>📈 Bullish</option><option value="bearish" ${m==='bearish'?'selected':''}>📉 Bearish</option><option value="divergence" ${m==='divergence'?'selected':''}>⭐ Divergence</option></select></td>
                 <td class="ai-cell" style="background:#fff3e0;">-</td>
-                <td class="action-cell"><span class="material-icons btn-icon" title="Order is managed in Instrument Pool">lock</span></td>
             `;
             tBodyV7.appendChild(tr);
             const recalcTarget = event => calcV7(event.target);
