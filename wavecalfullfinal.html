@@ -39,6 +39,7 @@ body {
     color: var(--text);
     padding: 16px;
 }
+.mobile-only { display:none !important; }
 
 header {
     background: transparent;
@@ -705,6 +706,67 @@ td {
     padding: 12px;
     border-radius: 8px;
 }
+
+@media (max-width: 768px) {
+    body { padding:10px; padding-top:max(10px,env(safe-area-inset-top)); padding-bottom:calc(86px + env(safe-area-inset-bottom)); }
+    .mobile-only { display:flex !important; }
+    header {
+        position:sticky; top:max(6px,env(safe-area-inset-top)); z-index:80; display:grid; grid-template-columns:1fr auto;
+        gap:9px; padding:10px; margin-bottom:10px; border:1px solid rgba(255,255,255,.72); border-radius:20px;
+        background:rgba(248,249,250,.76); backdrop-filter:blur(24px) saturate(180%); -webkit-backdrop-filter:blur(24px) saturate(180%);
+        box-shadow:0 10px 35px rgba(31,35,41,.12);
+    }
+    .header-left { grid-column:1; grid-row:1; min-width:0; }
+    header h1 { font-size:18px; white-space:normal; line-height:1.1; }
+    .app-logo { width:34px; height:34px; flex:0 0 auto; }
+    .mobile-header-tools { grid-column:2; grid-row:1; display:flex !important; align-items:center; gap:7px; }
+    .mobile-icon-btn { width:40px; height:40px; padding:0; justify-content:center; border-radius:14px; background:rgba(255,255,255,.78); border:1px solid rgba(218,220,224,.9); color:var(--text); }
+    .mobile-icon-btn .material-icons { font-size:20px; }
+    .util-btns { display:none; }
+    .header-reminder { grid-column:1/-1; grid-row:2; width:100%; min-width:0; height:38px; flex-basis:auto; border-radius:13px; }
+    .marquee-viewport { height:30px; }
+    .marquee-edit { flex-basis:30px; }
+    .tab-bar { padding:5px; margin-bottom:12px; border-radius:16px; background:rgba(232,234,237,.78); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); }
+    .tabs { padding:3px; }
+    .tab { min-height:38px; padding:7px 11px; }
+    .tab-add { display:none; }
+    .container { display:block; padding:0; }
+    .card, canvas, .chart-controls, .section { border-radius:18px; }
+    .card { padding:17px; margin-bottom:14px; }
+    .card-title, .switch-line { min-height:44px; margin-bottom:0; cursor:pointer; }
+    .mobile-collapsible > .card-title::after, .mobile-collapsible > .switch-line::after { content:'expand_more'; margin-left:auto; font-family:'Material Icons'; font-size:22px; color:var(--muted); }
+    .mobile-collapsible.expanded > .card-title::after, .mobile-collapsible.expanded > .switch-line::after { content:'expand_less'; }
+    .mobile-collapsible:not(.expanded) > :not(.card-title):not(.switch-line) { display:none !important; }
+    .mobile-collapsible.expanded > .card-title, .mobile-collapsible.expanded > .switch-line { margin-bottom:16px; }
+    .input-group input, .input-group select { min-height:46px; font-size:16px; }
+    .grid-2, .grid-3 { grid-template-columns:1fr 1fr; gap:12px; }
+    .canvas-wrap { margin-bottom:14px; }
+    canvas { min-height:300px; }
+    .chart-controls { gap:10px; padding:12px; }
+    main > .card { margin-top:14px !important; }
+    .summary { grid-template-columns:1fr 1fr; }
+    .section { padding:14px; }
+    .section.mobile-section-collapsible > h3 { min-height:42px; display:flex; align-items:center; margin:0; cursor:pointer; }
+    .section.mobile-section-collapsible > h3::after { content:'expand_more'; margin-left:auto; font-family:'Material Icons'; font-size:22px; }
+    .section.mobile-section-collapsible.expanded > h3::after { content:'expand_less'; }
+    .section.mobile-section-collapsible:not(.expanded) > :not(h3) { display:none !important; }
+    table { min-width:620px; }
+    .mobile-bottom-nav {
+        position:fixed; left:10px; right:10px; bottom:max(8px,env(safe-area-inset-bottom)); z-index:100;
+        display:grid !important; grid-template-columns:repeat(4,1fr); padding:7px; border:1px solid rgba(255,255,255,.78); border-radius:22px;
+        background:rgba(248,249,250,.78); backdrop-filter:blur(26px) saturate(190%); -webkit-backdrop-filter:blur(26px) saturate(190%);
+        box-shadow:0 12px 38px rgba(31,35,41,.18);
+    }
+    .mobile-bottom-nav button, .mobile-bottom-nav a { min-width:0; height:52px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:0; border-radius:16px; background:transparent; color:#5f6368; text-decoration:none; font:700 10px Roboto,sans-serif; }
+    .mobile-bottom-nav .material-icons { font-size:21px; }
+    .mobile-bottom-nav .active { background:rgba(255,255,255,.9); color:var(--primary); box-shadow:0 2px 8px rgba(31,35,41,.1); }
+    .mobile-action-sheet { align-items:flex-end; padding:0; }
+    .mobile-action-sheet .note-modal { width:100%; max-height:82dvh; border-radius:24px 24px 0 0; padding-bottom:env(safe-area-inset-bottom); }
+    .mobile-action-list { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .mobile-action-list button { min-height:52px; justify-content:flex-start; font-size:13px; border-radius:12px; }
+    .note-modal-backdrop:not(.mobile-action-sheet) { align-items:flex-end; padding:0; }
+    .note-modal-backdrop:not(.mobile-action-sheet) .note-modal { width:100%; max-height:88dvh; border-radius:24px 24px 0 0; padding-bottom:env(safe-area-inset-bottom); }
+}
 </style>
 </head>
 
@@ -713,6 +775,11 @@ td {
 <header>
     <div class="header-left">
         <h1><img src="logo.png" alt="Logo" class="app-logo"> Wave Theory Trading System</h1>
+    </div>
+
+    <div class="mobile-header-tools mobile-only">
+        <button type="button" class="btn-util mobile-icon-btn" onclick="openWaveMobileActions()"><span class="material-icons">cloud_done</span></button>
+        <button type="button" class="btn-util mobile-icon-btn" onclick="openWaveMobileActions()"><span class="material-icons">more_horiz</span></button>
     </div>
 
     <div class="header-reminder" title="慢速滚动；鼠标悬停暂停">
@@ -769,6 +836,27 @@ td {
         </div>
     </div>
 </div>
+
+<div class="note-modal-backdrop mobile-action-sheet" id="waveMobileActionsBackdrop" onclick="handleWaveMobileActionsBackdrop(event)" aria-hidden="true">
+    <div class="note-modal" role="dialog" aria-modal="true" aria-labelledby="waveMobileActionsTitle">
+        <div class="note-modal-header"><h2 id="waveMobileActionsTitle">Actions</h2><button type="button" class="note-modal-close" onclick="closeWaveMobileActions()"><span class="material-icons">close</span></button></div>
+        <div class="note-modal-body"><div class="mobile-action-list">
+            <button class="btn-util btn-cloud-down" onclick="closeWaveMobileActions();pullFromCloud()"><span class="material-icons">cloud_download</span> Pull from Cloud</button>
+            <button class="btn-util btn-cloud-up" onclick="closeWaveMobileActions();pushToCloud()"><span class="material-icons">cloud_upload</span> Push to Cloud</button>
+            <button class="btn-util" onclick="closeWaveMobileActions();downloadLocalBackup()"><span class="material-icons">save_alt</span> Local Backup</button>
+            <button class="btn-util" onclick="closeWaveMobileActions();document.getElementById('backupFile').click()"><span class="material-icons">folder_open</span> Import Backup</button>
+            <button class="btn-util" onclick="closeWaveMobileActions();openWaveNoteEditor('marquee')"><span class="material-icons">campaign</span> Edit Reminder</button>
+            <button class="btn-util btn-logout" onclick="closeWaveMobileActions();logOutCloud()"><span class="material-icons">logout</span> Log Out</button>
+        </div></div>
+    </div>
+</div>
+
+<nav class="mobile-bottom-nav mobile-only" aria-label="Mobile navigation">
+    <a href="https://gaman-cheung.github.io/Fibo-Tradingviewer/TradingViewerOnline.html?tab=pool"><span class="material-icons">inventory_2</span><span>Pool</span></a>
+    <a href="https://gaman-cheung.github.io/Fibo-Tradingviewer/TradingViewerOnline.html?tab=v6"><span class="material-icons">analytics</span><span>Terminal</span></a>
+    <button class="active"><span class="material-icons">show_chart</span><span>Wave</span></button>
+    <button onclick="openWaveNoteEditor('tips')"><span class="material-icons">menu_book</span><span>Pro Tips</span></button>
+</nav>
 
 <div class="tab-bar">
     <div id="tabs" class="tabs"></div>
@@ -1320,6 +1408,42 @@ function handleWaveNoteBackdrop(event) {
 document.addEventListener("keydown", event => {
     if (event.key === "Escape" && document.getElementById("waveNoteModalBackdrop")?.classList.contains("open")) closeWaveNoteEditor();
 });
+
+function openWaveMobileActions() {
+    const backdrop = document.getElementById("waveMobileActionsBackdrop");
+    backdrop.classList.add("open"); backdrop.setAttribute("aria-hidden", "false");
+}
+function closeWaveMobileActions() {
+    const backdrop = document.getElementById("waveMobileActionsBackdrop");
+    backdrop.classList.remove("open"); backdrop.setAttribute("aria-hidden", "true");
+}
+function handleWaveMobileActionsBackdrop(event) {
+    if (event.target.id === "waveMobileActionsBackdrop") closeWaveMobileActions();
+}
+
+function initWaveMobileAccordions() {
+    if (!window.matchMedia?.('(max-width: 768px)').matches) return;
+    document.querySelectorAll('aside > .card').forEach((card,index) => {
+        card.classList.add('mobile-collapsible');
+        if (index === 0) card.classList.add('expanded');
+        const trigger = card.querySelector(':scope > .card-title, :scope > .switch-line');
+        if (!trigger || trigger.dataset.mobileAccordionReady) return;
+        trigger.dataset.mobileAccordionReady = '1';
+        trigger.addEventListener('click', event => {
+            if (event.target.closest('input,select,button,label')) return;
+            card.classList.toggle('expanded');
+        });
+    });
+    document.querySelectorAll('main .section').forEach((section,index) => {
+        const trigger = section.querySelector(':scope > h3');
+        if (!trigger) return;
+        section.classList.add('mobile-section-collapsible');
+        if (index === 0) section.classList.add('expanded');
+        if (trigger.dataset.mobileAccordionReady) return;
+        trigger.dataset.mobileAccordionReady = '1';
+        trigger.addEventListener('click', () => section.classList.toggle('expanded'));
+    });
+}
 
 function activeTab() {
     return appState.tabs.find(t => t.id === appState.activeTabId);
@@ -3080,6 +3204,7 @@ window.onload = function() {
     renderWaveHeaderMarquee();
     loadTabToForm(activeTab());
     calculateAll();
+    initWaveMobileAccordions();
 };
 </script>
 

@@ -20,6 +20,7 @@
         /* Header & Tabs */
         .header { display: flex; align-items: center; margin-bottom: 16px; justify-content: space-between; flex-wrap: wrap; gap: 10px;}
         .header-left { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+        .mobile-only { display:none !important; }
 
         /* Editable reminder marquee */
         .header-reminder {
@@ -230,12 +231,90 @@
         #loader { display: none; position: fixed; top: 16px; right: 50%; transform: translateX(50%); background: #333; color: white; padding: 8px 24px; border-radius: 20px; font-size: 14px; font-weight: bold; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
 
         @media (max-width: 768px) {
-            #btn-pool { display:flex; }
-            .header-reminder { order: 3; flex-basis: 100%; }
+            :root { --mobile-glass:rgba(248,249,250,.76); }
+            body { padding:10px; padding-top:max(10px,env(safe-area-inset-top)); padding-bottom:calc(86px + env(safe-area-inset-bottom)); }
+            .mobile-only { display:flex !important; }
+            .header {
+                position:sticky; top:max(6px,env(safe-area-inset-top)); z-index:80; display:grid; grid-template-columns:1fr auto;
+                gap:9px; padding:10px; margin-bottom:12px; border:1px solid rgba(255,255,255,.72); border-radius:20px;
+                background:var(--mobile-glass); backdrop-filter:blur(24px) saturate(180%); -webkit-backdrop-filter:blur(24px) saturate(180%);
+                box-shadow:0 10px 35px rgba(31,35,41,.12);
+            }
+            .header-left { display:contents; }
+            .header h1 { grid-column:1; grid-row:1; font-size:21px; min-width:0; }
+            .app-logo { width:34px; height:34px; }
+            .mobile-header-tools { grid-column:2; grid-row:1; display:flex !important; align-items:center; gap:7px; }
+            .mobile-icon-btn { width:40px; height:40px; padding:0; justify-content:center; border-radius:14px; background:rgba(255,255,255,.78); border:1px solid rgba(218,220,224,.9); color:var(--text-primary); }
+            .mobile-icon-btn .material-icons { font-size:20px; }
+            .util-btns { display:none; }
+            .header-reminder { grid-column:1/-1; grid-row:2; order:initial; width:100%; min-width:0; height:38px; border-radius:13px; }
+            .marquee-viewport { height:30px; }
+            .marquee-edit { flex-basis:30px; }
+            .tab-container { grid-column:1/-1; grid-row:3; width:100%; height:42px; }
+            .tab-container .tab-btn { flex:1; justify-content:center; height:34px; padding:0 8px; }
+            body.view-pool .tab-container { display:none; }
+            #btn-pool { display:none; }
             .pool-grid { grid-template-columns:1fr; }
             .instrument-dialog-grid { grid-template-columns:1fr; }
-            td:first-child, th:first-child { position: sticky; left: 0; background: white; z-index: 2; box-shadow: 2px 0 5px rgba(0,0,0,0.05);}
-            th:first-child { background: #f1f3f4; z-index: 11; }
+            .pool-toolbar { padding:16px; border-radius:18px; }
+            .pool-toolbar h2 { width:100%; font-size:20px; }
+            .pool-search { flex-basis:100%; height:46px; }
+            .pool-toolbar .btn-add { min-height:46px; }
+            .instrument-card { border-radius:18px; padding:17px; box-shadow:0 6px 22px rgba(31,35,41,.08); }
+
+            /* Single-instrument mobile cards: keep the same DOM and inputs as desktop. */
+            #tab-v6 .table-card, #tab-v7 .table-card { overflow:visible; background:transparent; box-shadow:none; margin:0; }
+            #tab-v6 table, #tab-v6 tbody, #tab-v7 table, #tab-v7 tbody { display:block; width:100%; white-space:normal; }
+            #tab-v6 thead, #tab-v7 thead, .v7-top-scroll { display:none !important; }
+            #tab-v6 tbody tr, #tab-v7 tbody tr { display:none; }
+            #tab-v6 tbody tr.mobile-current, #tab-v7 tbody tr.mobile-current {
+                display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; padding:15px; margin-bottom:14px;
+                background:rgba(255,255,255,.9); border:1px solid rgba(218,220,224,.86); border-radius:20px;
+                box-shadow:0 8px 28px rgba(31,35,41,.09);
+            }
+            #tab-v6 td, #tab-v7 td {
+                box-sizing:border-box; min-width:0; height:auto; padding:11px; display:flex; flex-direction:column; align-items:stretch;
+                justify-content:center; gap:5px; border:1px solid #edf0f4; border-radius:12px; background:#f8f9fa; text-align:left;
+            }
+            #tab-v6 td::before, #tab-v7 td::before { color:var(--text-secondary); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.35px; }
+            #tab-v6 input, #tab-v7 input, #tab-v7 select { box-sizing:border-box; width:100%; min-height:42px; text-align:center; font-size:16px; background:white; }
+            #tab-v6 td:first-child, #tab-v7 td:first-child, #tab-v7 td:nth-child(17), #tab-v6 td:nth-child(17) { grid-column:1/-1; }
+            #tab-v6 td:first-child input, #tab-v7 td:first-child input { font-size:19px; text-align:left; border:0; background:transparent; padding-left:0; }
+            #tab-v6 td:nth-child(1)::before, #tab-v7 td:nth-child(1)::before { content:'Instrument'; }
+            #tab-v6 td:nth-child(2)::before { content:'High'; } #tab-v6 td:nth-child(3)::before { content:'Low'; } #tab-v6 td:nth-child(4)::before { content:'Current'; }
+            #tab-v6 td:nth-child(5)::before { content:'23.6%'; } #tab-v6 td:nth-child(6)::before { content:'38.2%'; } #tab-v6 td:nth-child(7)::before { content:'50%'; }
+            #tab-v6 td:nth-child(8)::before { content:'61.8%'; } #tab-v6 td:nth-child(9)::before { content:'78.6%'; } #tab-v6 td:nth-child(10)::before { content:'88.6%'; }
+            #tab-v6 td:nth-child(11)::before { content:'127.2% Target'; } #tab-v6 td:nth-child(12)::before { content:'127.2% Upside'; }
+            #tab-v6 td:nth-child(13)::before { content:'161.8% Target'; } #tab-v6 td:nth-child(14)::before { content:'161.8% Upside'; }
+            #tab-v6 td:nth-child(15)::before { content:'261.8% Target'; } #tab-v6 td:nth-child(16)::before { content:'261.8% Upside'; }
+            #tab-v6 td:nth-child(17)::before { content:'Current Zone'; } #tab-v6 td:nth-child(18)::before { content:'Actions'; }
+            #tab-v7 td:nth-child(2)::before { content:'Current / Zone'; } #tab-v7 td:nth-child(3)::before { content:'Support'; } #tab-v7 td:nth-child(4)::before { content:'Pressure'; }
+            #tab-v7 td:nth-child(5)::before { content:'Auto T1'; } #tab-v7 td:nth-child(6)::before { content:'Auto T2'; } #tab-v7 td:nth-child(7)::before { content:'Risk / Reward'; }
+            #tab-v7 td:nth-child(8)::before { content:'Prev Close'; } #tab-v7 td:nth-child(9)::before { content:'VR (5D)'; } #tab-v7 td:nth-child(10)::before { content:'Stop'; }
+            #tab-v7 td:nth-child(11)::before { content:'T1 Override'; } #tab-v7 td:nth-child(12)::before { content:'T2 Override'; } #tab-v7 td:nth-child(13)::before { content:'% Baseline'; }
+            #tab-v7 td:nth-child(14)::before { content:'Trend'; } #tab-v7 td:nth-child(15)::before { content:'RSI'; } #tab-v7 td:nth-child(16)::before { content:'MACD'; }
+            #tab-v7 td:nth-child(17)::before { content:'Composite Signal'; } #tab-v7 td:nth-child(18)::before { content:'Order'; }
+            #tab-v7 .market-cell, #tab-v7 .auto-level { min-width:0; }
+            #tab-v6 tr.mobile-current:not(.mobile-expanded) td:nth-child(n+5):nth-child(-n+16),
+            #tab-v7 tr.mobile-current:not(.mobile-expanded) td:nth-child(n+8):nth-child(-n+16) { display:none; }
+            .mobile-detail-toggle { width:100%; min-height:42px; border:1px solid #d8e2f3; border-radius:12px; background:#e8f0fe; color:#174ea6; font-weight:700; }
+            #tab-v7 .action-bar, #tab-v6 > .btn-add { display:none; }
+            #tab-v7 > div:last-child { margin-bottom:12px; }
+
+            .mobile-bottom-nav {
+                position:fixed; left:10px; right:10px; bottom:max(8px,env(safe-area-inset-bottom)); z-index:100;
+                display:grid !important; grid-template-columns:repeat(4,1fr); padding:7px; border:1px solid rgba(255,255,255,.78); border-radius:22px;
+                background:rgba(248,249,250,.78); backdrop-filter:blur(26px) saturate(190%); -webkit-backdrop-filter:blur(26px) saturate(190%);
+                box-shadow:0 12px 38px rgba(31,35,41,.18);
+            }
+            .mobile-bottom-nav button, .mobile-bottom-nav a { min-width:0; height:52px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:0; border-radius:16px; background:transparent; color:#5f6368; text-decoration:none; font:700 10px Roboto,sans-serif; }
+            .mobile-bottom-nav .material-icons { font-size:21px; }
+            .mobile-bottom-nav .active { background:rgba(255,255,255,.88); color:var(--g-blue); box-shadow:0 2px 8px rgba(31,35,41,.1); }
+            .mobile-action-sheet { align-items:flex-end; padding:0; }
+            .mobile-action-sheet .note-modal { width:100%; max-height:82dvh; border-radius:24px 24px 0 0; padding-bottom:env(safe-area-inset-bottom); }
+            .mobile-action-list { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+            .mobile-action-list button { min-height:52px; justify-content:flex-start; font-size:13px; }
+            .note-modal-backdrop .note-modal { max-height:88dvh; }
         }
     </style>
 </head>
@@ -257,6 +336,10 @@
                     <span class="material-icons" style="font-size: 18px;">track_changes</span> Then leap
                 </button>
             </div>
+        </div>
+        <div class="mobile-header-tools mobile-only">
+            <button type="button" class="btn-util mobile-icon-btn" onclick="openMobileActions()" title="Cloud & actions"><span class="material-icons">cloud_done</span></button>
+            <button type="button" class="btn-util mobile-icon-btn" onclick="openMobileActions()" title="More"><span class="material-icons">more_horiz</span></button>
         </div>
         <div class="header-reminder" title="慢速滚动；鼠标悬停暂停">
             <span class="material-icons">campaign</span>
@@ -399,6 +482,27 @@
             </div>
         </div>
     </div>
+
+    <div class="note-modal-backdrop mobile-action-sheet" id="mobileActionsBackdrop" onclick="handleMobileActionsBackdrop(event)" aria-hidden="true">
+        <div class="note-modal" role="dialog" aria-modal="true" aria-labelledby="mobileActionsTitle">
+            <div class="note-modal-header"><h2 id="mobileActionsTitle">Actions</h2><button type="button" class="note-modal-close" onclick="closeMobileActions()"><span class="material-icons">close</span></button></div>
+            <div class="note-modal-body"><div class="mobile-action-list">
+                <button class="btn-util btn-cloud-down" onclick="closeMobileActions();loadFromCloud()"><span class="material-icons">cloud_download</span> Pull from Cloud</button>
+                <button class="btn-util btn-cloud-up" onclick="closeMobileActions();saveToCloud()"><span class="material-icons">cloud_upload</span> Push to Cloud</button>
+                <button class="btn-util" onclick="closeMobileActions();exportData()"><span class="material-icons">save_alt</span> Local Backup</button>
+                <button class="btn-util" onclick="closeMobileActions();document.getElementById('importFile').click()"><span class="material-icons">folder_open</span> Import Backup</button>
+                <button class="btn-util" onclick="closeMobileActions();openNoteEditor('marquee')"><span class="material-icons">campaign</span> Edit Reminder</button>
+                <button class="btn-util btn-logout" onclick="closeMobileActions();document.getElementById('logoutBtn').click()"><span class="material-icons">logout</span> Log Out</button>
+            </div></div>
+        </div>
+    </div>
+
+    <nav class="mobile-bottom-nav mobile-only" aria-label="Mobile navigation">
+        <button id="mobileNavPool" onclick="switchTab('pool')"><span class="material-icons">inventory_2</span><span>Pool</span></button>
+        <button id="mobileNavTerminal" onclick="switchMobileTerminal()"><span class="material-icons">analytics</span><span>Terminal</span></button>
+        <a id="mobileNavWave" href="https://gaman-cheung.github.io/Fibo-Tradingviewer/wavecalfullfinal.html"><span class="material-icons">show_chart</span><span>Wave</span></a>
+        <button id="mobileNavTips" onclick="openNoteEditor('tips')"><span class="material-icons">menu_book</span><span>Pro Tips</span></button>
+    </nav>
 
     <script>
     // ================= Supabase 配置区域 =================
@@ -862,12 +966,60 @@
             document.getElementById('tab-' + tabId).classList.add('active');
             document.getElementById('btn-' + tabId).classList.add('active');
             localStorage.setItem('tv_active_tab', tabId);
+            document.body.classList.toggle('view-pool', tabId === 'pool');
+            document.body.classList.toggle('view-terminal', tabId === 'v6' || tabId === 'v7');
+            if (tabId === 'v6' || tabId === 'v7') localStorage.setItem('tv_last_terminal_tab', tabId);
             if (tabId === 'pool') renderInstrumentPool();
             if (tabId === 'v7') {
                 syncV7withV6(true);
                 requestAnimationFrame(syncV7ScrollWidth);
             }
+            applyMobileActiveInstrument();
+            updateMobileNavigation(tabId);
         }
+
+        function switchMobileTerminal() {
+            const last = localStorage.getItem('tv_last_terminal_tab');
+            switchTab(last === 'v7' ? 'v7' : 'v6');
+        }
+
+        function updateMobileNavigation(tabId) {
+            document.getElementById('mobileNavPool')?.classList.toggle('active', tabId === 'pool');
+            document.getElementById('mobileNavTerminal')?.classList.toggle('active', tabId === 'v6' || tabId === 'v7');
+        }
+
+        function applyMobileActiveInstrument() {
+            if (!window.matchMedia('(max-width: 768px)').matches) return;
+            const pool = loadInstrumentPool();
+            let activeId = localStorage.getItem(ACTIVE_INSTRUMENT_KEY);
+            if (!pool.items.some(item => item.id === activeId && item.status !== 'archived')) {
+                activeId = pool.items.filter(item => item.status !== 'archived').sort((a,b) => Number(a.order)-Number(b.order))[0]?.id || '';
+                if (activeId) localStorage.setItem(ACTIVE_INSTRUMENT_KEY, activeId);
+            }
+            document.querySelectorAll('#tableBodyV6 tr, #tableBodyV7 tr').forEach(row => {
+                const isCurrent = !!activeId && row.dataset.instrumentId === activeId;
+                row.classList.toggle('mobile-current', isCurrent);
+                if (isCurrent && !row.querySelector('.mobile-detail-toggle')) {
+                    const button = document.createElement('button');
+                    button.type = 'button'; button.className = 'mobile-detail-toggle mobile-only'; button.textContent = 'Show All Details';
+                    button.addEventListener('click', () => {
+                        row.classList.toggle('mobile-expanded');
+                        button.textContent = row.classList.contains('mobile-expanded') ? 'Collapse Details' : 'Show All Details';
+                    });
+                    row.querySelector('.action-cell')?.appendChild(button);
+                }
+            });
+        }
+
+        function openMobileActions() {
+            const backdrop = document.getElementById('mobileActionsBackdrop');
+            backdrop.classList.add('open'); backdrop.setAttribute('aria-hidden','false');
+        }
+        function closeMobileActions() {
+            const backdrop = document.getElementById('mobileActionsBackdrop');
+            backdrop.classList.remove('open'); backdrop.setAttribute('aria-hidden','true');
+        }
+        function handleMobileActionsBackdrop(event) { if (event.target.id === 'mobileActionsBackdrop') closeMobileActions(); }
 
         function syncV7ScrollWidth() {
             const table = document.getElementById('v7Table');
