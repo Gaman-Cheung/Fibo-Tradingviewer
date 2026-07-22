@@ -1672,7 +1672,7 @@
                 <td class="detail-col"><input type="number" class="input-risk stop" value="${s}" placeholder="止损" oninput="calcV7(this)"></td>
                 <td class="detail-col"><input type="number" class="input-risk target1" value="${g1}" placeholder="自动"></td>
                 <td class="detail-col"><input type="number" class="input-risk target" value="${g}" placeholder="自动"></td>
-                <td class="detail-col"><select class="trend" onchange="calcV7(this)"><option value="uptrend" ${t==='uptrend'?'selected':''}>📈 Uptrend (+2)</option><option value="sideways" ${t==='sideways'?'selected':''}>➖ Sideways (+0)</option><option value="downtrend" ${t==='downtrend'?'selected':''}>📉 Downtrend (-3)</option></select></td>
+                <td class="detail-col"><select class="trend" onchange="calcV7(this)"><option value="uptrend" ${t==='uptrend'?'selected':''}>📈 Uptrend</option><option value="sideways" ${t==='sideways'?'selected':''}>➖ Sideways</option><option value="downtrend" ${t==='downtrend'?'selected':''}>📉 Downtrend</option></select></td>
                 <td class="detail-col"><input type="number" class="input-rsi rsi" value="${r}" placeholder="RSI" oninput="calcV7(this)"></td>
                 <td class="detail-col"><select class="macd" onchange="calcV7(this)"><option value="neutral" ${m==='neutral'?'selected':''}>Wait/Flat</option><option value="bullish" ${m==='bullish'?'selected':''}>📈 Bullish</option><option value="bearish" ${m==='bearish'?'selected':''}>📉 Bearish</option><option value="divergence" ${m==='divergence'?'selected':''}>⭐ Divergence</option></select></td>
                 <td class="ai-cell" style="background:#fff3e0;">-</td>
