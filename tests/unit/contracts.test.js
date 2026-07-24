@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildCloudPayload, unpackCloudPayload } from '../../src/core/cloud-payload.js';
-import { ROUTES } from '../../src/core/config.js';
+import { ROUTES, SUPABASE_PROFILES } from '../../src/core/config.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -120,4 +120,11 @@ test('public entries and cross-system routes use the renamed HTML files', () => 
   ];
   const publishedSource = routedFiles.map(name => fs.readFileSync(path.join(root,name),'utf8')).join('\n');
   assert.doesNotMatch(publishedSource, /TradingViewerDoubleSys\.html|TradingViewerOnline\.html|wavecalfullfinal\.html/);
+});
+
+test('all pages use the same active Supabase project profile', () => {
+  const profiles = Object.values(SUPABASE_PROFILES);
+  assert.equal(new Set(profiles.map(profile => profile.url)).size, 1);
+  assert.equal(new Set(profiles.map(profile => profile.key)).size, 1);
+  assert.match(profiles[0].key, /^sb_publishable_/);
 });

@@ -11,7 +11,7 @@ export const ROUTES = Object.freeze({
 export const SUPABASE_PROFILES = Object.freeze({
   auth: Object.freeze({
     url: 'https://azquoojnwadtekkhxhui.supabase.co',
-    key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYXNlIiwicmVmIjoiYXpxdW9vam53YWR0ZWtraHhodWkiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTc3MzYyNjk5MywiZXhwIjoyMDg5MjAyOTkzfQ.v3vm-f_ufTFKc5PjGpf3Av9kDO_rwrL89XTMyauhh3g'
+    key: 'sb_publishable_uj_ViNAQS0Bv6Oy6qGzUmA_n7WAFsZc'
   }),
   terminal: Object.freeze({
     url: 'https://azquoojnwadtekkhxhui.supabase.co',
@@ -19,7 +19,7 @@ export const SUPABASE_PROFILES = Object.freeze({
   }),
   wave: Object.freeze({
     url: 'https://azquoojnwadtekkhxhui.supabase.co',
-    key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYXNlIiwicmVmIjoiYXpxdW9vam53YWR0ZWtraHhodWkiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTc3MzYyNjk5MywiZXhwIjoyMDg5MjAyOTkzfQ.v3vm-f_ufTFKc5PjGpf3Av9kDO_rwrL89XTMyauhh3g'
+    key: 'sb_publishable_uj_ViNAQS0Bv6Oy6qGzUmA_n7WAFsZc'
   })
 });
 
