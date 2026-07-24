@@ -1,0 +1,1986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TradingViewer</title>
+    <link rel="icon" type="image/png" href="logo.png">
+
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        :root {
+            --g-blue: #4285F4; --g-red: #EA4335; --g-yellow: #FBBC05; --g-green: #34A853;
+            --bg-color: #f8f9fa; --surface-color: #ffffff; --border-color: #dadce0; --text-primary: #202124; --text-secondary: #5f6368;
+        }
+        body { font-family: 'Roboto', sans-serif; background-color: var(--bg-color); margin: 0; padding: 16px; color: var(--text-primary); }
+
+        /* Header & Tabs */
+        .header { display: flex; align-items: center; margin-bottom: 16px; justify-content: space-between; flex-wrap: wrap; gap: 10px;}
+        .header-left { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+        .mobile-only { display:none !important; }
+
+        /* Editable reminder marquee */
+        .header-reminder {
+            box-sizing: border-box; flex: 1 1 320px; min-width: 240px; height: 44px; display: flex; align-items: center;
+            overflow: hidden; padding: 4px; background: #e8eaed; border: 0; border-radius: 8px;
+            color: var(--text-secondary);
+        }
+        .header-reminder > .material-icons { flex: 0 0 auto; margin: 0 8px 0 6px; font-size: 18px; color: var(--text-secondary); }
+        .marquee-viewport {
+            flex: 1; min-width: 0; height: 36px; display: flex; align-items: center;
+            overflow: hidden; white-space: nowrap; background: var(--surface-color); border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .marquee-track {
+            display: inline-block; min-width: max-content; padding-left: 100%; font-size: 13px; font-weight: 700;
+            animation: reminder-marquee var(--marquee-duration, 36s) linear infinite;
+        }
+        .header-reminder:hover .marquee-track { animation-play-state: paused; }
+        @keyframes reminder-marquee { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+        .marquee-edit {
+            flex: 0 0 36px; align-self: stretch; margin-left: 4px; border: 0; border-radius: 6px;
+            background: transparent; color: var(--text-secondary); cursor: pointer;
+        }
+        .marquee-edit:hover { background: var(--surface-color); color: var(--g-blue); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .marquee-edit .material-icons { font-size: 17px; vertical-align: middle; }
+
+        /* Editable notes / tips modal */
+        .note-modal-backdrop {
+            display: none; position: fixed; inset: 0; z-index: 10000; padding: 24px;
+            align-items: center; justify-content: center; background: rgba(32,33,36,0.48);
+        }
+        .note-modal-backdrop.open { display: flex; }
+        .note-modal {
+            width: min(760px, 94vw); max-height: 88vh; display: flex; flex-direction: column;
+            background: white; border-radius: 12px; box-shadow: 0 18px 50px rgba(0,0,0,0.28); overflow: hidden;
+        }
+        .note-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border-color); }
+        .note-modal-header h2 { margin: 0; font-size: 18px; }
+        .note-modal-close { border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; padding: 4px; border-radius: 50%; }
+        .note-modal-close:hover { background: #f1f3f4; }
+        .note-modal-body { padding: 16px 18px; overflow: auto; }
+        .note-textarea {
+            box-sizing: border-box; width: 100%; min-height: 340px; resize: vertical; padding: 14px;
+            border: 1px solid var(--border-color); border-radius: 8px; outline: none; text-align: left;
+            font: 14px/1.75 'Roboto', sans-serif; color: var(--text-primary); background: #fcfcfc;
+        }
+        .note-textarea:focus { border-color: var(--g-blue); box-shadow: 0 0 0 3px rgba(66,133,244,0.12); }
+        .note-modal-hint { margin-top: 8px; color: var(--text-secondary); font-size: 12px; }
+        .note-modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--border-color); }
+        .btn-note-save { background: var(--g-blue); border-color: var(--g-blue); color: white; }
+        .btn-note-save:hover { background: #3367d6; color: white; }
+        .btn-util.btn-pro-tips { background: #f8f9fa; border-color: #3c4043; color: #202124; }
+        .btn-util.btn-pro-tips:hover { background: #e8eaed; box-shadow: 0 1px 3px rgba(60,64,67,0.3); }
+
+        /* 3. Logo 样式 */
+        .app-logo { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,0.2); border: 2px solid var(--g-blue); }
+        .header h1 { font-size: 24px; margin: 0; display: flex; align-items: center; gap: 10px; font-weight: 900;}
+
+        .tab-container { display: flex; background: #e8eaed; border-radius: 8px; padding: 4px; display: inline-flex;}
+        .tab-btn {
+            background: transparent; border: none; padding: 8px 16px; border-radius: 6px;
+            font-size: 14px; font-weight: bold; color: var(--text-secondary); cursor: pointer; transition: 0.3s;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .tab-btn.active { background: var(--surface-color); color: var(--g-blue); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        #btn-pool { display:none; }
+
+        /* Utility Buttons */
+        .util-btns { display: flex; gap: 8px; flex-wrap: wrap;}
+        .btn-util {
+            display: inline-flex; align-items: center; gap: 4px; background: white; border: 1px solid var(--border-color);
+            padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: bold; cursor: pointer; color: var(--text-secondary); transition: 0.2s;
+        }
+        .btn-util:hover { background: #f1f3f4; color: var(--text-primary); }
+
+        /* Cloud Buttons Specific Styles */
+        .btn-util.btn-switch-system {background: #f8f9fa;border-color: #3c4043;color: #202124;}
+        .btn-util.btn-switch-system:hover {background: #e8eaed;box-shadow: 0 1px 3px rgba(60,64,67,0.3);}
+        .btn-cloud-up { color: #188038; border-color: #188038; background: #e6f4ea;}
+        .btn-cloud-up:hover { background: #ceead6; color: #137333;}
+        .btn-cloud-down { color: var(--g-blue); border-color: var(--g-blue); background: #e8f0fe;}
+        .btn-cloud-down:hover { background: #d2e3fc; color: #174ea6;}
+
+        /* 退出按钮的基础样式（复用 btn-util） */
+        .btn-util.btn-logout {
+            margin-left: 10px; /* 保持你想要的间距 */
+            color: #5f6368;    /* 初始文字颜色 */
+        }
+
+        /* 退出按钮特有的悬停效果：变红 */
+        .btn-util.btn-logout:hover {
+            background: #fdf2f2;      /* 淡淡的红背景 */
+            border-color: #f5c2c7;    /* 浅红边框 */
+            color: #d32f2f;           /* 红色文字 */
+        }
+
+        /* Table Styles */
+        .tab-content { display: none; animation: fadeIn 0.3s ease; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        .table-card { background: var(--surface-color); border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); overflow-x: auto; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+        th { background: #f1f3f4; color: var(--text-secondary); padding: 12px 8px; font-size: 12px; font-weight: 500; text-align: center; position: sticky; top: 0; z-index: 10;}
+        td { padding: 8px; border-bottom: 1px solid var(--border-color); font-size: 13px; text-align: center; vertical-align: middle; height: 48px; }
+        tbody tr:hover { background-color: rgba(66, 133, 244, 0.04); }
+
+        th.col-base { border-bottom: 3px solid var(--g-blue); }
+        th.col-retrace { border-bottom: 3px solid var(--g-green); }
+        th.col-target { border-bottom: 3px solid var(--g-yellow); }
+        th.col-indicator { border-bottom: 3px solid #ab47bc; }
+        th.col-ai { border-bottom: 3px solid #ff6d00; background: #fff3e0;}
+
+        input, select { padding: 8px 4px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; width: 60px; outline: none; text-align: center; font-family: 'Roboto', sans-serif;}
+        input:focus, select:focus { border-color: var(--g-blue); background: #f8faff; box-shadow: 0 0 0 2px rgba(66,133,244,0.1);}
+        .input-name { width: 70px; text-align: left; text-transform: uppercase; font-weight: bold; }
+        .input-rsi { width: 45px; }
+        .input-risk { width: 66px; }
+        select { width: 105px; cursor: pointer; }
+
+        .calc-result { font-family: 'Roboto Mono', monospace; font-weight: 500; position: relative;}
+        .profit-pct { color: var(--g-red); font-weight: 900; font-size: 13px;}
+        .compact-target { min-width:92px; line-height:1.35; }
+        .compact-target .target-price { display:block; font-weight:900; font-size:14px; color:var(--text-primary); }
+        .compact-target .target-pct { display:block; font-weight:900; font-size:12px; color:var(--g-red); }
+        .compact-target small { display:block; color:var(--text-secondary); font-size:9px; }
+        .help-icon {
+            width:18px; height:18px; padding:0; margin-left:3px; vertical-align:middle; border:1px solid #aeb4bd;
+            border-radius:50%; background:#fff; color:#5f6368; cursor:pointer; font:900 11px/16px Roboto,sans-serif;
+        }
+        .help-icon:hover { border-color:var(--g-blue); color:var(--g-blue); background:#e8f0fe; }
+        .help-content { color:var(--text-primary); font-size:14px; line-height:1.7; }
+        .help-content h3 { margin:16px 0 6px; font-size:14px; }
+        .help-content h3:first-child { margin-top:0; }
+        .help-content p { margin:6px 0; }
+        .help-content code { padding:2px 5px; border-radius:4px; background:#f1f3f4; font-family:monospace; }
+        .help-content .formula { padding:10px 12px; border-left:3px solid var(--g-blue); background:#f8faff; }
+        .signal-why { margin-top:5px; border:0; background:transparent; color:var(--g-blue); cursor:pointer; font-size:10px; font-weight:800; }
+        .rr-cell { min-width:360px; white-space:normal; }
+        .rr-panel { display:grid; gap:9px; text-align:left; line-height:1.35; }
+        .rr-values { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+        .rr-value { padding:7px 9px; border:1px solid #e5e9ef; border-radius:8px; background:#f8f9fa; }
+        .rr-value small { display:block; color:var(--text-secondary); font-size:9px; font-weight:800; text-transform:uppercase; }
+        .rr-value strong { display:block; margin-top:2px; font-size:14px; }
+        .rr-message { padding:8px 9px; border-radius:8px; background:#fff8e1; text-align:center; }
+        .risk-lines { display:grid; gap:2px; padding:0 2px; color:var(--text-secondary); font-size:10px; }
+        .stop-plan { display:grid; grid-template-columns:1.35fr 1fr 1fr; gap:6px; padding-top:8px; border-top:1px solid #e5e9ef; }
+        .stop-plan-title { grid-column:1/-1; display:flex; align-items:baseline; justify-content:space-between; gap:8px; font-size:10px; font-weight:900; }
+        .stop-plan-title span { color:var(--text-secondary); font-size:9px; font-weight:500; }
+        .stop-choice { position:relative; display:grid; grid-template-columns:1fr auto; align-items:center; gap:2px 7px; padding:8px; border:1px solid #dfe4ea; border-radius:9px; background:#fff; }
+        .stop-choice.structure-choice { border-color:#c8d8f6; background:#f8faff; }
+        .stop-choice-title { color:var(--text-secondary); font-size:9px; font-weight:800; }
+        .stop-choice strong { display:block; color:var(--text-primary); font-size:13px; }
+        .stop-choice small { grid-column:1; color:var(--text-secondary); font-size:9px; line-height:1.3; }
+        .stop-use { grid-column:2; grid-row:1/3; align-self:center; border:1px solid #b9cdf5; border-radius:13px; background:#fff; color:var(--g-blue); padding:5px 9px; cursor:pointer; font-size:10px; font-weight:900; }
+        .stop-use:hover { background:#e8f0fe; }
+
+        .highlight-cell { background-color: #e8f0fe !important; color: var(--g-blue) !important; font-weight: 900; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(66,133,244,0.3);}
+        .sr-tag { display: block; font-size: 10px; font-weight: 800; margin-top: 4px; padding: 2px 0; border-radius: 3px; letter-spacing: 0.5px; line-height: 1; }
+        .sr-tag.sup { background: rgba(52, 168, 83, 0.15); color: #188038; }
+        .sr-tag.res { background: rgba(234, 67, 53, 0.15); color: #c5221f; }
+
+        .status-badge { display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; min-width: 70px; }
+        .ai-badge { display: inline-block; padding: 6px 10px; border-radius: 4px; font-size: 12px; font-weight: 900; letter-spacing: 0.5px; text-transform: uppercase; min-width: 80px;}
+        .risk-ok { color:#137333; font-weight:900; }
+        .risk-warn { color:#b06000; font-weight:900; }
+        .risk-bad { color:#c5221f; font-weight:900; }
+        .level-map { min-width: 180px; text-align:left; line-height:1.55; white-space:normal; }
+        .level-map .resistance { color:#c5221f; }
+        .level-map .support { color:#137333; }
+        .level-map .event { color:#b06000; font-weight:900; }
+        .market-cell { min-width:115px; line-height:1.55; }
+        .current-proxy { width:78px; font-weight:900; border-color:var(--g-blue); }
+        .market-summary { margin-top:5px; line-height:1.45; }
+        .auto-level { min-width:105px; line-height:1.55; }
+        .auto-level .price { font-weight:900; font-size:14px; }
+        .auto-level .up { color:#c5221f; font-weight:900; }
+        .auto-level .down { color:#137333; font-weight:900; }
+        .auto-level small { color:var(--text-secondary); white-space:normal; display:block; }
+        .v7-top-scroll {
+            height:16px; overflow-x:auto; overflow-y:hidden; margin:0 2px 6px;
+            position:sticky; top:0; z-index:30; background:var(--bg-color);
+            border:1px solid var(--border-color); border-radius:8px;
+        }
+        .v7-top-scroll-inner { height:1px; }
+        #v7TableCard { margin-bottom:12px; }
+
+        tr.dragging { opacity: 0.5; background-color: #e8f0fe; }
+        .action-cell { display: flex; align-items: center; justify-content: center; gap: 4px; }
+        .btn-icon { color: var(--text-secondary); cursor: pointer; padding: 4px; border-radius: 50%; transition: 0.2s; user-select: none; font-size: 18px;}
+        .btn-icon:hover { color: var(--text-primary); background: #e8eaed; }
+        .btn-delete:hover { color: var(--g-red); background: rgba(234,67,53,0.1); }
+        .drag-handle { cursor: grab; }
+        .drag-handle:active { cursor: grabbing; }
+
+        .btn-add {
+            display: inline-flex; align-items: center; gap: 8px; background: var(--g-blue); color: white; border: none;
+            padding: 10px 20px; border-radius: 20px; font-weight: 500; font-size: 14px; cursor: pointer; box-shadow: 0 2px 6px rgba(66,133,244,0.3); transition: 0.2s;
+        }
+        .btn-add:hover { background: #3367d6; box-shadow: 0 4px 10px rgba(66,133,244,0.4); }
+        .btn-sync { background: #fff; color: var(--g-blue); border: 2px solid var(--g-blue); }
+        .btn-sync:hover { background: #e8f0fe; box-shadow: none;}
+
+        .action-bar { display: flex; gap: 12px; align-items: center; }
+
+        /* Instrument Pool */
+        .pool-toolbar {
+            display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px;
+            background:var(--surface-color); border-radius:8px; padding:14px 16px; box-shadow:0 2px 6px rgba(0,0,0,.08);
+        }
+        .pool-toolbar h2 { margin:0; font-size:18px; }
+        .pool-search { flex:1 1 260px; width:auto; min-width:180px; text-align:left; padding:10px 12px; }
+        .pool-count { color:var(--text-secondary); font-size:12px; white-space:nowrap; }
+        .pool-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:14px; }
+        .instrument-card {
+            position:relative; background:var(--surface-color); border:1px solid var(--border-color); border-radius:10px;
+            padding:15px; box-shadow:0 2px 6px rgba(0,0,0,.06); transition:.2s;
+        }
+        .instrument-card:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,0,0,.1); }
+        .instrument-card.dragging { opacity:.45; }
+        .instrument-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+        .instrument-name { font-size:16px; font-weight:900; overflow-wrap:anywhere; }
+        .instrument-code { color:var(--text-secondary); font-size:11px; margin-top:3px; }
+        .instrument-meta { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:14px 0; }
+        .instrument-meta div { background:#f8f9fa; border-radius:6px; padding:8px; text-align:center; font-size:11px; color:var(--text-secondary); }
+        .instrument-meta strong { display:block; margin-top:3px; color:var(--text-primary); font-size:13px; }
+        .instrument-actions { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+        .pool-action { border:1px solid var(--border-color); background:white; border-radius:16px; padding:6px 10px; cursor:pointer; font-size:12px; }
+        .pool-action:hover { background:#f1f3f4; }
+        .pool-action.danger { color:#c5221f; border-color:#f5c2c7; }
+        .pool-drag { cursor:grab; color:var(--text-secondary); user-select:none; touch-action:none; }
+        .instrument-card.touch-dragging { opacity:.72; transform:scale(.985); box-shadow:0 12px 30px rgba(31,35,41,.18); }
+        .pool-empty { grid-column:1/-1; padding:40px 20px; text-align:center; color:var(--text-secondary); background:white; border-radius:8px; }
+        .trash-panel { margin-top:22px; background:white; border-radius:8px; padding:14px 16px; box-shadow:0 2px 6px rgba(0,0,0,.06); }
+        .trash-panel summary { cursor:pointer; font-weight:700; color:var(--text-secondary); }
+        .trash-list { display:grid; gap:8px; margin-top:12px; }
+        .trash-item { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px; background:#f8f9fa; border-radius:6px; }
+        .instrument-dialog-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+        .instrument-dialog-grid label { display:block; color:var(--text-secondary); font-size:12px; margin-bottom:5px; }
+        .instrument-dialog-grid input, .instrument-dialog-grid select { box-sizing:border-box; width:100%; text-align:left; padding:10px; }
+
+        /* Loader */
+        #loader { display: none; position: fixed; top: 16px; right: 50%; transform: translateX(50%); background: #333; color: white; padding: 8px 24px; border-radius: 20px; font-size: 14px; font-weight: bold; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+
+        @media (max-width: 768px) {
+            :root { --mobile-glass:rgba(248,249,250,.76); }
+            body { padding:10px; padding-top:max(10px,env(safe-area-inset-top)); padding-bottom:calc(86px + env(safe-area-inset-bottom)); }
+            .mobile-only { display:flex !important; }
+            .header {
+                position:sticky; top:max(6px,env(safe-area-inset-top)); z-index:80; display:grid; grid-template-columns:1fr auto;
+                gap:9px; padding:10px; margin-bottom:12px; border:1px solid rgba(255,255,255,.72); border-radius:20px;
+                background:var(--mobile-glass); backdrop-filter:blur(24px) saturate(180%); -webkit-backdrop-filter:blur(24px) saturate(180%);
+                box-shadow:0 10px 35px rgba(31,35,41,.12);
+            }
+            .header-left { display:contents; }
+            .header h1 { grid-column:1; grid-row:1; font-size:21px; min-width:0; }
+            .app-logo { width:34px; height:34px; }
+            .mobile-header-tools { grid-column:2; grid-row:1; display:flex !important; align-items:center; gap:7px; }
+            .mobile-icon-btn { width:40px; height:40px; padding:0; justify-content:center; border-radius:14px; background:rgba(255,255,255,.78); border:1px solid rgba(218,220,224,.9); color:var(--text-primary); }
+            .mobile-icon-btn .material-icons { font-size:20px; }
+            .util-btns { display:none; }
+            .header-reminder { grid-column:1/-1; grid-row:2; order:initial; width:100%; min-width:0; height:38px; border-radius:13px; }
+            .marquee-viewport { height:30px; }
+            .marquee-edit { flex-basis:30px; }
+            .tab-container { grid-column:1/-1; grid-row:3; width:100%; height:42px; }
+            .tab-container .tab-btn { flex:1; justify-content:center; height:34px; padding:0 8px; }
+            body.view-pool .tab-container { display:none; }
+            #btn-pool { display:none; }
+            .pool-grid { grid-template-columns:1fr; }
+            .instrument-dialog-grid { grid-template-columns:1fr; }
+            .pool-toolbar { padding:16px; border-radius:18px; }
+            .pool-toolbar h2 { width:100%; font-size:20px; }
+            .pool-search { flex-basis:100%; height:46px; }
+            .pool-toolbar .btn-add { min-height:46px; }
+            .instrument-card { border-radius:18px; padding:17px; box-shadow:0 6px 22px rgba(31,35,41,.08); }
+
+            /* Single-instrument mobile cards: keep the same DOM and inputs as desktop. */
+            #tab-v6 .table-card, #tab-v7 .table-card { overflow:visible; background:transparent; box-shadow:none; margin:0; }
+            #tab-v6 table, #tab-v6 tbody, #tab-v7 table, #tab-v7 tbody { display:block; width:100%; white-space:normal; }
+            #tab-v6 thead, #tab-v7 thead, .v7-top-scroll { display:none !important; }
+            #tab-v6 tbody tr, #tab-v7 tbody tr { display:none; }
+            #tab-v6 tbody tr.mobile-current, #tab-v7 tbody tr.mobile-current {
+                display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; padding:15px; margin-bottom:14px;
+                background:rgba(255,255,255,.9); border:1px solid rgba(218,220,224,.86); border-radius:20px;
+                box-shadow:0 8px 28px rgba(31,35,41,.09);
+            }
+            #tab-v6 td, #tab-v7 td {
+                box-sizing:border-box; min-width:0; height:auto; padding:11px; display:flex; flex-direction:column; align-items:stretch;
+                justify-content:center; gap:5px; border:1px solid #edf0f4; border-radius:12px; background:#f8f9fa; text-align:left;
+            }
+            #tab-v6 td::before, #tab-v7 td::before { color:var(--text-secondary); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.35px; }
+            #tab-v6 input, #tab-v6 select, #tab-v7 input, #tab-v7 select { box-sizing:border-box; width:100%; min-height:42px; text-align:center; font-size:16px; background:white; }
+            #tab-v6 td:first-child, #tab-v7 td:first-child, #tab-v6 td:nth-child(18) { grid-column:1/-1; }
+            #tab-v6 td:first-child, #tab-v7 td:first-child { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; column-gap:12px; }
+            #tab-v6 td:first-child::before, #tab-v7 td:first-child::before { grid-column:1/-1; }
+            #tab-v6 td:first-child input, #tab-v7 td:first-child input { grid-column:1; font-size:19px; text-align:left; border:0; background:transparent; padding-left:0; }
+            .mobile-card-controls { grid-column:2; grid-row:2; display:flex !important; flex-direction:column; align-items:stretch; gap:7px; min-width:116px; }
+            .mobile-signal-summary { display:flex; flex-direction:column; align-items:stretch; gap:3px; min-width:184px; max-width:210px; }
+            .mobile-signal-summary small { color:var(--text-secondary); font-size:9px; font-weight:800; text-transform:uppercase; }
+            .mobile-signal-summary .ai-badge { min-width:0; padding:6px 9px; text-align:center; font-size:11px; }
+            .mobile-signal-summary > div { margin-top:1px !important; color:var(--text-secondary); font-size:9px !important; line-height:1.3; text-align:center; white-space:normal; }
+            #tab-v6 td:nth-child(1)::before, #tab-v7 td:nth-child(1)::before { content:'Instrument'; }
+            #tab-v6 td:nth-child(2)::before { content:'High'; } #tab-v6 td:nth-child(3)::before { content:'Low'; } #tab-v6 td:nth-child(4)::before { content:'Current'; }
+            #tab-v6 td:nth-child(5)::before { content:'Entry'; } #tab-v6 td:nth-child(6)::before { content:'Prev Close'; } #tab-v6 td:nth-child(7)::before { content:'% Baseline'; }
+            #tab-v6 td:nth-child(8)::before { content:'23.6%'; } #tab-v6 td:nth-child(9)::before { content:'38.2%'; } #tab-v6 td:nth-child(10)::before { content:'50%'; }
+            #tab-v6 td:nth-child(11)::before { content:'61.8%'; } #tab-v6 td:nth-child(12)::before { content:'78.6%'; } #tab-v6 td:nth-child(13)::before { content:'88.6%'; }
+            #tab-v6 td:nth-child(14)::before { content:'Previous High'; } #tab-v6 td:nth-child(15)::before { content:'127.2% Target'; }
+            #tab-v6 td:nth-child(16)::before { content:'161.8% Target'; } #tab-v6 td:nth-child(17)::before { content:'261.8% Target'; }
+            #tab-v6 td:nth-child(18)::before { content:'Current Zone'; } #tab-v6 td:nth-child(19)::before { content:'Actions'; }
+            #tab-v7 td:nth-child(2)::before { content:'Current / Zone'; } #tab-v7 td:nth-child(3)::before { content:'Support'; } #tab-v7 td:nth-child(4)::before { content:'Pressure'; }
+            #tab-v7 td:nth-child(5)::before { content:'Auto T1'; } #tab-v7 td:nth-child(6)::before { content:'Auto T2'; } #tab-v7 td:nth-child(7)::before { content:'Risk / Reward'; }
+            #tab-v7 td:nth-child(8)::before { content:'VR (5D)'; } #tab-v7 td:nth-child(9)::before { content:'Stop'; }
+            #tab-v7 td:nth-child(10)::before { content:'T1 Override'; } #tab-v7 td:nth-child(11)::before { content:'T2 Override'; }
+            #tab-v7 td:nth-child(12)::before { content:'Trend'; } #tab-v7 td:nth-child(13)::before { content:'RSI'; } #tab-v7 td:nth-child(14)::before { content:'MACD'; }
+            #tab-v7 td:nth-child(15)::before { content:'Composite Signal'; }
+            #tab-v7 .market-cell, #tab-v7 .auto-level { min-width:0; }
+            #tab-v7 td.rr-cell { grid-column:1/-1; min-width:0; }
+            #tab-v7 .rr-panel { gap:10px; }
+            #tab-v7 .stop-plan { grid-template-columns:1fr 1fr; }
+            #tab-v7 .stop-choice.structure-choice { grid-column:1/-1; }
+            #tab-v7 .stop-choice { min-height:58px; }
+            #tab-v6 tr.mobile-current:not(.mobile-expanded) td:nth-child(n+8):nth-child(-n+17),
+            #tab-v7 tr.mobile-current:not(.mobile-expanded) td:nth-child(n+8):nth-child(-n+14) { display:none; }
+            .mobile-detail-toggle { min-height:36px; padding:6px 9px; border:1px solid #d8e2f3; border-radius:11px; background:#e8f0fe; color:#174ea6; font-size:11px; font-weight:700; white-space:nowrap; }
+            #tab-v6 td:nth-child(19), #tab-v7 td:nth-child(15) { display:none !important; }
+            #tab-v7 .action-bar, #tab-v6 > .btn-add { display:none; }
+            #tab-v7 > div:last-child { margin-bottom:12px; }
+
+            .mobile-bottom-nav {
+                position:fixed; left:10px; right:10px; bottom:max(8px,env(safe-area-inset-bottom)); z-index:100;
+                display:grid !important; grid-template-columns:repeat(4,1fr); padding:7px; border:1px solid rgba(255,255,255,.78); border-radius:22px;
+                background:rgba(248,249,250,.78); backdrop-filter:blur(26px) saturate(190%); -webkit-backdrop-filter:blur(26px) saturate(190%);
+                box-shadow:0 12px 38px rgba(31,35,41,.18);
+            }
+            .mobile-bottom-nav button, .mobile-bottom-nav a { min-width:0; height:52px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:0; border-radius:16px; background:transparent; color:#5f6368; text-decoration:none; font:700 10px Roboto,sans-serif; }
+            .mobile-bottom-nav .material-icons { font-size:21px; }
+            .mobile-bottom-nav .active { background:rgba(255,255,255,.88); color:var(--g-blue); box-shadow:0 2px 8px rgba(31,35,41,.1); }
+            .mobile-action-sheet { align-items:flex-end; padding:0; }
+            .mobile-action-sheet .note-modal { width:100%; max-height:82dvh; border-radius:24px 24px 0 0; padding-bottom:env(safe-area-inset-bottom); }
+            .mobile-action-list { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+            .mobile-action-list button { min-height:52px; justify-content:flex-start; font-size:13px; }
+            .mobile-action-list .btn-logout { width:100%; margin-left:0 !important; }
+            .note-modal-backdrop .note-modal { max-height:88dvh; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loader">Syncing...</div>
+
+    <div class="header">
+        <div class="header-left">
+            <h1><img src="logo.png" alt="Logo" class="app-logo"> TradingViewer</h1>
+            <div class="tab-container">
+                <button class="tab-btn" onclick="switchTab('pool')" id="btn-pool">
+                    <span class="material-icons" style="font-size: 18px;">inventory_2</span> Pool
+                </button>
+                <button class="tab-btn active" onclick="switchTab('v6')" id="btn-v6">
+                    <span class="material-icons" style="font-size: 18px;">travel_explore</span> Look first
+                </button>
+                <button class="tab-btn" onclick="switchTab('v7')" id="btn-v7">
+                    <span class="material-icons" style="font-size: 18px;">track_changes</span> Then leap
+                </button>
+            </div>
+        </div>
+        <div class="mobile-header-tools mobile-only">
+            <button type="button" class="btn-util mobile-icon-btn" onclick="openMobileActions()" title="Cloud & actions"><span class="material-icons">cloud_done</span></button>
+            <button type="button" class="btn-util mobile-icon-btn" onclick="openMobileActions()" title="More"><span class="material-icons">more_horiz</span></button>
+        </div>
+        <div class="header-reminder" title="慢速滚动；鼠标悬停暂停">
+            <span class="material-icons">campaign</span>
+            <div class="marquee-viewport"><div class="marquee-track" id="reminderMarqueeText"></div></div>
+            <button type="button" class="marquee-edit" onclick="openNoteEditor('marquee')" title="编辑滚动提醒">
+                <span class="material-icons">edit</span>
+            </button>
+        </div>
+        <div class="util-btns">
+            <button type="button" class="btn-util btn-pro-tips" onclick="openNoteEditor('tips')"><span class="material-icons" style="font-size:16px;">menu_book</span> Pro Tips</button>
+            <button class="btn-util btn-switch-system" onclick="window.location.href='https://gaman-cheung.github.io/Fibo-Tradingviewer/wavecalfullfinal.html'"><span class="material-icons" style="font-size:16px;">functions</span> 波浪推演矩阵</button>
+            <button class="btn-util btn-cloud-down" onclick="loadFromCloud()" id="btn-pull"><span class="material-icons" style="font-size:16px;">cloud_download</span> Pull from Cloud</button>
+            <button class="btn-util btn-cloud-up" onclick="saveToCloud()" id="btn-push"><span class="material-icons" style="font-size:16px;">cloud_upload</span> Push to Cloud</button> 
+            
+            <button class="btn-util" onclick="exportData()"><span class="material-icons" style="font-size:16px;">save_alt</span> Local Backup</button>
+            <button class="btn-util" onclick="document.getElementById('importFile').click()"><span class="material-icons" style="font-size:16px;">folder_open</span></button>
+            
+            <button id="logoutBtn" class="btn-util btn-logout" style="margin-left: 10px;"><span class="material-icons" style="font-size:16px;">logout</span> Log Out</button>
+            <input type="file" id="importFile" style="display:none;" accept=".json" onchange="importData(event)">
+        </div>
+    </div>
+
+    <div id="tab-pool" class="tab-content">
+        <div class="pool-toolbar">
+            <h2>Instrument Pool</h2>
+            <input id="poolSearch" class="pool-search" type="search" placeholder="Search ticker / code" oninput="renderInstrumentPool()">
+            <span class="pool-count" id="poolCount">0 instruments</span>
+            <button type="button" class="btn-add" onclick="openInstrumentDialog()"><span class="material-icons">add</span> Add Instrument</button>
+        </div>
+        <div id="instrumentPoolGrid" class="pool-grid"></div>
+        <details class="trash-panel">
+            <summary>Recently Removed <span id="trashCount"></span></summary>
+            <div id="instrumentTrashList" class="trash-list"></div>
+        </details>
+    </div>
+
+    <div id="tab-v6" class="tab-content active">
+        <div class="table-card">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="col-base">Ticker</th>
+                        <th class="col-base">High</th>
+                        <th class="col-base">Low</th>
+                        <th class="col-base">Current</th>
+                        <th class="col-base">Entry <button class="help-icon" onclick="openHelp('entry')" title="Entry 说明">?</button></th>
+                        <th class="col-base">Prev Close <button class="help-icon" onclick="openHelp('previous')" title="Prev Close 说明">?</button></th>
+                        <th class="col-base">% Baseline <button class="help-icon" onclick="openHelp('baseline')" title="Baseline 说明">?</button></th>
+                        <th class="col-retrace">📉 23.6% <button class="help-icon" onclick="openHelp('fibonacci')" title="斐波那契说明">?</button></th>
+                        <th class="col-retrace">📉 38.2%</th>
+                        <th class="col-retrace">⚖️ 50.0%</th>
+                        <th class="col-retrace">💎 61.8%</th>
+                        <th class="col-retrace">🚨 78.6%</th>
+                        <th class="col-retrace">🧛 88.6%</th>
+                        <th class="col-target">Previous High <button class="help-icon" onclick="openHelp('targets')" title="目标位说明">?</button></th>
+                        <th class="col-target">🚀 127.2%</th>
+                        <th class="col-target">🌕 161.8%</th>
+                        <th class="col-target">🌌 261.8%</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBodyV6"></tbody>
+            </table>
+        </div>
+        <button onclick="createDesktopInstrumentRow()" class="btn-add"><span class="material-icons">add</span> Add Look first Row</button>
+    </div>
+
+    <div id="tab-v7" class="tab-content">
+        <div class="v7-top-scroll" id="v7TopScroll" title="完整视图横向滚动条"><div class="v7-top-scroll-inner" id="v7TopScrollInner"></div></div>
+        <div class="table-card" id="v7TableCard">
+            <table id="v7Table">
+                <thead>
+                    <tr>
+                        <th class="col-base">Ticker</th>
+                        <th class="col-base">Current / Zone</th>
+                        <th class="col-retrace">Support / %</th>
+                        <th class="col-retrace">Pressure / %</th>
+                        <th class="col-target">Auto T1 / %</th>
+                        <th class="col-target">Auto T2 / %</th>
+                        <th class="col-target">R:R <button class="help-icon" onclick="openHelp('rr')" title="R:R 说明">?</button></th>
+                        <th class="col-indicator detail-col">VR (5D) <button class="help-icon" onclick="openHelp('volume')" title="VR 说明">?</button></th>
+                        <th class="col-indicator detail-col">Stop <button class="help-icon" onclick="openHelp('stop')" title="Stop 说明">?</button></th>
+                        <th class="col-target detail-col">T1 Override</th>
+                        <th class="col-target detail-col">T2 Override</th>
+                        <th class="col-indicator detail-col">Trend (13d) <button class="help-icon" onclick="openHelp('trend')">?</button></th>
+                        <th class="col-indicator detail-col">RSI (14) <button class="help-icon" onclick="openHelp('rsi')">?</button></th>
+                        <th class="col-indicator detail-col">MACD Trend <button class="help-icon" onclick="openHelp('macd')">?</button></th>
+                        <th class="col-ai">🎯 Composite Signal <button class="help-icon" onclick="openHelp('composite')" title="Composite Signal 说明">?</button></th>
+                    </tr>
+                </thead>
+                <tbody id="tableBodyV7"></tbody>
+            </table>
+        </div>
+        <div class="action-bar">
+            <button onclick="switchTab('v6')" class="btn-add" style="background:var(--g-red);"><span class="material-icons">add</span> 在 Look first 添加标的</button>
+        </div>
+        <div style="margin-top:10px;color:var(--text-secondary);font-size:12px;line-height:1.6;">
+            High、Low、Current、Entry、Prev Close 与涨跌幅基准统一来自 Look first；Then leap 的 Current 是同一数据源的代理输入。VR (5D) 可直接填写券商软件显示的五日量比。R:R 始终使用 Entry，T1/T2 Override 留空即使用自动目标。
+        </div>
+    </div>
+
+    <div class="note-modal-backdrop" id="noteModalBackdrop" onclick="handleNoteBackdrop(event)" aria-hidden="true">
+        <div class="note-modal" role="dialog" aria-modal="true" aria-labelledby="noteModalTitle">
+            <div class="note-modal-header">
+                <h2 id="noteModalTitle">Pro Tips</h2>
+                <button type="button" class="note-modal-close" onclick="closeNoteEditor()" title="关闭"><span class="material-icons">close</span></button>
+            </div>
+            <div class="note-modal-body">
+                <textarea id="noteEditorText" class="note-textarea"></textarea>
+                <div class="note-modal-hint" id="noteModalHint">内容保存在当前浏览器，并包含在 Local Backup 中。</div>
+            </div>
+            <div class="note-modal-footer">
+                <button type="button" class="btn-util" onclick="closeNoteEditor()">取消</button>
+                <button type="button" class="btn-util btn-note-save" onclick="saveNoteEditor()"><span class="material-icons" style="font-size:16px;">save</span> 保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="note-modal-backdrop" id="helpModalBackdrop" onclick="handleHelpBackdrop(event)" aria-hidden="true">
+        <div class="note-modal" role="dialog" aria-modal="true" aria-labelledby="helpModalTitle">
+            <div class="note-modal-header">
+                <h2 id="helpModalTitle">指标说明</h2>
+                <button type="button" class="note-modal-close" onclick="closeHelp()" title="关闭"><span class="material-icons">close</span></button>
+            </div>
+            <div class="note-modal-body"><div id="helpModalContent" class="help-content"></div></div>
+            <div class="note-modal-footer"><span style="margin-right:auto;color:var(--text-secondary);font-size:11px;">Algorithm Guide v2.0 · 2026-07</span><button type="button" class="btn-util" onclick="closeHelp()">关闭</button></div>
+        </div>
+    </div>
+
+    <div class="note-modal-backdrop" id="instrumentModalBackdrop" onclick="handleInstrumentBackdrop(event)" aria-hidden="true">
+        <div class="note-modal" role="dialog" aria-modal="true" aria-labelledby="instrumentModalTitle" style="width:min(560px,94vw);">
+            <div class="note-modal-header">
+                <h2 id="instrumentModalTitle">Add Instrument</h2>
+                <button type="button" class="note-modal-close" onclick="closeInstrumentDialog()" title="关闭"><span class="material-icons">close</span></button>
+            </div>
+            <div class="note-modal-body">
+                <input type="hidden" id="instrumentEditId">
+                <div class="instrument-dialog-grid">
+                    <div><label for="instrumentTicker">Ticker / Name</label><input id="instrumentTicker" type="text" placeholder="e.g. 弘信电子"></div>
+                    <div><label for="instrumentCode">Code (optional)</label><input id="instrumentCode" type="text" placeholder="e.g. 300657"></div>
+                    <div><label for="instrumentMarket">Market</label><select id="instrumentMarket"><option value="CN-A">A Share</option><option value="HK">Hong Kong</option><option value="US">US</option><option value="INDEX">Index</option><option value="OTHER">Other</option></select></div>
+                </div>
+                <div class="note-modal-hint">Ticker可以修改；永久ID由系统生成且不会因改名或排序改变。</div>
+            </div>
+            <div class="note-modal-footer">
+                <button type="button" class="btn-util" onclick="closeInstrumentDialog()">Cancel</button>
+                <button type="button" class="btn-util btn-note-save" onclick="saveInstrumentDialog()"><span class="material-icons" style="font-size:16px;">save</span> Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="note-modal-backdrop mobile-action-sheet" id="mobileActionsBackdrop" onclick="handleMobileActionsBackdrop(event)" aria-hidden="true">
+        <div class="note-modal" role="dialog" aria-modal="true" aria-labelledby="mobileActionsTitle">
+            <div class="note-modal-header"><h2 id="mobileActionsTitle">Actions</h2><button type="button" class="note-modal-close" onclick="closeMobileActions()"><span class="material-icons">close</span></button></div>
+            <div class="note-modal-body"><div class="mobile-action-list">
+                <button class="btn-util btn-cloud-down" onclick="closeMobileActions();loadFromCloud()"><span class="material-icons">cloud_download</span> Pull from Cloud</button>
+                <button class="btn-util btn-cloud-up" onclick="closeMobileActions();saveToCloud()"><span class="material-icons">cloud_upload</span> Push to Cloud</button>
+                <button class="btn-util" onclick="closeMobileActions();exportData()"><span class="material-icons">save_alt</span> Local Backup</button>
+                <button class="btn-util" onclick="closeMobileActions();document.getElementById('importFile').click()"><span class="material-icons">folder_open</span> Import Backup</button>
+                <button class="btn-util" onclick="closeMobileActions();openNoteEditor('marquee')"><span class="material-icons">campaign</span> Edit Reminder</button>
+                <button class="btn-util btn-logout" onclick="closeMobileActions();document.getElementById('logoutBtn').click()"><span class="material-icons">logout</span> Log Out</button>
+            </div></div>
+        </div>
+    </div>
+
+    <nav class="mobile-bottom-nav mobile-only" aria-label="Mobile navigation">
+        <button id="mobileNavPool" onclick="switchTab('pool')"><span class="material-icons">inventory_2</span><span>Pool</span></button>
+        <button id="mobileNavTerminal" onclick="switchMobileTerminal()"><span class="material-icons">analytics</span><span>Terminal</span></button>
+        <a id="mobileNavWave" href="https://gaman-cheung.github.io/Fibo-Tradingviewer/wavecalfullfinal.html"><span class="material-icons">show_chart</span><span>Wave</span></a>
+        <button id="mobileNavTips" onclick="openNoteEditor('tips')"><span class="material-icons">menu_book</span><span>Pro Tips</span></button>
+    </nav>
+
+    <script>
+    // ================= Supabase 配置区域 =================
+            // ⚠️ 请在这里填入你的真实数据
+            const supabaseUrl = 'https://azquoojnwadtekkhxhui.supabase.co';
+            const supabaseKey = 'sb_publishable_uj_ViNAQS0Bv6Oy6qGzUmA_n7WAFsZc';
+
+            // 🚨 修复点 1：把变量名从 supabase 改成 supabaseClient
+            const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+            // ================= 🆕 新增：路由守卫 (禁止单独访问) =================
+            async function checkAuth() {
+                // 复用上面的 supabaseClient 获取当前登录状态
+                const { data: { session } } = await supabaseClient.auth.getSession();
+    
+                // 如果没有 session (未登录)，立刻踢回登录页
+                if (!session) {
+                    alert('未授权访问！请先登录。');
+                    window.location.replace('https://gaman-cheung.github.io/Fibo-Tradingviewer/TradingViewerDoubleSys.html'); 
+                }
+            }
+            // 页面一加载就执行检查
+            checkAuth();
+            // ===============================================================
+        
+            function showLoader(text) {
+                const loader = document.getElementById('loader');
+                loader.innerText = text;
+                loader.style.display = 'block';
+            }
+            function hideLoader() { document.getElementById('loader').style.display = 'none'; }
+
+            // ================= 全新多用户云端同步逻辑 =================
+            async function saveToCloud() {
+                showLoader('Pushing to Cloud...');
+                const v6Data = JSON.parse(localStorage.getItem('tv_lookfirst_data_v3') || '[]');
+                const v7Data = JSON.parse(localStorage.getItem('tv_thenleap_data_v3') || '[]');
+                const headerNotes = {
+                    marquee: localStorage.getItem('tv_header_marquee_v1') || '',
+                    tips: localStorage.getItem('tv_header_tips_v1') || ''
+                };
+                const instrumentPool = loadInstrumentPool();
+                // 复用 v6_data JSON 保存界面元数据，不新增 Supabase 字段；旧版本会自动忽略额外属性。
+                const v6CloudData = v6Data.length
+                    ? v6Data.map((row, index) => index === 0 ? { ...row, __header_notes_v1: headerNotes, __instrument_pool_v1: instrumentPool } : row)
+                    : [{ __header_notes_v1: headerNotes, __instrument_pool_v1: instrumentPool }];
+
+                // 1. 动态获取当前正在操作的“打碟宇航员”是谁
+                const { data: { user } } = await supabaseClient.auth.getUser();
+            
+                if (!user) {
+                    hideLoader();
+                    return alert("未检测到登录状态，请刷新页面或重新登录！");
+                }
+
+                const { data: existingCloudRow } = await supabaseClient
+                    .from('fibo_data')
+                    .select('wp_data')
+                    .eq('user_id', user.id)
+                    .single();
+                let localWaveState = null;
+                try {
+                    const parsedWaveState = JSON.parse(localStorage.getItem('wave_matrix_tabs_v3') || 'null');
+                    if (parsedWaveState?.tabs && Array.isArray(parsedWaveState.tabs)) localWaveState = parsedWaveState;
+                } catch (e) {}
+                const mergedWpData = { ...(existingCloudRow?.wp_data || {}), ...(localWaveState || {}), instrumentPool, uiNotes:headerNotes };
+                if (Array.isArray(mergedWpData.tabs)) {
+                    const validInstrumentIds = new Set(instrumentPool.items.map(item => item.id));
+                    const deletedInstrumentIds = new Set((instrumentPool.tombstones || []).map(item => item.id));
+                    mergedWpData.tabs = mergedWpData.tabs.filter(tab => !tab.instrumentId || (validInstrumentIds.has(tab.instrumentId) && !deletedInstrumentIds.has(tab.instrumentId)));
+                }
+
+                // 2. 将数据连同他的专属 user_id 一起推上云端
+                // (因为去掉了 id:1，现在直接根据 user_id 自动匹配他的专属行)
+                const { data, error } = await supabaseClient
+                    .from('fibo_data')
+                    .upsert({ 
+                        user_id: user.id, // 👈 核心改变：绑定当前用户的真实 ID
+                        v6_data: v6CloudData, 
+                        v7_data: v7Data,
+                        wp_data: mergedWpData
+                    }, { onConflict: 'user_id' });
+
+                hideLoader();
+                if (error) {
+                    alert("❌ Cloud Sync Failed: " + error.message);
+                } else {
+                    const btn = document.getElementById('btn-push');
+                    const orig = btn.innerHTML;
+                    btn.innerHTML = '<span class="material-icons" style="font-size:16px;">check</span> Saved to Cloud';
+                    setTimeout(() => btn.innerHTML = orig, 2000);
+                }
+            }
+
+            async function loadFromCloud() {
+                showLoader('Pulling from Cloud...');
+
+                const { data: { user } } = await supabaseClient.auth.getUser();
+                if (!user) {
+                    hideLoader();
+                    return alert("未检测到登录状态，请刷新页面或重新登录！");
+                }
+            
+                // 3. 直接请求！有了 RLS 的保护，这句代码在云端会自动被过滤，
+                // 保证只返回当前登录用户自己的那一行数据，绝对拿不到别人的。
+                const { data, error } = await supabaseClient
+                    .from('fibo_data')
+                    .select('*')
+                    .eq('user_id', user.id)
+                    .single(); 
+
+                hideLoader();
+                // PGRST116 是 Supabase 的一个特定状态码，意思是"找不到数据"
+                // 这对新注册、还没点过 push 的用户是正常现象，我们予以放行
+                if (error && error.code !== 'PGRST116') { 
+                    alert("❌ Load Failed: " + error.message);
+                    return;
+                }
+
+                if (data) {
+                    if (data.v6_data) {
+                        const cloudV6Data = Array.isArray(data.v6_data) ? data.v6_data : [];
+                        const noteCarrier = cloudV6Data.find(item => item && typeof item === 'object' && item.__header_notes_v1);
+                        const cloudNotes = data.wp_data?.uiNotes || noteCarrier?.__header_notes_v1;
+                        const poolCarrier = cloudV6Data.find(item => item && typeof item === 'object' && item.__instrument_pool_v1);
+                        const mergedCloudPool = mergeInstrumentPools(loadInstrumentPool(), poolCarrier?.__instrument_pool_v1, data.wp_data?.instrumentPool);
+                        if (mergedCloudPool.items.length) saveInstrumentPool(mergedCloudPool);
+                        if (cloudNotes && Object.prototype.hasOwnProperty.call(cloudNotes, 'marquee')) localStorage.setItem('tv_header_marquee_v1', cloudNotes.marquee || '');
+                        if (cloudNotes && Object.prototype.hasOwnProperty.call(cloudNotes, 'tips')) localStorage.setItem('tv_header_tips_v1', cloudNotes.tips || '');
+                        const cleanV6Data = cloudV6Data
+                            .filter(item => item && typeof item === 'object')
+                            .map(item => {
+                                const cleanRow = { ...item };
+                                delete cleanRow.__header_notes_v1;
+                                delete cleanRow.__instrument_pool_v1;
+                                return cleanRow;
+                            })
+                            .filter(item => ['n','h','l','c'].some(key => Object.prototype.hasOwnProperty.call(item, key)));
+                        localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify(cleanV6Data));
+                    }
+                    if (!data.v6_data && data.wp_data?.uiNotes) {
+                        localStorage.setItem('tv_header_marquee_v1', data.wp_data.uiNotes.marquee || '');
+                        localStorage.setItem('tv_header_tips_v1', data.wp_data.uiNotes.tips || '');
+                    }
+                    if (!data.v6_data && data.wp_data?.instrumentPool?.items) saveInstrumentPool(mergeInstrumentPools(loadInstrumentPool(), data.wp_data.instrumentPool));
+                    if (data.v7_data) localStorage.setItem('tv_thenleap_data_v3', JSON.stringify(data.v7_data));
+                    if (data.wp_data?.tabs && Array.isArray(data.wp_data.tabs)) {
+                        const waveState = { ...data.wp_data, instrumentPool:loadInstrumentPool(), uiNotes:data.wp_data.uiNotes || {} };
+                        localStorage.setItem('wave_matrix_tabs_v3', JSON.stringify(waveState));
+                    }
+                
+                    const btn = document.getElementById('btn-pull');
+                    const orig = btn.innerHTML;
+                    btn.innerHTML = '<span class="material-icons" style="font-size:16px;">check</span> Up to Date';
+                    setTimeout(() => { btn.innerHTML = orig; location.reload(); }, 1000);
+                } else {
+                    alert("云端还没有你的数据记录哦！请先在页面上添加几行 K 线数据，然后点击 Push to Cloud ☁️。");
+                }
+            }
+
+        // ================= Instrument Pool / Permanent IDs =================
+        const INSTRUMENT_POOL_KEY = 'tv_instrument_pool_v1';
+        const ACTIVE_INSTRUMENT_KEY = 'tv_active_instrument_id';
+
+        function normalizeInstrumentName(value) {
+            return String(value || '').trim().toUpperCase();
+        }
+
+        function createInstrumentId() {
+            if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+            return `inst_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+        }
+
+        function loadInstrumentPool() {
+            try {
+                const parsed = JSON.parse(localStorage.getItem(INSTRUMENT_POOL_KEY) || '{}');
+                if (!Array.isArray(parsed.items)) parsed.items = [];
+                if (!Array.isArray(parsed.tombstones)) parsed.tombstones = [];
+                parsed.version = 1;
+                return parsed;
+            } catch (e) {
+                return { version:1, items:[], tombstones:[] };
+            }
+        }
+
+        function mergeInstrumentPools(...pools) {
+            const byId = new Map();
+            const tombstones = new Map();
+            pools.filter(pool => pool && Array.isArray(pool.tombstones)).forEach(pool => pool.tombstones.forEach(entry => {
+                if (!entry?.id) return;
+                const existing = tombstones.get(entry.id);
+                if (!existing || Date.parse(entry.deletedAt || 0) >= Date.parse(existing.deletedAt || 0)) tombstones.set(entry.id, entry);
+            }));
+            pools.filter(pool => pool && Array.isArray(pool.items)).forEach(pool => pool.items.forEach(item => {
+                if (!item?.id) return;
+                const existing = byId.get(item.id);
+                const existingTime = Date.parse(existing?.updatedAt || existing?.createdAt || 0) || 0;
+                const itemTime = Date.parse(item.updatedAt || item.createdAt || 0) || 0;
+                if (!existing || itemTime >= existingTime) byId.set(item.id, { ...existing, ...item });
+            }));
+            tombstones.forEach((entry,id) => {
+                const item = byId.get(id);
+                if (!item || (Date.parse(entry.deletedAt || 0) || 0) >= (Date.parse(item.updatedAt || item.createdAt || 0) || 0)) byId.delete(id);
+            });
+            return { version:1, items:[...byId.values()], tombstones:[...tombstones.values()] };
+        }
+
+        function saveInstrumentPool(pool) {
+            if (!Array.isArray(pool.tombstones)) pool.tombstones = [];
+            localStorage.setItem(INSTRUMENT_POOL_KEY, JSON.stringify(pool));
+        }
+
+        function getInstrumentById(id) {
+            return loadInstrumentPool().items.find(item => item.id === id) || null;
+        }
+
+        function isInstrumentActive(id) {
+            const item = getInstrumentById(id);
+            return !item || item.status !== 'archived';
+        }
+
+        function migrateInstrumentIdentity(v6Data, v7Data) {
+            const pool = loadInstrumentPool();
+            const byId = new Map(pool.items.map(item => [item.id, item]));
+            const byTicker = new Map(pool.items.map(item => [normalizeInstrumentName(item.ticker), item]));
+            const now = new Date().toISOString();
+
+            v6Data.forEach((row, index) => {
+                const tickerKey = normalizeInstrumentName(row.n);
+                let item = row.id ? byId.get(row.id) : null;
+                if (!item && tickerKey) item = byTicker.get(tickerKey);
+                if (!item) {
+                    item = { id:createInstrumentId(), ticker:String(row.n || '').trim() || `Instrument ${index + 1}`, code:'', market:'CN-A', order:index, status:'active', createdAt:now, updatedAt:now, deletedAt:null };
+                    pool.items.push(item);
+                    byId.set(item.id, item);
+                    byTicker.set(normalizeInstrumentName(item.ticker), item);
+                }
+                row.id = item.id;
+                if (String(row.n || '').trim()) item.ticker = String(row.n).trim();
+                if (item.status !== 'archived') item.order = index;
+            });
+
+            const v6ByTicker = new Map(v6Data.map(row => [normalizeInstrumentName(row.n), row.id]));
+            v7Data.forEach((row, index) => {
+                if (!row.id) row.id = v6ByTicker.get(normalizeInstrumentName(row.n)) || byTicker.get(normalizeInstrumentName(row.n))?.id || '';
+                if (!row.id && normalizeInstrumentName(row.n)) {
+                    const item = { id:createInstrumentId(), ticker:String(row.n).trim(), code:'', market:'CN-A', order:pool.items.length + index, status:'active', createdAt:now, updatedAt:now, deletedAt:null };
+                    pool.items.push(item);
+                    byId.set(item.id, item);
+                    byTicker.set(normalizeInstrumentName(item.ticker), item);
+                    row.id = item.id;
+                }
+            });
+
+            pool.items.forEach((item, index) => {
+                if (!Number.isFinite(Number(item.order))) item.order = index;
+                if (!item.status) item.status = 'active';
+            });
+            saveInstrumentPool(pool);
+            localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify(v6Data));
+            localStorage.setItem('tv_thenleap_data_v3', JSON.stringify(v7Data));
+            return { v6Data, v7Data, pool };
+        }
+
+        function escapePoolHtml(value) {
+            return String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[char]));
+        }
+
+        function readStoredRows(key) {
+            try { const rows = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(rows) ? rows : []; }
+            catch (e) { return []; }
+        }
+
+        function mergeRowsWithHiddenInstruments(key, liveRows) {
+            const poolIds = new Set(loadInstrumentPool().items.map(item => item.id));
+            const liveIds = new Set(liveRows.map(row => row.id).filter(Boolean));
+            const retained = readStoredRows(key).filter(row => row?.id && poolIds.has(row.id) && !liveIds.has(row.id));
+            return [...liveRows, ...retained];
+        }
+
+        function renderInstrumentPool() {
+            const grid = document.getElementById('instrumentPoolGrid');
+            if (!grid) return;
+            const pool = loadInstrumentPool();
+            const query = normalizeInstrumentName(document.getElementById('poolSearch')?.value);
+            const v6Map = new Map(readStoredRows('tv_lookfirst_data_v3').map(row => [row.id, row]));
+            const v7Map = new Map(readStoredRows('tv_thenleap_data_v3').map(row => [row.id, row]));
+            const active = pool.items.filter(item => item.status !== 'archived').sort((a,b) => Number(a.order) - Number(b.order));
+            const visible = active.filter(item => !query || normalizeInstrumentName(`${item.ticker} ${item.code}`).includes(query));
+            document.getElementById('poolCount').textContent = `${active.length} instrument${active.length === 1 ? '' : 's'}`;
+
+            grid.innerHTML = visible.length ? visible.map(item => {
+                const lf = v6Map.get(item.id) || {};
+                const tl = v7Map.get(item.id) || {};
+                const lfReady = Number.isFinite(parseFloat(lf.h)) && Number.isFinite(parseFloat(lf.l)) && Number.isFinite(parseFloat(lf.c));
+                const tlReady = !!(tl.r || tl.s || tl.p || tl.v || (tl.t && tl.t !== 'sideways') || (tl.m && tl.m !== 'neutral'));
+                return `<article class="instrument-card" draggable="${query ? 'false' : 'true'}" data-instrument-id="${escapePoolHtml(item.id)}">
+                    <div class="instrument-head"><div><div class="instrument-name">${escapePoolHtml(item.ticker || 'Untitled Instrument')}</div><div class="instrument-code">${escapePoolHtml([item.code,item.market].filter(Boolean).join(' · '))}</div></div><span class="material-icons pool-drag" title="Drag to reorder">drag_indicator</span></div>
+                    <div class="instrument-meta"><div>Current<strong>${lf.c || '--'}</strong></div><div>Look First<strong>${lfReady ? 'Ready' : 'Pending'}</strong></div><div>Then Leap<strong>${tlReady ? 'Ready' : 'Pending'}</strong></div></div>
+                    <div class="instrument-actions"><button class="pool-action" onclick="openInstrument('${item.id}')">Look First</button><button class="pool-action" onclick="openInstrumentWave('${item.id}')">Wave</button><button class="pool-action" onclick="openInstrumentDialog('${item.id}')">Edit</button><button class="pool-action danger" onclick="archiveInstrument('${item.id}')">Remove</button></div>
+                </article>`;
+            }).join('') : '<div class="pool-empty">No instruments found. Add your first instrument to begin.</div>';
+
+            const archived = pool.items.filter(item => item.status === 'archived').sort((a,b) => String(b.deletedAt).localeCompare(String(a.deletedAt)));
+            document.getElementById('trashCount').textContent = archived.length ? `(${archived.length})` : '';
+            document.getElementById('instrumentTrashList').innerHTML = archived.length ? archived.map(item => `<div class="trash-item"><span><strong>${escapePoolHtml(item.ticker)}</strong><small style="display:block;color:var(--text-secondary);">Removed ${escapePoolHtml(item.deletedAt?.slice(0,10) || '')}</small></span><span><button class="pool-action" onclick="restoreInstrument('${item.id}')">Restore</button> <button class="pool-action danger" onclick="permanentlyDeleteInstrument('${item.id}')">Delete forever</button></span></div>`).join('') : '<div style="color:var(--text-secondary);font-size:12px;">Trash is empty.</div>';
+            initPoolDrag();
+        }
+
+        function initPoolDrag() {
+            const grid = document.getElementById('instrumentPoolGrid');
+            if (!grid || normalizeInstrumentName(document.getElementById('poolSearch')?.value)) return;
+            let dragged = null;
+            let touchDragged = null;
+            let touchHandle = null;
+            let touchPointerId = null;
+
+            const finishTouchDrag = () => {
+                if (!touchDragged) return;
+                touchDragged.classList.remove('touch-dragging');
+                if (touchHandle && touchPointerId !== null && touchHandle.hasPointerCapture?.(touchPointerId)) touchHandle.releasePointerCapture(touchPointerId);
+                touchDragged = null; touchHandle = null; touchPointerId = null;
+                savePoolDomOrder();
+            };
+            grid.querySelectorAll('.instrument-card').forEach(card => {
+                card.addEventListener('dragstart', () => { dragged = card; card.classList.add('dragging'); });
+                card.addEventListener('dragend', () => { card.classList.remove('dragging'); dragged = null; savePoolDomOrder(); });
+                card.addEventListener('dragover', event => {
+                    event.preventDefault();
+                    if (!dragged || dragged === card) return;
+                    const box = card.getBoundingClientRect();
+                    grid.insertBefore(dragged, event.clientY < box.top + box.height / 2 ? card : card.nextSibling);
+                });
+                const handle = card.querySelector('.pool-drag');
+                if (!handle) return;
+                handle.addEventListener('pointerdown', event => {
+                    if (event.pointerType === 'mouse') return;
+                    event.preventDefault();
+                    touchDragged = card; touchHandle = handle; touchPointerId = event.pointerId;
+                    card.classList.add('touch-dragging');
+                    handle.setPointerCapture?.(event.pointerId);
+                });
+                handle.addEventListener('pointermove', event => {
+                    if (!touchDragged || event.pointerId !== touchPointerId) return;
+                    event.preventDefault();
+                    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('.instrument-card');
+                    if (!target || target === touchDragged || target.parentElement !== grid) return;
+                    const box = target.getBoundingClientRect();
+                    grid.insertBefore(touchDragged, event.clientY < box.top + box.height / 2 ? target : target.nextSibling);
+                });
+                handle.addEventListener('pointerup', finishTouchDrag);
+                handle.addEventListener('pointercancel', finishTouchDrag);
+            });
+        }
+
+        function savePoolDomOrder() {
+            const ids = [...document.querySelectorAll('#instrumentPoolGrid .instrument-card')].map(card => card.dataset.instrumentId);
+            const pool = loadInstrumentPool();
+            const now = new Date().toISOString();
+            ids.forEach((id, order) => { const item = pool.items.find(entry => entry.id === id); if (item) { item.order = order; item.updatedAt = now; } });
+            saveInstrumentPool(pool);
+            reorderStoredRowsByPool();
+        }
+
+        function reorderStoredRowsByPool() {
+            const order = new Map(loadInstrumentPool().items.map(item => [item.id, Number(item.order)]));
+            for (const key of ['tv_lookfirst_data_v3','tv_thenleap_data_v3']) {
+                const rows = readStoredRows(key);
+                rows.sort((a,b) => (order.get(a.id) ?? 1e9) - (order.get(b.id) ?? 1e9));
+                localStorage.setItem(key, JSON.stringify(rows));
+            }
+            try {
+                const waveState = JSON.parse(localStorage.getItem('wave_matrix_tabs_v3') || 'null');
+                if (waveState?.tabs && Array.isArray(waveState.tabs)) {
+                    waveState.tabs.sort((a,b) => (order.get(a.instrumentId) ?? 1e9) - (order.get(b.instrumentId) ?? 1e9));
+                    waveState.instrumentPool = loadInstrumentPool();
+                    localStorage.setItem('wave_matrix_tabs_v3', JSON.stringify(waveState));
+                }
+            } catch (e) {}
+        }
+
+        function createDesktopInstrumentRow() {
+            const pool = loadInstrumentPool();
+            const id = createInstrumentId();
+            const now = new Date().toISOString();
+            pool.items.push({ id, ticker:'', code:'', market:'CN-A', order:pool.items.filter(item => item.status !== 'archived').length, status:'active', createdAt:now, updatedAt:now, deletedAt:null });
+            saveInstrumentPool(pool);
+            addV6Row('', '', '', '', id);
+            saveLocalV6();
+            const input = document.querySelector(`#tableBodyV6 tr[data-instrument-id="${id}"] .name`);
+            input?.focus();
+        }
+
+        function handleDesktopTickerInput(input) {
+            const row = input.closest('tr');
+            const id = row?.dataset.instrumentId || '';
+            const ticker = input.value.trim();
+            const pool = loadInstrumentPool();
+            const item = pool.items.find(entry => entry.id === id);
+            if (item) { item.ticker = ticker; item.updatedAt = new Date().toISOString(); saveInstrumentPool(pool); }
+            const v7Rows = readStoredRows('tv_thenleap_data_v3');
+            v7Rows.forEach(entry => { if (entry.id === id) entry.n = ticker; });
+            localStorage.setItem('tv_thenleap_data_v3', JSON.stringify(v7Rows));
+            const v7Name = document.querySelector(`#tableBodyV7 tr[data-instrument-id="${id}"] .name`);
+            if (v7Name) v7Name.value = ticker;
+            saveLocalV6();
+        }
+
+        function openInstrumentDialog(id = '') {
+            const item = id ? getInstrumentById(id) : null;
+            document.getElementById('instrumentModalTitle').textContent = item ? 'Edit Instrument' : 'Add Instrument';
+            document.getElementById('instrumentEditId').value = item?.id || '';
+            document.getElementById('instrumentTicker').value = item?.ticker || '';
+            document.getElementById('instrumentCode').value = item?.code || '';
+            document.getElementById('instrumentMarket').value = item?.market || 'CN-A';
+            const backdrop = document.getElementById('instrumentModalBackdrop');
+            backdrop.classList.add('open'); backdrop.setAttribute('aria-hidden','false');
+            setTimeout(() => document.getElementById('instrumentTicker').focus(), 0);
+        }
+
+        function closeInstrumentDialog() {
+            const backdrop = document.getElementById('instrumentModalBackdrop');
+            backdrop.classList.remove('open'); backdrop.setAttribute('aria-hidden','true');
+        }
+
+        function handleInstrumentBackdrop(event) { if (event.target.id === 'instrumentModalBackdrop') closeInstrumentDialog(); }
+
+        function saveInstrumentDialog() {
+            const id = document.getElementById('instrumentEditId').value;
+            const ticker = document.getElementById('instrumentTicker').value.trim();
+            const code = document.getElementById('instrumentCode').value.trim();
+            const market = document.getElementById('instrumentMarket').value;
+            if (!ticker) return alert('Ticker / Name is required.');
+            const pool = loadInstrumentPool();
+            const duplicate = pool.items.find(item => item.status !== 'archived' && item.id !== id && (normalizeInstrumentName(item.ticker) === normalizeInstrumentName(ticker) || (code && item.code === code && item.market === market)));
+            if (duplicate) return alert('This instrument already exists in the pool.');
+            const now = new Date().toISOString();
+            if (id) {
+                const item = pool.items.find(entry => entry.id === id);
+                if (!item) return;
+                item.ticker = ticker; item.code = code; item.market = market; item.updatedAt = now;
+                for (const key of ['tv_lookfirst_data_v3','tv_thenleap_data_v3']) {
+                    const rows = readStoredRows(key); rows.forEach(row => { if (row.id === id) row.n = ticker; }); localStorage.setItem(key, JSON.stringify(rows));
+                }
+                document.querySelectorAll(`[data-instrument-id="${id}"] .name`).forEach(input => { input.value = ticker; });
+            } else {
+                const newId = createInstrumentId();
+                const activeCount = pool.items.filter(item => item.status !== 'archived').length;
+                pool.items.push({ id:newId, ticker, code, market, order:activeCount, status:'active', createdAt:now, updatedAt:now, deletedAt:null });
+                const rows = readStoredRows('tv_lookfirst_data_v3'); rows.push({ id:newId, n:ticker, h:'', l:'', c:'' }); localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify(rows));
+                localStorage.setItem(ACTIVE_INSTRUMENT_KEY, newId);
+                addV6Row(ticker, '', '', '', newId);
+            }
+            saveInstrumentPool(pool); closeInstrumentDialog(); renderInstrumentPool();
+        }
+
+        function openInstrument(id) {
+            localStorage.setItem(ACTIVE_INSTRUMENT_KEY, id);
+            switchTab('v6');
+            const row = document.querySelector(`#tableBodyV6 tr[data-instrument-id="${id}"]`);
+            row?.scrollIntoView({ behavior:'smooth', block:'center' });
+        }
+
+        function openInstrumentWave(id) {
+            localStorage.setItem(ACTIVE_INSTRUMENT_KEY, id);
+            window.location.href = 'https://gaman-cheung.github.io/Fibo-Tradingviewer/wavecalfullfinal.html';
+        }
+
+        function archiveInstrument(id) {
+            const item = getInstrumentById(id); if (!item || !confirm(`Remove “${item.ticker}” from the active pool? Its data can be restored from Recently Removed.`)) return;
+            saveLocalV6(); saveLocalV7();
+            const pool = loadInstrumentPool(); const target = pool.items.find(entry => entry.id === id);
+            target.status = 'archived'; target.deletedAt = new Date().toISOString(); target.updatedAt = target.deletedAt;
+            saveInstrumentPool(pool); localStorage.setItem('tv_active_tab','pool'); location.reload();
+        }
+
+        function removeInstrumentFromCurrentLayout(id) {
+            if (window.matchMedia('(max-width: 768px)').matches) archiveInstrument(id);
+            else permanentlyDeleteInstrument(id);
+        }
+
+        function restoreInstrument(id) {
+            const pool = loadInstrumentPool(); const target = pool.items.find(entry => entry.id === id); if (!target) return;
+            target.status = 'active'; target.deletedAt = null; target.updatedAt = new Date().toISOString();
+            target.order = pool.items.filter(item => item.status !== 'archived').length;
+            saveInstrumentPool(pool); reorderStoredRowsByPool(); localStorage.setItem('tv_active_tab','pool'); location.reload();
+        }
+
+        function permanentlyDeleteInstrument(id) {
+            const item = getInstrumentById(id); if (!item || !confirm(`Permanently delete “${item.ticker}” and all linked Look First / Then Leap data? This cannot be undone.`)) return;
+            const pool = loadInstrumentPool();
+            pool.items = pool.items.filter(entry => entry.id !== id);
+            pool.tombstones = [...(pool.tombstones || []).filter(entry => entry.id !== id), { id, deletedAt:new Date().toISOString() }];
+            saveInstrumentPool(pool);
+            for (const key of ['tv_lookfirst_data_v3','tv_thenleap_data_v3']) localStorage.setItem(key, JSON.stringify(readStoredRows(key).filter(row => row.id !== id)));
+            try {
+                const waveState = JSON.parse(localStorage.getItem('wave_matrix_tabs_v3') || 'null');
+                if (waveState?.tabs && Array.isArray(waveState.tabs)) {
+                    waveState.tabs = waveState.tabs.filter(tab => tab.instrumentId !== id);
+                    if (!waveState.tabs.some(tab => tab.id === waveState.activeTabId)) waveState.activeTabId = waveState.tabs[0]?.id || null;
+                    waveState.instrumentPool = pool;
+                    localStorage.setItem('wave_matrix_tabs_v3', JSON.stringify(waveState));
+                }
+            } catch (e) {}
+            if (window.matchMedia('(max-width: 768px)').matches) renderInstrumentPool();
+            else { localStorage.setItem('tv_active_tab','v6'); location.reload(); }
+        }
+
+        // ================= Tab & UI Logic =================
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById('tab-' + tabId).classList.add('active');
+            document.getElementById('btn-' + tabId).classList.add('active');
+            localStorage.setItem('tv_active_tab', tabId);
+            document.body.classList.toggle('view-pool', tabId === 'pool');
+            document.body.classList.toggle('view-terminal', tabId === 'v6' || tabId === 'v7');
+            if (tabId === 'v6' || tabId === 'v7') localStorage.setItem('tv_last_terminal_tab', tabId);
+            if (tabId === 'pool') renderInstrumentPool();
+            if (tabId === 'v7') {
+                syncV7withV6(true);
+                requestAnimationFrame(syncV7ScrollWidth);
+            }
+            applyMobileActiveInstrument();
+            updateMobileNavigation(tabId);
+        }
+
+        function switchMobileTerminal() {
+            const last = localStorage.getItem('tv_last_terminal_tab');
+            switchTab(last === 'v7' ? 'v7' : 'v6');
+        }
+
+        function updateMobileNavigation(tabId) {
+            document.getElementById('mobileNavPool')?.classList.toggle('active', tabId === 'pool');
+            document.getElementById('mobileNavTerminal')?.classList.toggle('active', tabId === 'v6' || tabId === 'v7');
+        }
+
+        function ensureMobileCardControls(row) {
+            const firstCell = row.querySelector('td:first-child');
+            if (!firstCell) return null;
+            let controls = firstCell.querySelector('.mobile-card-controls');
+            if (!controls) {
+                controls = document.createElement('div');
+                controls.className = 'mobile-card-controls mobile-only';
+                firstCell.appendChild(controls);
+            }
+            return controls;
+        }
+
+        function syncMobileCompositeSignal(row) {
+            if (!window.matchMedia('(max-width: 768px)').matches || !row?.closest('#tableBodyV7')) return;
+            const controls = ensureMobileCardControls(row);
+            const source = row.querySelector('.ai-cell');
+            if (!controls || !source) return;
+            let summary = controls.querySelector('.mobile-signal-summary');
+            if (!summary) {
+                summary = document.createElement('div');
+                summary.className = 'mobile-signal-summary';
+                controls.prepend(summary);
+            }
+            summary.dataset.explanation = source.dataset.explanation || '';
+            summary.innerHTML = `<small>Composite Signal</small>${source.innerHTML || '<span>-</span>'}`;
+        }
+
+        function applyMobileActiveInstrument() {
+            if (!window.matchMedia('(max-width: 768px)').matches) return;
+            const pool = loadInstrumentPool();
+            let activeId = localStorage.getItem(ACTIVE_INSTRUMENT_KEY);
+            if (!pool.items.some(item => item.id === activeId && item.status !== 'archived')) {
+                activeId = pool.items.filter(item => item.status !== 'archived').sort((a,b) => Number(a.order)-Number(b.order))[0]?.id || '';
+                if (activeId) localStorage.setItem(ACTIVE_INSTRUMENT_KEY, activeId);
+            }
+            document.querySelectorAll('#tableBodyV6 tr, #tableBodyV7 tr').forEach(row => {
+                const isCurrent = !!activeId && row.dataset.instrumentId === activeId;
+                row.classList.toggle('mobile-current', isCurrent);
+                if (isCurrent && !row.querySelector('.mobile-detail-toggle')) {
+                    const controls = ensureMobileCardControls(row);
+                    const button = document.createElement('button');
+                    button.type = 'button'; button.className = 'mobile-detail-toggle mobile-only'; button.textContent = 'Show Details';
+                    button.addEventListener('click', () => {
+                        row.classList.toggle('mobile-expanded');
+                        button.textContent = row.classList.contains('mobile-expanded') ? 'Collapse' : 'Show Details';
+                    });
+                    controls?.appendChild(button);
+                }
+                if (isCurrent) syncMobileCompositeSignal(row);
+            });
+        }
+
+        function openMobileActions() {
+            const backdrop = document.getElementById('mobileActionsBackdrop');
+            backdrop.classList.add('open'); backdrop.setAttribute('aria-hidden','false');
+        }
+        function closeMobileActions() {
+            const backdrop = document.getElementById('mobileActionsBackdrop');
+            backdrop.classList.remove('open'); backdrop.setAttribute('aria-hidden','true');
+        }
+        function handleMobileActionsBackdrop(event) { if (event.target.id === 'mobileActionsBackdrop') closeMobileActions(); }
+
+        function syncV7ScrollWidth() {
+            const table = document.getElementById('v7Table');
+            const inner = document.getElementById('v7TopScrollInner');
+            const topScroll = document.getElementById('v7TopScroll');
+            const tableCard = document.getElementById('v7TableCard');
+            if (table && inner) inner.style.width = table.scrollWidth + 'px';
+            if (table && topScroll && tableCard && tableCard.clientWidth > 0) {
+                topScroll.style.display = table.scrollWidth > tableCard.clientWidth + 1 ? 'block' : 'none';
+            }
+        }
+
+        function initV7TableUX() {
+            const topScroll = document.getElementById('v7TopScroll');
+            const tableCard = document.getElementById('v7TableCard');
+            if (!topScroll || !tableCard) return;
+
+            let syncing = false;
+            topScroll.addEventListener('scroll', () => {
+                if (syncing) return;
+                syncing = true;
+                tableCard.scrollLeft = topScroll.scrollLeft;
+                syncing = false;
+            });
+            tableCard.addEventListener('scroll', () => {
+                if (syncing) return;
+                syncing = true;
+                topScroll.scrollLeft = tableCard.scrollLeft;
+                syncing = false;
+            });
+
+            syncV7ScrollWidth();
+            if (window.ResizeObserver) new ResizeObserver(syncV7ScrollWidth).observe(document.getElementById('v7Table'));
+            window.addEventListener('resize', syncV7ScrollWidth);
+        }
+
+        function applyAutoHighlight(row, currentPrice, levelsDict) {
+            row.querySelectorAll('td.calc-result').forEach(td => {
+                td.classList.remove('highlight-cell');
+                const tags = td.querySelectorAll('.sr-tag');
+                tags.forEach(t => t.remove());
+            });
+
+            if (isNaN(currentPrice)) return;
+            let minDiff = Infinity; let closestKey = null; let closestValue = 0;
+
+            for (const [key, value] of Object.entries(levelsDict)) {
+                let diff = Math.abs(currentPrice - value);
+                if (diff < minDiff) { minDiff = diff; closestKey = key; closestValue = value; }
+            }
+
+            const diffPct = Math.abs(currentPrice) > 0 ? minDiff / Math.abs(currentPrice) : Infinity;
+            if (closestKey && diffPct <= 0.02) {
+                const targetCell = row.querySelector('.res-' + closestKey);
+                if(targetCell) {
+                    targetCell.classList.add('highlight-cell');
+                    const isSupport = currentPrice >= closestValue;
+                    const srHtml = isSupport ? '<div class="sr-tag sup">🛡️ Support</div>' : '<div class="sr-tag res">🧱 Resist</div>';
+                    targetCell.innerHTML = closestValue.toFixed(2) + srHtml;
+                }
+            }
+        }
+
+        // ================= Look first Core =================
+        const tBodyV6 = document.getElementById('tableBodyV6');
+
+        function updateV6Medals() {
+            const pctColumns = ['pct-1272', 'pct-1618', 'pct-2618'];
+            pctColumns.forEach(colClass => {
+                const cells = Array.from(document.querySelectorAll('#tableBodyV6 .' + colClass));
+                const data = cells.map(cell => {
+                    const val = parseFloat(cell.getAttribute('data-val'));
+                    return { cell, val: isNaN(val) ? -Infinity : val };
+                }).filter(item => item.val !== -Infinity);
+
+                data.sort((a, b) => b.val - a.val);
+
+                cells.forEach(cell => {
+                    if (cell.getAttribute('data-val')) {
+                        const value = parseFloat(cell.getAttribute('data-val'));
+                        cell.innerHTML = `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+                    } else cell.innerHTML = '-';
+                });
+
+                if (data[0]) data[0].cell.innerHTML = `🥇 +${data[0].val.toFixed(2)}%`;
+                if (data[1]) data[1].cell.innerHTML = `🥈 +${data[1].val.toFixed(2)}%`;
+                if (data[2]) data[2].cell.innerHTML = `🥉 +${data[2].val.toFixed(2)}%`;
+            });
+        }
+
+        function calcV6(el) {
+            const row = el.closest('tr');
+            const h = parseFloat(row.querySelector('.high').value);
+            const l = parseFloat(row.querySelector('.low').value);
+            const c = parseFloat(row.querySelector('.current').value);
+            const entry = parseFloat(row.querySelector('.entry').value);
+            const previous = parseFloat(row.querySelector('.previous').value);
+            const baselineMode = row.querySelector('.baseline').value;
+
+            if (!h || !l || h <= l) {
+                row.querySelectorAll('.calc-result').forEach(td => td.innerText = '-');
+                row.querySelectorAll('.profit-pct').forEach(td => { td.innerText = '-'; td.removeAttribute('data-val'); });
+                row.querySelector('.status-cell').innerHTML = '-';
+                updateV6Medals(); saveLocalV6(); return;
+            }
+
+            const diff = h - l;
+            const levels = { '236': h - diff * 0.236, '382': h - diff * 0.382, '500': h - diff * 0.5, '618': h - diff * 0.618, '786': h - diff * 0.786, '886': h - diff * 0.886 };
+            for (const key in levels) { row.querySelector('.res-' + key).innerText = levels[key].toFixed(2); }
+
+            const e1272 = l + diff * 1.272; const e1618 = l + diff * 1.618; const e2618 = l + diff * 2.618;
+            let base = c, baseName = 'Current';
+            if (baselineMode === 'entry' && Number.isFinite(entry) && entry > 0) { base = entry; baseName = 'Entry'; }
+            else if (baselineMode === 'previous' && Number.isFinite(previous) && previous > 0) { base = previous; baseName = 'Prev Close'; }
+            const renderTarget = (selector, price, label, pctClass = '') => {
+                const pct = Number.isFinite(base) && base > 0 ? movePct(price, base) : null;
+                const pctText = pct === null ? '--' : `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+                row.querySelector(selector).innerHTML = `<span class="target-price">${price.toFixed(2)}</span><span class="target-pct ${pctClass}" ${pctClass && pct !== null ? `data-val="${pct}"` : ''}>${pctText}</span><small>vs ${baseName} · ${label}</small>`;
+            };
+            renderTarget('.target-high', h, 'Previous High');
+            renderTarget('.ext-1272', e1272, '1.272', 'pct-1272');
+            renderTarget('.ext-1618', e1618, '1.618', 'pct-1618');
+            renderTarget('.ext-2618', e2618, '2.618', 'pct-2618');
+
+            if (!isNaN(c) && c > 0) {
+                applyAutoHighlight(row, c, levels);
+
+                let status = '-';
+                if (c >= h) status = '<span class="status-badge" style="background:#cce5ff;color:#004085;">📈 Breakout</span>';
+                else if (c >= levels['382']) status = '<span class="status-badge">⏳ Pullback</span>';
+                else if (c >= levels['618']) status = '<span class="status-badge">⚖️ Correction</span>';
+                else if (c >= levels['786']) status = '<span class="status-badge" style="background:#fff3cd;color:#856404;">💎 Golden Dip</span>';
+                else if (c >= levels['886']) status = '<span class="status-badge" style="background:#f8d7da;color:#721c24;">🚨 Danger Zone</span>';
+                else if (c >= l) status = '<span class="status-badge" style="background:#e2d9f3;color:#4a148c;">🧛 Harmonic</span>';
+                else status = '<span class="status-badge" style="background:#343a40;color:#fff;">💀 Dead</span>';
+                row.querySelector('.status-cell').innerHTML = status;
+            } else {
+                row.querySelectorAll('.profit-pct').forEach(td => td.removeAttribute('data-val'));
+            }
+            updateV6Medals(); saveLocalV6();
+        }
+
+        function addV6Row(n='', h='', l='', c='', instrumentId='', entry='', previous='', baseline='current') {
+            const tr = document.createElement('tr');
+            tr.dataset.instrumentId = instrumentId;
+            tr.innerHTML = `
+                <td><input type="text" class="input-name name" value="${escapePoolHtml(n)}" placeholder="TICKER" oninput="handleDesktopTickerInput(this)"></td>
+                <td><input type="number" class="high" value="${h}" oninput="calcV6(this)"></td>
+                <td><input type="number" class="low" value="${l}" oninput="calcV6(this)"></td>
+                <td><input type="number" class="current" value="${c}" oninput="calcV6(this)"></td>
+                <td><input type="number" class="entry" value="${entry}" placeholder="Entry" oninput="calcV6(this)"></td>
+                <td><input type="number" class="previous" value="${previous}" placeholder="Prev" oninput="calcV6(this)"></td>
+                <td><select class="baseline" onchange="calcV6(this)"><option value="current" ${baseline==='current'?'selected':''}>Current</option><option value="entry" ${baseline==='entry'?'selected':''}>Entry</option><option value="previous" ${baseline==='previous'?'selected':''}>Prev Close</option></select></td>
+                <td class="calc-result res-236">-</td><td class="calc-result res-382">-</td><td class="calc-result res-500">-</td>
+                <td class="calc-result res-618">-</td><td class="calc-result res-786">-</td><td class="calc-result res-886">-</td>
+                <td class="calc-result compact-target target-high">-</td>
+                <td class="calc-result compact-target ext-1272">-</td>
+                <td class="calc-result compact-target ext-1618">-</td>
+                <td class="calc-result compact-target ext-2618">-</td>
+                <td class="status-cell">-</td>
+                <td class="action-cell">
+                    <span class="material-icons btn-icon btn-delete" onclick="removeInstrumentFromCurrentLayout('${instrumentId}')" title="Delete instrument">delete</span>
+                    <span class="material-icons btn-icon drag-handle">drag_indicator</span>
+                </td>
+            `;
+            tBodyV6.appendChild(tr); makeRowDraggable(tr, saveLocalV6); if(h && l) calcV6(tr.querySelector('.high'));
+        }
+
+        // ================= Then leap Core =================
+        const tBodyV7 = document.getElementById('tableBodyV7');
+
+        function mergeLookFirstRecords(items) {
+            const map = new Map();
+            items.forEach(item => {
+                const ticker = String(item?.n || '').trim().toUpperCase();
+                if (!ticker) return;
+                const id = String(item?.id || '').trim();
+                if (id && !isInstrumentActive(id)) return;
+                const key = id ? `id:${id}` : `ticker:${ticker}`;
+                if (!map.has(key)) map.set(key, { id, n:ticker, h:'', l:'', c:'', e:'', p:'', b:'current' });
+                const record = map.get(key);
+                const h = parseFloat(item?.h), l = parseFloat(item?.l), c = parseFloat(item?.c);
+                if (Number.isFinite(h) && Number.isFinite(l) && h > l) {
+                    record.h = item.h;
+                    record.l = item.l;
+                }
+                if (Number.isFinite(c)) record.c = item.c;
+                const entry = parseFloat(item?.e), previous = parseFloat(item?.p);
+                if (Number.isFinite(entry)) record.e = item.e;
+                if (Number.isFinite(previous)) record.p = item.p;
+                if (['current','entry','previous'].includes(item?.b)) record.b = item.b;
+            });
+            return [...map.values()].filter(item => {
+                const h = parseFloat(item.h), l = parseFloat(item.l), c = parseFloat(item.c);
+                return Number.isFinite(h) && Number.isFinite(l) && Number.isFinite(c) && h > l;
+            });
+        }
+
+        function collectLookFirstRecords() {
+            const domItems = [...document.querySelectorAll('#tableBodyV6 tr')].map(row => ({
+                id:row.dataset.instrumentId || '',
+                n:row.querySelector('.name')?.value || '',
+                h:row.querySelector('.high')?.value || '',
+                l:row.querySelector('.low')?.value || '',
+                c:row.querySelector('.current')?.value || '',
+                e:row.querySelector('.entry')?.value || '',
+                p:row.querySelector('.previous')?.value || '',
+                b:row.querySelector('.baseline')?.value || 'current'
+            }));
+            let savedItems = [];
+            try {
+                savedItems = JSON.parse(localStorage.getItem('tv_lookfirst_data_v3') || '[]');
+            } catch (e) {
+                savedItems = [];
+            }
+            // 先读已保存值，再用当前DOM覆盖，兼容某个来源暂时缺少Current的情况。
+            savedItems = savedItems.filter(item => !item?.id || isInstrumentActive(item.id));
+            return mergeLookFirstRecords([...savedItems, ...domItems]);
+        }
+
+        function updateLookFirstCurrent(instrumentId, ticker, value) {
+            let updated = false;
+            document.querySelectorAll('#tableBodyV6 tr').forEach(row => {
+                const sourceTicker = (row.querySelector('.name')?.value || '').trim().toUpperCase();
+                const currentInput = row.querySelector('.current');
+                const idMatches = instrumentId && row.dataset.instrumentId === instrumentId;
+                if ((idMatches || (!instrumentId && sourceTicker === ticker)) && currentInput) {
+                    currentInput.value = value;
+                    calcV6(currentInput);
+                    updated = true;
+                }
+            });
+            return updated;
+        }
+
+        function syncV7withV6(silent = false, seedData = null) {
+            const v7Cache = {};
+            if (Array.isArray(seedData)) {
+                seedData.forEach(item => {
+                    const ticker = String(item?.n || '').trim().toUpperCase();
+                    const cacheKey = item?.id ? `id:${item.id}` : `ticker:${ticker}`;
+                    if (ticker) v7Cache[cacheKey] = {
+                        t:item.t || 'sideways', r:item.r || '', m:item.m || 'neutral',
+                        s:item.s || '', g:item.g || '', g1:item.g1 || '', v:item.v || ''
+                    };
+                });
+            } else {
+                document.querySelectorAll('#tableBodyV7 tr').forEach(tr => {
+                    const read = (selector, fallback = '') => tr.querySelector(selector)?.value ?? fallback;
+                    const ticker = read('.name').trim().toUpperCase();
+                    const instrumentId = tr.dataset.instrumentId || '';
+                    const cacheKey = instrumentId ? `id:${instrumentId}` : `ticker:${ticker}`;
+                    if(ticker) v7Cache[cacheKey] = {
+                        t: read('.trend', 'sideways'), r: read('.rsi'), m: read('.macd', 'neutral'),
+                        s: read('.stop'), g: read('.target'), g1: read('.target1'), v: read('.volume-ratio')
+                    };
+                });
+            }
+
+            tBodyV7.innerHTML = '';
+            collectLookFirstRecords().forEach(source => {
+                const ticker = source.n;
+                const cacheKey = source.id ? `id:${source.id}` : `ticker:${ticker}`;
+                const cached = v7Cache[cacheKey] || { t:'sideways', r:'', m:'neutral', s:'', g:'', g1:'', v:'' };
+                addV7Row(ticker, cached.t, cached.r, cached.m, cached.s, cached.g, cached.v, cached.g1, source.id);
+            });
+
+            saveLocalV7();
+            requestAnimationFrame(syncV7ScrollWidth);
+            if (!silent) {
+                const syncBtn = document.querySelector('#tab-v7 .btn-sync');
+                if (!syncBtn) return;
+                const originalHtml = syncBtn.innerHTML;
+                syncBtn.innerHTML = '<span class="material-icons">check_circle</span> 已自动引用 Look first';
+                setTimeout(() => { syncBtn.innerHTML = originalHtml; }, 1600);
+            }
+        }
+
+        function getAutoPlan(h, l, c) {
+            const diff = h - l;
+            const fibs = [
+                { label:'23.6%', price:h - diff * 0.236 }, { label:'38.2%', price:h - diff * 0.382 },
+                { label:'50%', price:h - diff * 0.5 }, { label:'61.8%', price:h - diff * 0.618 },
+                { label:'78.6%', price:h - diff * 0.786 }, { label:'88.6%', price:h - diff * 0.886 }
+            ];
+            const extensions = [
+                { label:'1.272延伸', price:l + diff * 1.272 },
+                { label:'1.618延伸', price:l + diff * 1.618 },
+                { label:'2.618延伸', price:l + diff * 2.618 }
+            ];
+            const supports = [...fibs, { label:'前低', price:l }];
+            if (c >= h) supports.push({ label:'前高回踩', price:h });
+            const support = supports.filter(x => x.price <= c).sort((a,b) => b.price - a.price)[0] || { label:'前低', price:l };
+            const fibPressure = fibs.filter(x => x.price > c).sort((a,b) => a.price - b.price)[0] || null;
+            const nearHigh = c < h && (h - c) / Math.abs(h || 1) <= 0.01;
+            let pressure, t1, t2, stage;
+
+            if (c < h && !nearHigh && fibPressure) {
+                stage = 'recovery';
+                pressure = fibPressure;
+                t1 = fibPressure;
+                t2 = { label:'前高', price:h };
+            } else if (c < h) {
+                stage = 'nearHigh';
+                pressure = { label:'前高突破', price:h };
+                t1 = pressure;
+                t2 = extensions[0];
+            } else {
+                stage = 'breakout';
+                const future = extensions.filter(x => x.price > c).sort((a,b) => a.price - b.price);
+                pressure = future[0] || { label:'已超2.618', price:extensions[2].price };
+                t1 = future[0] || null;
+                t2 = future[1] || future[0] || null;
+            }
+            return { fibs, extensions, support, pressure, t1, t2, stage };
+        }
+
+        function movePct(price, base) {
+            return Number.isFinite(price) && Number.isFinite(base) && base !== 0 ? (price - base) / base * 100 : null;
+        }
+
+        function levelHtml(level, base, fallback = '暂无') {
+            if (!level || !Number.isFinite(level.price)) return `<span style="color:var(--text-secondary);">${fallback}</span>`;
+            const pct = movePct(level.price, base);
+            const cls = pct !== null && pct < 0 ? 'down' : 'up';
+            const pctText = pct === null ? '--' : `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+            return `<div class="price">${level.price.toFixed(2)}</div><div class="${cls}">${pctText}</div><small>${level.label}</small>`;
+        }
+
+        function getStopCandidates(plan, entry, low) {
+            if (!Number.isFinite(entry) || entry <= 0) return null;
+            const below = [...plan.fibs, { label:'前低', price:low }]
+                .filter(level => Number.isFinite(level.price) && level.price < entry)
+                .sort((a,b) => b.price - a.price);
+            if (!below.length) return null;
+            let index = 0;
+            let support = below[index];
+            let stop = support.price * 0.995;
+            let riskPct = (entry - stop) / entry * 100;
+            if (riskPct < 3 && below[index + 1]) {
+                support = below[++index];
+                stop = support.price * 0.995;
+                riskPct = (entry - stop) / entry * 100;
+            }
+            return {
+                structure:{ price:stop, riskPct, label:`${support.label} 下方 0.5%`, tooWide:riskPct > 7 },
+                fixed5:{ price:entry * 0.95, riskPct:5, label:'Entry -5%' },
+                fixed7:{ price:entry * 0.93, riskPct:7, label:'Entry -7%' },
+                support
+            };
+        }
+
+        function useStopCandidate(button, price) {
+            const row = button.closest('tr');
+            const input = row?.querySelector('.stop');
+            if (!input || !Number.isFinite(price)) return;
+            input.value = Number(price).toFixed(2);
+            calcV7(input);
+        }
+
+        function calcV7(el) {
+            const row = el?.closest?.('tr');
+            if (!row) return;
+            const requiredCells = ['.market-cell','.market-summary','.support-cell','.pressure-cell','.t1-cell','.t2-cell','.rr-cell','.ai-cell'];
+            if (requiredCells.some(selector => !row.querySelector(selector))) {
+                syncV7withV6(true);
+                return;
+            }
+            const read = (selector, fallback = '') => row.querySelector(selector)?.value ?? fallback;
+            // 计算时直接读取 Look first 唯一数据源，不保留价格副本。
+            const ticker = read('.name').trim().toUpperCase();
+            const instrumentId = row.dataset.instrumentId || '';
+            if (el?.classList?.contains('current-proxy')) {
+                updateLookFirstCurrent(instrumentId, ticker, el.value);
+            }
+            const sourceRecords = collectLookFirstRecords();
+            const liveSource = (instrumentId ? sourceRecords.find(item => item.id === instrumentId) : null)
+                || sourceRecords.find(item => item.n === ticker) || null;
+            const h = parseFloat(liveSource?.h);
+            const l = parseFloat(liveSource?.l);
+            const c = parseFloat(liveSource?.c);
+            const entry = parseFloat(liveSource?.e);
+            const previous = parseFloat(liveSource?.p);
+            const volumeRatio = parseFloat(read('.volume-ratio'));
+            const stop = parseFloat(read('.stop'));
+            const override1 = parseFloat(read('.target1'));
+            const override2 = parseFloat(read('.target'));
+            const baselineMode = liveSource?.b || 'current';
+            const trend = read('.trend', 'sideways');
+            const rsi = parseFloat(read('.rsi'));
+            const macd = read('.macd', 'neutral');
+
+            if (!Number.isFinite(h) || !Number.isFinite(l) || !Number.isFinite(c) || h <= l) {
+                row.querySelector('.market-summary').innerHTML = `<span class="risk-bad">Look first 数据不完整</span><br><small>H:${Number.isFinite(h)?h:'--'} L:${Number.isFinite(l)?l:'--'} C:${Number.isFinite(c)?c:'--'}</small>`;
+                ['support-cell','pressure-cell','t1-cell','t2-cell','rr-cell','ai-cell'].forEach(cls => row.querySelector('.' + cls).innerHTML = '-');
+                return;
+            }
+
+            const plan = getAutoPlan(h, l, c);
+            const invalidOverride1 = Number.isFinite(override1) && override1 <= c;
+            const invalidOverride2 = Number.isFinite(override2) && override2 <= c;
+            const effectiveT1 = Number.isFinite(override1) && !invalidOverride1 ? { label:'人工覆盖 T1', price:override1 } : plan.t1;
+            const effectiveT2 = Number.isFinite(override2) && !invalidOverride2 ? { label:'人工覆盖 T2', price:override2 } : plan.t2;
+            let base = c, baseName = 'Current';
+            if (baselineMode === 'entry' && Number.isFinite(entry) && entry > 0) { base = entry; baseName = 'Entry'; }
+            else if (baselineMode === 'previous' && Number.isFinite(previous) && previous > 0) { base = previous; baseName = 'Prev Close'; }
+
+            let zone, fiboScore;
+            const levels = Object.fromEntries(plan.fibs.map(x => [x.label, x.price]));
+            if (c >= h) { zone = '📈 Breakout'; fiboScore = 0; }
+            else if (c >= levels['38.2%']) { zone = '⏳ Pullback'; fiboScore = 0; }
+            else if (c >= levels['61.8%']) { zone = '⚖️ Correction'; fiboScore = 1; }
+            else if (c >= levels['78.6%']) { zone = '💎 Golden Dip'; fiboScore = 4; }
+            else if (c >= levels['88.6%']) { zone = '🚨 Danger Zone'; fiboScore = 3; }
+            else if (c >= l) { zone = '🧛 Harmonic'; fiboScore = 2; }
+            else { zone = '💀 Structure Broken'; fiboScore = -5; }
+
+            const dayMove = Number.isFinite(previous) && previous > 0 ? movePct(c, previous) : null;
+            const currentProxy = row.querySelector('.current-proxy');
+            if (currentProxy && document.activeElement !== currentProxy) currentProxy.value = c;
+            const entryMove = Number.isFinite(entry) && entry > 0 ? movePct(c, entry) : null;
+            row.querySelector('.market-summary').innerHTML = `<small>${zone}</small>${dayMove === null ? '' : `<br><span class="${dayMove < 0 ? 'risk-bad' : 'risk-ok'}">vs Prev ${dayMove >= 0 ? '+' : ''}${dayMove.toFixed(2)}%</span>`}${entryMove === null ? '<br><small>Entry 未填</small>' : `<br><span class="${entryMove < 0 ? 'risk-bad' : 'risk-ok'}">vs Entry ${entryMove >= 0 ? '+' : ''}${entryMove.toFixed(2)}%</span>`}`;
+            row.querySelector('.support-cell').innerHTML = levelHtml(plan.support, base);
+            row.querySelector('.pressure-cell').innerHTML = levelHtml(plan.pressure, base);
+            row.querySelector('.t1-cell').innerHTML = invalidOverride1
+                ? `<span class="risk-bad">覆盖值须高于 Current</span><small>暂用自动 T1</small>${levelHtml(plan.t1, base)}`
+                : levelHtml(effectiveT1, base);
+            row.querySelector('.t2-cell').innerHTML = invalidOverride2
+                ? `<span class="risk-bad">覆盖值须高于 Current</span><small>暂用自动 T2</small>${levelHtml(plan.t2, base)}`
+                : levelHtml(effectiveT2, base);
+            [row.querySelector('.support-cell'), row.querySelector('.pressure-cell'), row.querySelector('.t1-cell'), row.querySelector('.t2-cell')]
+                .forEach(cell => cell.title = `涨跌幅基准：${baseName}`);
+
+            const trendScore = trend === 'uptrend' ? 2 : (trend === 'downtrend' ? -3 : 0);
+            let rsiScore = 0;
+            if (Number.isFinite(rsi)) {
+                if (rsi <= 30) rsiScore = 2;
+                else if (rsi <= 45) rsiScore = 1;
+                else if (rsi >= 70) rsiScore = -2;
+            }
+            const macdScore = macd === 'divergence' ? 2 : (macd === 'bullish' ? 1 : (macd === 'bearish' ? -1 : 0));
+            const momentumScore = Math.min(3, rsiScore + macdScore);
+
+            let volumeScore = 0;
+            let volumeText = '5日量比未填';
+            if (Number.isFinite(previous) && previous > 0 && Number.isFinite(volumeRatio) && volumeRatio > 0) {
+                const move = (c - previous) / previous;
+                if (volumeRatio >= 2.5) {
+                    if (move > 0.002) { volumeScore = 1; volumeText = '异常放量上涨：加速 / 强分歧'; }
+                    else if (move < -0.002) { volumeScore = -2; volumeText = '异常放量下跌：恐慌 / 出货风险'; }
+                    else { volumeScore = 0; volumeText = '异常放量：等待方向确认'; }
+                } else if (move > 0.002 && volumeRatio >= 1.5) { volumeScore = 1; volumeText = '明显放量上涨确认'; }
+                else if (move > 0.002 && volumeRatio <= 0.8) { volumeScore = -1; volumeText = '缩量反弹'; }
+                else if (move < -0.002 && volumeRatio >= 1.5) { volumeScore = -2; volumeText = '明显放量下跌风险'; }
+                else if (move < -0.002 && volumeRatio <= 0.8) { volumeScore = 1; volumeText = '缩量回调'; }
+                else if (volumeRatio >= 1.2) volumeText = `温和放量 (${volumeRatio.toFixed(2)}x)`;
+                else volumeText = `正常量能 (${volumeRatio.toFixed(2)}x)`;
+            } else if (Number.isFinite(volumeRatio) && volumeRatio > 0) {
+                if (volumeRatio >= 2.5) volumeText = '异常放量：缺少 Prev Close，等待方向确认';
+                else if (volumeRatio >= 1.5) volumeText = '明显放量：缺少 Prev Close';
+                else if (volumeRatio >= 1.2) volumeText = '温和放量：缺少 Prev Close';
+                else if (volumeRatio <= 0.8) volumeText = '明显缩量：缺少 Prev Close';
+                else volumeText = '正常量能：缺少 Prev Close';
+            }
+            let strengthBonus = 0;
+            if (trend === 'uptrend' && c >= h && (macd === 'bullish' || volumeScore > 0)) strengthBonus = 2;
+            else if (trend === 'uptrend' && c >= levels['38.2%']) strengthBonus = 1;
+            const totalScore = fiboScore + trendScore + momentumScore + volumeScore + strengthBonus;
+
+            const hasEntry = Number.isFinite(entry) && entry > 0;
+            const rrEntry = hasEntry ? entry : c;
+            const isPreview = !hasEntry;
+            const stopPlan = hasEntry ? getStopCandidates(plan, entry, l) : null;
+            const stopRiskPct = Number.isFinite(stop) && stop < rrEntry ? (rrEntry - stop) / rrEntry * 100 : null;
+            const stopTooTight = stopRiskPct !== null && stopRiskPct < 1;
+            const stopTooWide = stopRiskPct !== null && stopRiskPct > 10;
+            const stopBasicValid = Number.isFinite(stop) && stop < rrEntry && !stopTooTight && !stopTooWide;
+            let rr1 = null, rr2 = null;
+            if (stopBasicValid) {
+                if (effectiveT1 && effectiveT1.price > rrEntry) rr1 = (effectiveT1.price - rrEntry) / (rrEntry - stop);
+                if (effectiveT2 && effectiveT2.price > rrEntry) rr2 = (effectiveT2.price - rrEntry) / (rrEntry - stop);
+            }
+            const targetPlanValid = Number.isFinite(rr2);
+            const riskValid = hasEntry && stopBasicValid && targetPlanValid;
+            const structureAligned = !!(stopPlan && Number.isFinite(stop) && stop <= stopPlan.structure.price * 1.003);
+            const lowDrawdown = hasEntry && l < entry ? (entry - l) / entry * 100 : null;
+            let rrTopHtml = '';
+            if (!hasEntry) {
+                rrTopHtml = `<div class="rr-message"><span class="risk-warn">Entry 未填</span><br><small>Current 仅作 R:R 预览${Number.isFinite(rr2) ? ` · T2 ${rr2.toFixed(2)}R` : ''}</small></div>`;
+            } else if (!Number.isFinite(stop)) {
+                rrTopHtml = '<div class="rr-message"><span class="risk-warn">待设 Manual Stop</span><br><small>可从下方选择一个基于 Entry 的方案</small></div>';
+            } else if (stop >= entry) {
+                rrTopHtml = '<div class="rr-message"><span class="risk-bad">Stop 必须低于 Entry</span></div>';
+            } else if (stopTooTight) {
+                rrTopHtml = `<div class="rr-message"><span class="risk-bad">Stop 过紧 (${stopRiskPct.toFixed(1)}%)</span><br><small>低于 Entry 的 1% 会虚增 R:R</small></div>`;
+            } else if (stopTooWide) {
+                rrTopHtml = `<div class="rr-message"><span class="risk-bad">Stop 过宽 (${stopRiskPct.toFixed(1)}%)</span><br><small>超过 Entry 的 10% 执行上限</small></div>`;
+            } else if (!targetPlanValid) {
+                rrTopHtml = '<div class="rr-message"><span class="risk-bad">目标价不高于 Entry</span></div>';
+            } else {
+                rrTopHtml = `<div class="rr-values"><div class="rr-value"><small>T1 R:R</small><strong class="${rr1 >= 1 ? 'risk-ok' : 'risk-bad'}">${Number.isFinite(rr1) ? `${rr1.toFixed(2)}R` : '--'}</strong></div><div class="rr-value"><small>T2 R:R</small><strong class="${rr2 >= 2 ? 'risk-ok' : 'risk-bad'}">${rr2.toFixed(2)}R</strong></div></div>`;
+            }
+            let riskDetails = '';
+            if (hasEntry && stopRiskPct !== null) riskDetails += `<span>Manual Stop · Entry ${entry.toFixed(2)} → ${stop.toFixed(2)} · -${stopRiskPct.toFixed(1)}%</span>`;
+            if (lowDrawdown !== null) riskDetails += `<span>Extreme Reference · Entry → Low · -${lowDrawdown.toFixed(1)}%</span>`;
+            let stopPlanHtml = '';
+            if (stopPlan) {
+                const structure = stopPlan.structure;
+                stopPlanHtml = `<div class="stop-plan">
+                    <div class="stop-plan-title">Recommended Stops <span>All based on Entry ${entry.toFixed(2)}</span></div>
+                    <div class="stop-choice structure-choice"><div><span class="stop-choice-title">Structure Stop</span><strong class="${structure.tooWide ? 'risk-warn' : ''}">${structure.price.toFixed(2)}</strong></div><small>${structure.label} · Entry risk -${structure.riskPct.toFixed(1)}%${structure.tooWide ? ' · Too Wide' : ''}</small><button class="stop-use" onclick="useStopCandidate(this,${structure.price})">Use</button></div>
+                    <div class="stop-choice"><div><span class="stop-choice-title">Entry -5%</span><strong>${stopPlan.fixed5.price.toFixed(2)}</strong></div><small>Fixed stop based on Entry</small><button class="stop-use" onclick="useStopCandidate(this,${stopPlan.fixed5.price})">Use</button></div>
+                    <div class="stop-choice"><div><span class="stop-choice-title">Entry -7%</span><strong>${stopPlan.fixed7.price.toFixed(2)}</strong></div><small>Fixed stop based on Entry</small><button class="stop-use" onclick="useStopCandidate(this,${stopPlan.fixed7.price})">Use</button></div>
+                </div>`;
+            }
+            row.querySelector('.rr-cell').innerHTML = `<div class="rr-panel">${rrTopHtml}${riskDetails ? `<div class="risk-lines">${riskDetails}</div>` : ''}${stopPlanHtml}</div>`;
+
+            const structureBroken = c < l;
+            const firstBarrierTight = Number.isFinite(rr1) && rr1 < 1;
+            const goodRR = riskValid && rr1 >= 1 && rr2 >= 2;
+            const sniperAllowed = goodRR && trend !== 'downtrend' && structureAligned && !firstBarrierTight;
+            const technicalLabel = totalScore >= 6 ? 'Strong Setup' : (totalScore >= 3 ? 'Good Structure' : (totalScore >= 1 ? 'Watch Structure' : 'Weak Structure'));
+            let entryLabel = !hasEntry ? 'Entry Pending' : (!Number.isFinite(stop) ? 'Risk Plan Pending' : (!riskValid ? 'Invalid Stop / Target' : (goodRR ? 'Executable Entry' : 'R:R Pending')));
+
+            let aiHtml = '', signalName = '';
+            if (structureBroken) { signalName = 'Structure Invalid'; aiHtml = '<span class="ai-badge" style="background:#e0e0e0;color:#757575;">🛑 Structure Invalid</span>'; }
+            else if (totalScore < 1) { signalName = 'Avoid'; aiHtml = '<span class="ai-badge" style="background:#e0e0e0;color:#757575;">🛑 Avoid</span>'; }
+            else if (totalScore < 3) { signalName = 'Watch'; aiHtml = '<span class="ai-badge" style="background:#ffd600;color:#333;">👀 Watch</span>'; }
+            else if (!hasEntry) { signalName = 'Wait Better Entry'; aiHtml = '<span class="ai-badge" style="background:#ffb300;color:#333;">⏳ Wait Better Entry</span>'; }
+            else if (!Number.isFinite(stop)) { signalName = 'Risk Plan Pending'; aiHtml = '<span class="ai-badge" style="background:#ffb300;color:#333;">🛡️ Risk Plan Pending</span>'; }
+            else if (!riskValid) { signalName = 'Invalid Stop'; aiHtml = '<span class="ai-badge" style="background:#e0e0e0;color:#c5221f;">⚠️ Invalid Stop</span>'; }
+            else if (totalScore >= 6 && sniperAllowed) { signalName = 'Sniper Buy'; aiHtml = '<span class="ai-badge" style="background:#d50000;color:white;">🔥 Sniper Buy</span>'; }
+            else if (firstBarrierTight) { signalName = 'Wait Reclaim'; aiHtml = '<span class="ai-badge" style="background:#ffb300;color:#333;">⏳ Wait Reclaim</span>'; }
+            else if (goodRR) { signalName = 'Good Setup'; aiHtml = '<span class="ai-badge" style="background:#00c853;color:white;">🟢 Good Setup</span>'; }
+            else { signalName = 'Wait Better Entry'; aiHtml = '<span class="ai-badge" style="background:#ffb300;color:#333;">⏳ Wait Better Entry</span>'; }
+            aiHtml += `<div style="font-size:10px;margin-top:4px;color:#5f6368;">${technicalLabel} / ${entryLabel}</div>`;
+            aiHtml += `<div style="font-size:10px;color:#5f6368;">F${fiboScore}+T${trendScore}+M${momentumScore}+V${volumeScore}+S${strengthBonus}=${totalScore}</div>`;
+            aiHtml += `<div style="font-size:10px;color:${volumeScore < 0 ? '#c5221f' : '#5f6368'};">${firstBarrierTight ? '第一压力过近；' : ''}${volumeText}</div>`;
+            aiHtml += '<button class="signal-why" onclick="openSignalExplanation(this)">Why this signal?</button>';
+            const aiCell = row.querySelector('.ai-cell');
+            aiCell.dataset.explanation = JSON.stringify({ signalName, totalScore, fiboScore, trendScore, momentumScore, volumeScore, strengthBonus, entry:hasEntry?entry:null, stop:Number.isFinite(stop)?stop:null, stopRiskPct, rr1, rr2, structureAligned, firstBarrierTight, volumeText });
+            aiCell.innerHTML = aiHtml;
+            syncMobileCompositeSignal(row);
+            saveLocalV7();
+        }
+
+        function addV7Row(n='', t='sideways', r='', m='neutral', s='', g='', v='', g1='', instrumentId='') {
+            const tr = document.createElement('tr');
+            tr.dataset.instrumentId = instrumentId;
+            tr.innerHTML = `
+                <td>
+                    <input type="text" class="input-name name" value="${escapePoolHtml(n)}" readonly title="标的来自 Instrument Pool">
+                </td>
+                <td class="market-cell"><input type="number" class="current-proxy" placeholder="Current"><div class="market-summary">-</div></td>
+                <td class="support-cell auto-level">-</td>
+                <td class="pressure-cell auto-level">-</td>
+                <td class="t1-cell auto-level">-</td>
+                <td class="t2-cell auto-level">-</td>
+                <td class="rr-cell">-</td>
+                <td class="detail-col"><input type="number" step="0.01" class="input-risk volume-ratio" value="${v}" placeholder="VR" oninput="calcV7(this)"></td>
+                <td class="detail-col"><input type="number" class="input-risk stop" value="${s}" placeholder="止损" oninput="calcV7(this)"></td>
+                <td class="detail-col"><input type="number" class="input-risk target1" value="${g1}" placeholder="自动"></td>
+                <td class="detail-col"><input type="number" class="input-risk target" value="${g}" placeholder="自动"></td>
+                <td class="detail-col"><select class="trend" onchange="calcV7(this)"><option value="uptrend" ${t==='uptrend'?'selected':''}>📈 Uptrend</option><option value="sideways" ${t==='sideways'?'selected':''}>➖ Sideways</option><option value="downtrend" ${t==='downtrend'?'selected':''}>📉 Downtrend</option></select></td>
+                <td class="detail-col"><input type="number" class="input-rsi rsi" value="${r}" placeholder="RSI" oninput="calcV7(this)"></td>
+                <td class="detail-col"><select class="macd" onchange="calcV7(this)"><option value="neutral" ${m==='neutral'?'selected':''}>Wait/Flat</option><option value="bullish" ${m==='bullish'?'selected':''}>📈 Bullish</option><option value="bearish" ${m==='bearish'?'selected':''}>📉 Bearish</option><option value="divergence" ${m==='divergence'?'selected':''}>⭐ Divergence</option></select></td>
+                <td class="ai-cell" style="background:#fff3e0;">-</td>
+            `;
+            tBodyV7.appendChild(tr);
+            const recalcTarget = event => calcV7(event.target);
+            tr.querySelectorAll('.target1, .target, .current-proxy').forEach(input => {
+                input.addEventListener('input', recalcTarget);
+                input.addEventListener('change', recalcTarget);
+            });
+            calcV7(tr.querySelector('.name'));
+        }
+
+        // ================= Drag & Drop / Data Save =================
+        let draggedRow = null;
+        function makeRowDraggable(tr, saveCallback) {
+            const handle = tr.querySelector('.drag-handle');
+            handle.addEventListener('mousedown', () => tr.setAttribute('draggable', 'true'));
+            handle.addEventListener('mouseup', () => tr.removeAttribute('draggable'));
+            tr.addEventListener('dragstart', () => { draggedRow = tr; setTimeout(() => tr.classList.add('dragging'), 0); });
+            tr.addEventListener('dragend', () => { tr.classList.remove('dragging'); tr.removeAttribute('draggable'); draggedRow = null; saveCallback(); });
+            tr.addEventListener('dragover', (e) => {
+                e.preventDefault(); const tbody = tr.closest('tbody');
+                const afterEl = getDragAfterElement(tbody, e.clientY);
+                if (afterEl == null) tbody.appendChild(draggedRow); else tbody.insertBefore(draggedRow, afterEl);
+            });
+        }
+        function getDragAfterElement(container, y) {
+            const draggableEls = [...container.querySelectorAll('tr:not(.dragging)')];
+            return draggableEls.reduce((closest, child) => {
+                const box = child.getBoundingClientRect(); const offset = y - box.top - box.height / 2;
+                if (offset < 0 && offset > closest.offset) return { offset: offset, element: child }; else return closest;
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+
+        function saveLocalV6() {
+            const data = [];
+            document.querySelectorAll('#tableBodyV6 tr').forEach(tr => {
+                data.push({
+                    id:tr.dataset.instrumentId || '', n:tr.querySelector('.name').value,
+                    h:tr.querySelector('.high').value, l:tr.querySelector('.low').value, c:tr.querySelector('.current').value,
+                    e:tr.querySelector('.entry').value, p:tr.querySelector('.previous').value, b:tr.querySelector('.baseline').value
+                });
+            });
+            const merged = mergeRowsWithHiddenInstruments('tv_lookfirst_data_v3', data);
+            localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify(merged));
+            const pool = loadInstrumentPool();
+            data.forEach((row, order) => { const item = pool.items.find(entry => entry.id === row.id); if (item) item.order = order; });
+            saveInstrumentPool(pool);
+            reorderStoredRowsByPool();
+        }
+        function saveLocalV7() {
+            const data = [];
+            document.querySelectorAll('#tableBodyV7 tr').forEach(tr => {
+                const read = (selector, fallback = '') => tr.querySelector(selector)?.value ?? fallback;
+                data.push({
+                    id: tr.dataset.instrumentId || '',
+                    n: read('.name'),
+                    t: read('.trend', 'sideways'),
+                    r: read('.rsi'),
+                    m: read('.macd', 'neutral'),
+                    s: read('.stop'),
+                    g: read('.target'),
+                    g1: read('.target1'),
+                    v: read('.volume-ratio')
+                });
+            });
+            localStorage.setItem('tv_thenleap_data_v3', JSON.stringify(mergeRowsWithHiddenInstruments('tv_thenleap_data_v3', data)));
+        }
+
+        const HELP_TOPICS = {
+            entry: { title:'Entry · 实际/计划买入价', html:`<h3>这是什么</h3><p>Entry 是实际持仓平均成本，或尚未成交时的计划买入价。它是执行层的唯一成本基准。</p><h3>如何计算</h3><div class="formula"><code>R:R = (Target − Entry) ÷ (Entry − Stop)</code><br><code>当前盈亏 = (Current − Entry) ÷ Entry</code></div><h3>对信号的影响</h3><p>Entry 为空时，系统可用 Current 做 R:R 预览，但预览不能把 Composite Signal 升级为 Good Setup 或 Sniper Buy。</p><h3>常见误区</h3><p>Current 是市场现价，不等于你的成本；Stop 也不是买入价。</p>` },
+            previous: { title:'Prev Close · 前收盘价', html:`<h3>用途</h3><p>填写上一交易日正式收盘价，用于计算当日涨跌幅，并结合 VR (5D) 判断放量上涨、放量下跌或价格走平。</p><h3>注意</h3><p>它不参与 R:R。复权口径应与 Current、High、Low 保持一致。</p>` },
+            baseline: { title:'% Baseline · 展示基准', html:`<h3>用途</h3><p>决定支撑、压力和目标价下方涨跌幅相对于哪个价格显示：Current、Entry 或 Prev Close。</p><h3>边界</h3><p>Baseline 只改变百分比展示，不改变斐波那契价位、技术评分或 R:R；R:R 始终使用 Entry。</p>` },
+            fibonacci: { title:'Fibonacci · 回撤区域', html:`<h3>计算</h3><p>以 Look First 的 High 与 Low 为区间：<code>回撤价 = High − (High − Low) × 比例</code>。23.6%、38.2%、50%、61.8%、78.6%、88.6% 用于描述价格所处区域，而不是保证支撑有效。</p><h3>F 分值</h3><p>Breakout 0；Pullback 0；Correction +1；Golden Dip +4；Danger Zone +3；Harmonic +2；Structure Broken −5。分数反映系统的左侧赔率偏好，不等于趋势已经反转。</p>` },
+            targets: { title:'Targets · 目标位', html:`<h3>Look First</h3><p>Previous High 是第一档历史压力；1.272、1.618、2.618 是基于 High/Low 区间计算的延伸目标。每格同时显示目标价及相对 Baseline 的涨跌幅。</p><h3>Then Leap</h3><p>T1/T2 会根据 Current 所处阶段自动选择：修复阶段先看最近压力与前高，接近前高时看突破与第一延伸，突破后再顺延。Override 只在明确要改变自动计划时填写。</p>` },
+            rr: { title:'R:R · 风险收益比', html:`<h3>公式</h3><div class="formula"><code>T1 R:R = (T1 − Entry) ÷ (Entry − Stop)</code><br><code>T2 R:R = (T2 − Entry) ÷ (Entry − Stop)</code></div><h3>执行门槛</h3><p>Good Setup 至少需要 T1 ≥ 1R、T2 ≥ 2R，并且 Entry 与有效 Stop 都已填写。Stop 风险低于 1% 视为过紧，高于 10% 视为过宽，避免人为虚增赔率。</p><h3>风险</h3><p>R:R 是计划比例，不包含跳空、滑点、流动性和成交失败风险。</p>` },
+            stop: { title:'Stop · 止损与结构止损', html:`<h3>手动 Stop</h3><p>手动 Stop 永远由用户决定，系统不会自动覆盖。必须低于 Entry；计划风险应处于 1%–10%。</p><h3>结构止损</h3><p>系统寻找 Entry 下方最近的有效斐波那契支撑，并放在支撑下约 0.5%。若风险不足 3%，改用下一档支撑，避免止损贴得太紧；结构风险超过 7% 会提示 Too Wide。</p><h3>其他候选</h3><p>同时提供 Entry −5% 与 Entry −7% 作为执行参考。结构止损、固定止损各有取舍，不保证阻止跳空损失。</p>` },
+            volume: { title:'VR (5D) · 五日量比', html:`<h3>定义</h3><p>直接填写券商软件基于过去五个交易日的量比。≤0.8 为缩量，0.8–1.2 正常，1.2–1.5 温和放量，≥1.5 明显放量，≥2.5 触发异常放量提示。</p><h3>评分</h3><p>系统结合 Current 相对 Prev Close 的方向判断量价关系。异常巨量不会无限加分，仍受原有 V 分值与总分门控约束。</p>` },
+            trend: { title:'Trend (13d) · 趋势', html:`<h3>填写方式</h3><p>依据约 13 个交易日的价格结构手动选择 Uptrend、Sideways 或 Downtrend，而不是系统自动读取盘口。</p><h3>T 分值</h3><p>Uptrend +2，Sideways 0，Downtrend −3。Sniper Buy 禁止出现在 Downtrend，但低位技术分仍可能显示 Watch，代表观察而非确认买入。</p>` },
+            rsi: { title:'RSI (14) · 相对强弱', html:`<h3>M 分值的一部分</h3><p>RSI ≤30 得 +2；30–45 得 +1；45–70 得 0；≥70 得 −2。RSI 与 MACD 合并为 Momentum，合计上限为 +3。</p><h3>误区</h3><p>超卖不代表立刻反转，超买也不代表立刻下跌；必须结合趋势、结构和风险计划。</p>` },
+            macd: { title:'MACD Trend · 动量状态', html:`<h3>M 分值的一部分</h3><p>Divergence +2，Bullish +1，Neutral 0，Bearish −1；再与 RSI 分值合并，Momentum 最高 +3。</p><h3>填写口径</h3><p>Divergence 只用于你已经确认的有效背离，不应把普通金叉或短暂柱体收窄直接当作背离。</p>` },
+            composite: { title:'Composite Signal · 综合信号', html:`<h3>技术分</h3><div class="formula"><code>Total = F + T + M + V + S</code></div><p>F 为斐波那契区域，T 为趋势，M 为 RSI/MACD 动量，V 为五日量价，S 为趋势强度奖励。原有权重未因 Entry/R:R 改造而改变。</p><h3>执行层</h3><p>技术分 1–2 始终只是 Watch，不能仅凭漂亮的 R:R 升级。技术分 ≥3 后，仍需 Entry、有效 Stop、T1 ≥1R、T2 ≥2R 才能成为 Good Setup。Sniper Buy 还要求总分 ≥6、非 Downtrend、止损与结构支撑对齐且第一压力不过近。</p><h3>标签</h3><p>Entry 缺失显示 Wait Better Entry；有 Entry 但无 Stop 显示 Risk Plan Pending；止损无效显示 Invalid Stop；结构跌破则优先显示 Structure Invalid/Avoid。</p>` }
+        };
+
+        function openHelp(topic, custom = null) {
+            const data = custom || HELP_TOPICS[topic] || HELP_TOPICS.composite;
+            document.getElementById('helpModalTitle').textContent = data.title;
+            document.getElementById('helpModalContent').innerHTML = data.html;
+            const modal = document.getElementById('helpModalBackdrop');
+            modal.classList.add('open'); modal.setAttribute('aria-hidden','false');
+        }
+        function closeHelp() {
+            const modal = document.getElementById('helpModalBackdrop');
+            modal.classList.remove('open'); modal.setAttribute('aria-hidden','true');
+        }
+        function handleHelpBackdrop(event) { if (event.target.id === 'helpModalBackdrop') closeHelp(); }
+        function openSignalExplanation(button) {
+            const raw = button.closest('.ai-cell, .mobile-signal-summary')?.dataset.explanation;
+            if (!raw) return openHelp('composite');
+            const x = JSON.parse(raw);
+            const fmt = value => Number.isFinite(value) ? value.toFixed(2) : '--';
+            const html = `<h3>当前结论：${x.signalName}</h3><div class="formula">F${x.fiboScore} + T${x.trendScore} + M${x.momentumScore} + V${x.volumeScore} + S${x.strengthBonus} = <strong>${x.totalScore}</strong></div><h3>执行数据</h3><p>Entry：${fmt(x.entry)}<br>Stop：${fmt(x.stop)}${Number.isFinite(x.stopRiskPct) ? `（计划风险 ${x.stopRiskPct.toFixed(1)}%）` : ''}<br>T1：${fmt(x.rr1)}R<br>T2：${fmt(x.rr2)}R<br>结构止损对齐：${x.structureAligned ? '是' : '否'}<br>第一压力过近：${x.firstBarrierTight ? '是' : '否'}</p><h3>量价说明</h3><p>${x.volumeText}</p><p style="color:var(--text-secondary);">该结论只解释系统规则，不构成收益保证或投资建议。</p>`;
+            openHelp('composite', { title:`Why · ${x.signalName}`, html });
+        }
+
+        const HEADER_NOTE_KEYS = {
+            marquee: 'tv_header_marquee_v1',
+            tips: 'tv_header_tips_v1'
+        };
+        let noteEditorMode = 'tips';
+
+        function renderHeaderMarquee() {
+            const track = document.getElementById('reminderMarqueeText');
+            if (!track) return;
+            const savedText = localStorage.getItem(HEADER_NOTE_KEYS.marquee) || '';
+            const displayText = savedText.trim() || '点击右侧铅笔，添加你的交易纪律或盘前提醒';
+            track.textContent = displayText;
+            const duration = Math.max(30, Math.min(120, 26 + displayText.length * 0.42));
+            track.style.setProperty('--marquee-duration', `${duration}s`);
+            track.style.animation = 'none';
+            void track.offsetWidth;
+            track.style.animation = '';
+        }
+
+        function openNoteEditor(mode) {
+            noteEditorMode = mode === 'marquee' ? 'marquee' : 'tips';
+            const backdrop = document.getElementById('noteModalBackdrop');
+            const editor = document.getElementById('noteEditorText');
+            const title = document.getElementById('noteModalTitle');
+            const hint = document.getElementById('noteModalHint');
+            const isMarquee = noteEditorMode === 'marquee';
+            title.textContent = isMarquee ? '编辑滚动提醒' : 'Pro Tips';
+            editor.value = localStorage.getItem(HEADER_NOTE_KEYS[noteEditorMode]) || '';
+            editor.placeholder = isMarquee ? '例如：不追高，不重仓猜底；先看指数，再看板块，最后看个股。' : '在这里记录交易原则、操作说明、复盘提示或名言警句……';
+            editor.style.minHeight = isMarquee ? '140px' : '340px';
+            hint.textContent = isMarquee
+                ? '保存后会在顶部慢速滚动；鼠标悬停可以暂停。Local Backup 与 Push to Cloud 均会保存。'
+                : '支持长文字和换行；Local Backup 与 Push to Cloud 均会保存。';
+            backdrop.classList.add('open');
+            backdrop.setAttribute('aria-hidden', 'false');
+            setTimeout(() => editor.focus(), 0);
+        }
+
+        function closeNoteEditor() {
+            const backdrop = document.getElementById('noteModalBackdrop');
+            backdrop.classList.remove('open');
+            backdrop.setAttribute('aria-hidden', 'true');
+        }
+
+        function saveNoteEditor() {
+            const editor = document.getElementById('noteEditorText');
+            localStorage.setItem(HEADER_NOTE_KEYS[noteEditorMode], editor.value);
+            if (noteEditorMode === 'marquee') renderHeaderMarquee();
+            closeNoteEditor();
+        }
+
+        function handleNoteBackdrop(event) {
+            if (event.target.id === 'noteModalBackdrop') closeNoteEditor();
+        }
+
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && document.getElementById('noteModalBackdrop')?.classList.contains('open')) closeNoteEditor();
+            if (event.key === 'Escape' && document.getElementById('helpModalBackdrop')?.classList.contains('open')) closeHelp();
+        });
+
+        function exportData() {
+            const combinedData = {
+                v6: JSON.parse(localStorage.getItem('tv_lookfirst_data_v3') || '[]'),
+                v7: JSON.parse(localStorage.getItem('tv_thenleap_data_v3') || '[]'),
+                headerNotes: {
+                    marquee: localStorage.getItem(HEADER_NOTE_KEYS.marquee) || '',
+                    tips: localStorage.getItem(HEADER_NOTE_KEYS.tips) || ''
+                },
+                instrumentPool: loadInstrumentPool()
+            };
+            const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(combinedData, null, 2)], { type: "application/json" }));
+            a.download = `Fibo_System_Backup_${new Date().toISOString().slice(0, 10)}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        }
+
+        function importData(event) {
+            const file = event.target.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.v6) localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify(data.v6));
+                    if (data.v7) localStorage.setItem('tv_thenleap_data_v3', JSON.stringify(data.v7));
+                    if (data.headerNotes && Object.prototype.hasOwnProperty.call(data.headerNotes, 'marquee')) localStorage.setItem(HEADER_NOTE_KEYS.marquee, data.headerNotes.marquee || '');
+                    if (data.headerNotes && Object.prototype.hasOwnProperty.call(data.headerNotes, 'tips')) localStorage.setItem(HEADER_NOTE_KEYS.tips, data.headerNotes.tips || '');
+                    if (data.instrumentPool?.items && Array.isArray(data.instrumentPool.items)) saveInstrumentPool(data.instrumentPool);
+                    location.reload();
+                } catch (err) { alert("❌ Invalid backup file."); }
+            };
+            reader.readAsText(file);
+        }
+
+        function migrateExecutionFields(v6Data, v7Data) {
+            const byId = new Map(), byTicker = new Map();
+            (v7Data || []).forEach(row => {
+                if (row?.id) byId.set(String(row.id), row);
+                const ticker = String(row?.n || '').trim().toUpperCase();
+                if (ticker && !byTicker.has(ticker)) byTicker.set(ticker, row);
+            });
+            return (v6Data || []).map(row => {
+                const legacy = (row?.id ? byId.get(String(row.id)) : null) || byTicker.get(String(row?.n || '').trim().toUpperCase()) || {};
+                return {
+                    ...row,
+                    e: row?.e ?? '',
+                    p: row?.p ?? legacy.p ?? '',
+                    b: ['current','entry','previous'].includes(row?.b) ? row.b : (legacy.b === 'previous' ? 'previous' : 'current')
+                };
+            });
+        }
+
+        window.onload = () => {
+            renderHeaderMarquee();
+            let savedV6Data = readStoredRows('tv_lookfirst_data_v3');
+            let savedV7Data = readStoredRows('tv_thenleap_data_v3');
+            const migrated = migrateInstrumentIdentity(savedV6Data, savedV7Data);
+            savedV6Data = migrateExecutionFields(migrated.v6Data, migrated.v7Data);
+            savedV7Data = migrated.v7Data;
+            const existingV6Ids = new Set(savedV6Data.map(row => row.id));
+            migrated.pool.items.filter(item => item.status !== 'archived' && !existingV6Ids.has(item.id)).forEach(item => savedV6Data.push({ id:item.id, n:item.ticker, h:'', l:'', c:'', e:'', p:'', b:'current' }));
+            localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify(savedV6Data));
+            const orderMap = new Map(migrated.pool.items.map(item => [item.id, Number(item.order)]));
+            savedV6Data.filter(d => isInstrumentActive(d.id)).sort((a,b) => (orderMap.get(a.id) ?? 1e9) - (orderMap.get(b.id) ?? 1e9)).forEach(d => addV6Row(d.n, d.h, d.l, d.c, d.id, d.e, d.p, d.b));
+            // 直接用 Look first 价格与 V7 附加字段合并建表，避免先生成空价格行。
+            syncV7withV6(true, savedV7Data);
+            initV7TableUX();
+            renderInstrumentPool();
+            const savedTab = localStorage.getItem('tv_active_tab');
+            const requestedTab = new URLSearchParams(window.location.search).get('tab');
+            const navigationEntry = window.performance?.getEntriesByType?.('navigation')?.[0];
+            const isReload = navigationEntry?.type === 'reload';
+            const cameFromLogin = document.referrer.includes('TradingViewerDoubleSys.html');
+            const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
+            // Pool是移动端入口；桌面端保持原来的 Look First / Then Leap 工作流。
+            const allowedTabs = isMobileLayout ? ['pool','v6','v7'] : ['v6','v7'];
+            const fallbackTab = isMobileLayout ? 'pool' : 'v6';
+            const validSavedTab = allowedTabs.includes(requestedTab) ? requestedTab : (allowedTabs.includes(savedTab) ? savedTab : fallbackTab);
+            const initialTab = cameFromLogin && !isReload ? fallbackTab : validSavedTab;
+            switchTab(initialTab);
+        };
+        // ================= 🆕 新增：登出逻辑 =================
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            // 同样复用已经声明好的 supabaseClient
+            const { error } = await supabaseClient.auth.signOut();
+    
+            if (error) {
+                alert('登出失败: ' + error.message);
+            } else {
+                alert('已安全登出！');
+                localStorage.setItem('tv_active_tab', 'v6');
+                // 踢回登录页
+                window.location.replace('https://gaman-cheung.github.io/Fibo-Tradingviewer/TradingViewerDoubleSys.html');
+            }
+        });
+    </script>
+</body>
+</html>
