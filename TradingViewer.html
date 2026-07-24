@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TradingViewer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link rel="icon" type="image/png" href="logo.png">
+    <link rel="apple-touch-icon" href="logo.png">
+    <link rel="stylesheet" href="assets/css/tokens.css">
+    <link rel="stylesheet" href="assets/css/components.css">
+    <link rel="stylesheet" href="assets/css/auth.css">
+</head>
+<body>
+
+    <div class="container">
+        <div class="hero-animation">
+            <img class="floating-logo" src="logo.png" alt="Logo">
+
+            <div class="narration-wrapper">
+                <svg class="abc-wave" viewBox="0 0 200 150">
+                    <path class="abc-path" d="M 20 20 L 70 90 L 120 40 L 170 110" fill="none" stroke="#4285F4" stroke-width="3" stroke-linecap="round"/>
+                    <path class="abc-arrow-head" d="M 155 100 L 170 110 L 163 93" fill="none" stroke="#4285F4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                    <text class="abc-label label-a" x="60" y="80" fill="#4285F4" font-size="12" font-family="sans-serif">A波</text>
+                    <text class="abc-label label-b" x="110" y="30" fill="#4285F4" font-size="12" font-family="sans-serif">B波</text>
+                    <text class="abc-label label-c" x="160" y="100" fill="#4285F4" font-size="12" font-family="sans-serif">C波</text>
+                </svg>
+
+                <svg class="onetwothreefourfive-wave" viewBox="0 0 280 180">
+                    <path class="otf-path" d="M 20 160 L 60 110 L 90 140 L 150 50 L 190 90 L 250 10" fill="none" stroke="#F4B400" stroke-width="3" stroke-linecap="round"/>
+                    <path class="otf-arrow-head" d="M 235 18 L 250 10 L 243 25" fill="none" stroke="#F4B400" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                    <text class="otf-label label-1" x="50" y="100" fill="#F4B400" font-size="12" font-family="sans-serif">1波</text>
+                    <text class="otf-label label-2" x="80" y="130" fill="#F4B400" font-size="12" font-family="sans-serif">2波</text>
+                    <text class="otf-label label-3" x="140" y="40" fill="#F4B400" font-size="12" font-family="sans-serif">3波</text>
+                    <text class="otf-label label-4" x="180" y="80" fill="#F4B400" font-size="12" font-family="sans-serif">4波</text>
+                    <text class="otf-label label-5" x="240" y="25" fill="#F4B400" font-size="12" font-family="sans-serif">5波</text>
+                </svg>
+
+                <div class="central-art">
+                    <div class="central-dash-line"></div>
+
+                    <div class="candle-breakout">
+                        <div class="main-candle breakout-1"></div>
+                        <div class="main-candle breakout-2"></div>
+                        <div class="main-candle breakout-3"></div>
+                    </div>
+
+                    <svg class="moon-arrow" viewBox="0 0 250 220">
+                        <path class="moon-arrow-path" d="M 20 200 Q 130 150, 190 20" fill="none" stroke="#EA4335" stroke-width="10" stroke-linecap="round"/>
+                        <path class="moon-arrow-head" d="M 175 35 L 190 20 L 195 40" fill="none" stroke="#EA4335" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+            </div>
+
+        </div>
+
+        <main class="login-card" aria-labelledby="card-title">
+            <div class="login-brand">
+                <img class="login-brand-logo" src="logo.png" alt="Fibo TradingViewer">
+                <div>
+                    <div class="login-eyebrow">FIBO TRADING SYSTEM</div>
+                    <h1 id="card-title">Fibo TradingViewer</h1>
+                </div>
+            </div>
+            <p class="login-subtitle">One account for Terminal, Wave and your Instrument Pool.</p>
+            <div id="card-badge" class="version-badge"><span class="material-icons">hub</span> Unified Workspace</div>
+
+            <form id="auth-form" novalidate>
+                <div class="input-group">
+                    <label for="email">Email address</label>
+                    <div class="input-shell">
+                        <span class="material-icons field-icon" aria-hidden="true">mail_outline</span>
+                        <input type="email" id="email" name="email" placeholder="name@example.com" autocomplete="email" inputmode="email" required>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="password">Password</label>
+                    <div class="input-shell">
+                        <span class="material-icons field-icon" aria-hidden="true">lock_outline</span>
+                        <input type="password" id="password" name="password" placeholder="Enter your password" autocomplete="current-password" required>
+                        <button type="button" id="togglePassword" class="password-toggle" aria-label="Show password" aria-pressed="false"><span class="material-icons">visibility</span></button>
+                    </div>
+                </div>
+                <div id="auth-message" class="auth-message" role="status" aria-live="polite"></div>
+                <div class="actions">
+                    <button type="submit" class="btn btn-primary"><span>Log In</span><span class="material-icons">arrow_forward</span></button>
+                    <button type="button" class="btn btn-secondary">Create Account</button>
+                </div>
+            </form>
+            <p class="login-footnote"><span class="material-icons">verified_user</span> Your workspace is synced securely through your account.</p>
+        </main>
+
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+        <script type="module" src="src/apps/auth-app.js"></script>
+</body>
+</html>

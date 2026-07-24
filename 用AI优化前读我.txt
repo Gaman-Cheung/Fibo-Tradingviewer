@@ -1,0 +1,1 @@
+先完整阅读根目录的 AGENTS.md，再根据 docs/SYSTEM_MAP.md、docs/DATA_CONTRACTS.md 和 docs/ALGORITHMS.md 定位模块

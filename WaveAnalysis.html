@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wave Analysis</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    
+<link rel="stylesheet" href="assets/css/tokens.css">
+<link rel="stylesheet" href="assets/css/components.css">
+<link rel="stylesheet" href="assets/css/wave.css">
+</head>
+
+<body>
+
+<header>
+    <div class="header-left">
+        <h1><img src="logo.png" alt="Logo" class="app-logo"> Wave Theory Trading System</h1>
+    </div>
+
+    <div class="mobile-header-tools mobile-only">
+        <button type="button" class="btn-util mobile-icon-btn" data-fibo-click="openWaveMobileActions()"><span class="material-icons">cloud_done</span></button>
+        <button type="button" class="btn-util mobile-icon-btn" data-fibo-click="openWaveMobileActions()"><span class="material-icons">more_horiz</span></button>
+    </div>
+
+    <div class="header-reminder" title="慢速滚动；鼠标悬停暂停">
+        <span class="material-icons">campaign</span>
+        <div class="marquee-viewport"><div class="marquee-track" id="waveReminderMarqueeText"></div></div>
+        <button type="button" class="marquee-edit" data-fibo-click="openWaveNoteEditor('marquee')" title="编辑滚动提醒">
+            <span class="material-icons">edit</span>
+        </button>
+    </div>
+
+    <div class="util-btns">
+        <button type="button" class="btn-util btn-pro-tips" data-fibo-click="openWaveNoteEditor('tips')">
+            <span class="material-icons" style="font-size:16px;">menu_book</span> Pro Tips
+        </button>
+        <button class="btn-util btn-switch-system" data-fibo-click="window.location.href='https://gaman-cheung.github.io/Fibo-Tradingviewer/Terminal.html'">
+            <span class="material-icons" style="font-size:16px;">analytics</span> 交易终端
+        </button>
+        <button class="btn-util btn-cloud-down" data-fibo-click="pullFromCloud()" id="btn-pull">
+            <span class="material-icons" style="font-size:16px;">cloud_download</span> Pull from Cloud
+        </button>
+        <button class="btn-util btn-cloud-up" data-fibo-click="pushToCloud()" id="btn-push">
+            <span class="material-icons" style="font-size:16px;">cloud_upload</span> Push to Cloud
+        </button>
+        
+        <button class="btn-util" data-fibo-click="downloadLocalBackup()">
+            <span class="material-icons" style="font-size:16px;">save_alt</span> Local Backup
+        </button>
+        <button class="btn-util" data-fibo-click="document.getElementById('backupFile').click()" title="Open Local Backup">
+            <span class="material-icons" style="font-size:16px;">folder_open</span>
+        </button>
+        
+        <button class="btn-util btn-logout" data-fibo-click="logOutCloud()">
+            <span class="material-icons" style="font-size:16px;">logout</span> Log Out
+        </button>
+        <input id="backupFile" type="file" accept="application/json" style="display:none" data-fibo-change="importLocalBackup(event)">
+    </div>
+    
+    
+</header>
+
+<div class="note-modal-backdrop" id="waveNoteModalBackdrop" data-fibo-click="handleWaveNoteBackdrop(event)" aria-hidden="true">
+    <div class="note-modal" role="dialog" aria-modal="true" aria-labelledby="waveNoteModalTitle">
+        <div class="note-modal-header">
+            <h2 id="waveNoteModalTitle">Pro Tips</h2>
+            <button type="button" class="note-modal-close" data-fibo-click="closeWaveNoteEditor()" title="关闭"><span class="material-icons">close</span></button>
+        </div>
+        <div class="note-modal-body">
+            <textarea id="waveNoteEditorText" class="note-textarea"></textarea>
+            <div class="note-modal-hint" id="waveNoteModalHint">内容会保存在本地备份与 Supabase 的 wp_data 中。</div>
+        </div>
+        <div class="note-modal-footer">
+            <button type="button" class="btn-util" data-fibo-click="closeWaveNoteEditor()">取消</button>
+            <button type="button" class="btn-util btn-note-save" data-fibo-click="saveWaveNoteEditor()"><span class="material-icons" style="font-size:16px;">save</span> 保存</button>
+        </div>
+    </div>
+</div>
+
+<div class="note-modal-backdrop mobile-action-sheet" id="waveMobileActionsBackdrop" data-fibo-click="handleWaveMobileActionsBackdrop(event)" aria-hidden="true">
+    <div class="note-modal" role="dialog" aria-modal="true" aria-labelledby="waveMobileActionsTitle">
+        <div class="note-modal-header"><h2 id="waveMobileActionsTitle">Actions</h2><button type="button" class="note-modal-close" data-fibo-click="closeWaveMobileActions()"><span class="material-icons">close</span></button></div>
+        <div class="note-modal-body"><div class="mobile-action-list">
+            <button class="btn-util btn-cloud-down" data-fibo-click="closeWaveMobileActions();pullFromCloud()"><span class="material-icons">cloud_download</span> Pull from Cloud</button>
+            <button class="btn-util btn-cloud-up" data-fibo-click="closeWaveMobileActions();pushToCloud()"><span class="material-icons">cloud_upload</span> Push to Cloud</button>
+            <button class="btn-util" data-fibo-click="closeWaveMobileActions();downloadLocalBackup()"><span class="material-icons">save_alt</span> Local Backup</button>
+            <button class="btn-util" data-fibo-click="closeWaveMobileActions();document.getElementById('backupFile').click()"><span class="material-icons">folder_open</span> Import Backup</button>
+            <button class="btn-util" data-fibo-click="closeWaveMobileActions();openWaveNoteEditor('marquee')"><span class="material-icons">campaign</span> Edit Reminder</button>
+            <button class="btn-util btn-logout" data-fibo-click="closeWaveMobileActions();logOutCloud()"><span class="material-icons">logout</span> Log Out</button>
+        </div></div>
+    </div>
+</div>
+
+<nav class="mobile-bottom-nav mobile-only" aria-label="Mobile navigation">
+    <a href="https://gaman-cheung.github.io/Fibo-Tradingviewer/Terminal.html?tab=pool"><span class="material-icons">inventory_2</span><span>Pool</span></a>
+    <a href="https://gaman-cheung.github.io/Fibo-Tradingviewer/Terminal.html?tab=v6"><span class="material-icons">analytics</span><span>Terminal</span></a>
+    <button class="active"><span class="material-icons">show_chart</span><span>Wave</span></button>
+    <button data-fibo-click="openWaveNoteEditor('tips')"><span class="material-icons">menu_book</span><span>Pro Tips</span></button>
+</nav>
+
+<div class="note-modal-backdrop" id="waveInstrumentPickerBackdrop" data-fibo-click="handleWaveInstrumentPickerBackdrop(event)" aria-hidden="true">
+    <div class="note-modal" role="dialog" aria-modal="true" aria-labelledby="waveInstrumentPickerTitle">
+        <div class="note-modal-header"><h2 id="waveInstrumentPickerTitle">Select Instrument</h2><button type="button" class="note-modal-close" data-fibo-click="closeWaveInstrumentPicker()"><span class="material-icons">close</span></button></div>
+        <div class="note-modal-body"><input id="waveInstrumentSearch" type="search" placeholder="Search ticker / code" data-fibo-input="renderWaveInstrumentPicker()" style="box-sizing:border-box;width:100%;min-height:46px;margin-bottom:12px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;"><div id="waveInstrumentPickerList" class="wave-picker-list"></div></div>
+        <div class="note-modal-footer"><button type="button" class="btn-util" data-fibo-click="openSharedInstrumentPool()"><span class="material-icons" style="font-size:16px;">inventory_2</span> Manage Pool</button></div>
+    </div>
+</div>
+
+<div class="tab-bar">
+    <button type="button" class="mobile-wave-selector mobile-only" data-fibo-click="openWaveInstrumentPicker()"><span class="material-icons">show_chart</span><span id="mobileWaveSelectorName">Select Instrument</span><span class="material-icons">expand_more</span></button>
+    <div id="tabs" class="tabs"></div>
+    <button class="tab-add" data-fibo-click="createNewTab()">＋ 新建标的</button>
+</div>
+
+<div class="container">
+
+    <aside>
+
+        <div class="card">
+            <div class="card-title">① 主浪锚点输入</div>
+
+            <div class="input-group">
+                <input type="text" id="symbolName" placeholder=" " data-fibo-input="renameActiveTab(this.value); calculateAll(); saveCurrentTab();">
+                <label>标的 / 指数名称，如 上证指数、BTC、ETH</label>
+            </div>
+
+            <div class="grid-2">
+                <div class="input-group">
+                    <input type="number" id="p0" placeholder=" " data-fibo-input="calculateAll(); saveCurrentTab();">
+                    <label>P0 大浪起点</label>
+                </div>
+                <div class="input-group">
+                    <input type="number" id="p1" placeholder=" " data-fibo-input="calculateAll(); saveCurrentTab();">
+                    <label>P1 大1浪高点</label>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="input-group">
+                    <input type="number" id="p2" placeholder=" " data-fibo-input="calculateAll(); saveCurrentTab();">
+                    <label>P2 大2浪低点，可空</label>
+                </div>
+                <div class="input-group">
+                    <input type="number" id="p3" placeholder=" " data-fibo-input="calculateAll(); saveCurrentTab();">
+                    <label>P3 大3浪高点，可空</label>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="input-group">
+                    <input type="number" id="p4" placeholder=" " data-fibo-input="calculateAll(); saveCurrentTab();">
+                    <label>P4 大4浪低点，可空</label>
+                </div>
+                <div class="input-group">
+                    <input type="number" id="p5" placeholder=" " data-fibo-input="calculateAll(); saveCurrentTab();">
+                    <label>P5 大5浪高点，可空</label>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="input-group">
+                    <input type="number" id="aPoint" placeholder=" " data-fibo-input="calculateAll(); saveCurrentTab();">
+                    <label>A浪低点，可空</label>
+                </div>
+                <div class="input-group">
+                    <input type="number" id="bPoint" placeholder=" " data-fibo-input="calculateAll(); saveCurrentTab();">
+                    <label>B浪反弹高点，可空</label>
+                </div>
+            </div>
+
+            <p class="hint">
+                数值可以逐步填写。越往后的锚点越不确定时，系统会使用区间推演；当 P2/P3/P4/P5 逐步确认后，后续预测区间会自然收敛。
+            </p>
+        </div>
+
+        <div class="card">
+            <div class="card-title">② 斐波那契参数</div>
+
+            <div class="sub-title">回撤 / 反弹参数，可点击启用或关闭</div>
+            <div class="chip-row selectable-ratios" id="retraceChips">
+                <span class="chip retrace active" data-type="retrace" data-val="0.236">23.6%</span>
+                <span class="chip retrace active" data-type="retrace" data-val="0.382">38.2%</span>
+                <span class="chip retrace active" data-type="retrace" data-val="0.5">50.0%</span>
+                <span class="chip retrace active" data-type="retrace" data-val="0.618">61.8%</span>
+                <span class="chip retrace active" data-type="retrace" data-val="0.786">78.6%</span>
+                <span class="chip retrace active" data-type="retrace" data-val="0.886">88.6%</span>
+            </div>
+
+            <div class="input-group">
+                <input type="text" id="customRetrace" placeholder=" " data-fibo-input="calculateAll(); saveCurrentTab();">
+                <label>自定义回撤/反弹参数，如 0.333, 0.707</label>
+            </div>
+
+            <div class="sub-title">延伸参数，可点击启用或关闭</div>
+            <div class="chip-row selectable-ratios" id="extendChips">
+                <span class="chip extend active" data-type="extend" data-val="1">100%</span>
+                <span class="chip extend active" data-type="extend" data-val="1.272">127.2%</span>
+                <span class="chip extend active" data-type="extend" data-val="1.382">138.2%</span>
+                <span class="chip extend active" data-type="extend" data-val="1.618">161.8%</span>
+                <span class="chip extend active" data-type="extend" data-val="2">200%</span>
+                <span class="chip extend active" data-type="extend" data-val="2.618">261.8%</span>
+                <span class="chip extend active" data-type="extend" data-val="4.236">423.6%</span>
+            </div>
+
+            <div class="input-group">
+                <input type="text" id="customExtend" placeholder=" " data-fibo-input="calculateAll(); saveCurrentTab();">
+                <label>自定义延伸参数，如 1.111, 5.236, 6.18</label>
+            </div>
+
+            <div class="sub-title">ABC 专用参数</div>
+            <div class="chip-row">
+                <span class="chip abc">A: 38.2 / 50 / 61.8</span>
+                <span class="chip abc">B: 38.2 / 61.8 / 78.6 / 88.6</span>
+                <span class="chip abc">C: 61.8 / 100 / 127.2 / 161.8</span>
+            </div>
+
+            <p class="hint">
+                只有被选中的参数会参与右侧计算、子浪推演和图形核心区绘制。自定义参数不会生成 chip，但会直接参与当前计算。
+            </p>
+        </div>
+
+        <div class="card">
+            <div class="switch-line">
+                <span style="font-weight:500;">开启子浪推演</span>
+                <label class="switch">
+                    <input type="checkbox" id="subToggle" data-fibo-change="toggleSubPanel(); saveCurrentTab();">
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <p class="hint">
+                子浪按独立波段测算。上涨波段计算回撤支撑与向上延伸；下跌波段计算反弹压力与向下延伸。
+            </p>
+
+            <div id="subPanel" style="display:none; margin-top:20px; border-top:1px dashed #ccc; padding-top:20px;">
+                <div class="card-title" style="font-size:15px; color:var(--text);">
+                    ③ 子浪波段推演
+                </div>
+
+                <div id="subList"></div>
+
+                <div class="btn-row">
+                    <button class="btn-primary" data-fibo-click="addSubWave('up'); saveCurrentTab();">＋ 添加上涨波段</button>
+                    <button class="btn-secondary" data-fibo-click="addSubWave('down'); saveCurrentTab();">＋ 添加下跌波段</button>
+                    <button class="btn-secondary" data-fibo-click="autoContinueSubWave(); saveCurrentTab();" title="保持上一波方向，并按上一波幅度的 1.272 倍投射">同方向 1.272 扩展</button>
+                </div>
+            </div>
+        </div>
+
+    </aside>
+
+    <main>
+
+        <div class="canvas-wrap">
+            <canvas id="chart" height="420"></canvas>
+
+            <div class="chart-controls">
+                <label><input type="checkbox" id="showBandW3" checked data-fibo-change="calculateAll(); saveCurrentTab();"> 大3核心区</label>
+                <label><input type="checkbox" id="showBandW4" checked data-fibo-change="calculateAll(); saveCurrentTab();"> 大4防守区</label>
+                <label><input type="checkbox" id="showBandW5" checked data-fibo-change="calculateAll(); saveCurrentTab();"> 大5核心区</label>
+                <label><input type="checkbox" id="showBandABC" checked data-fibo-change="calculateAll(); saveCurrentTab();"> ABC/C浪区</label>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:24px;">
+            <div class="card-title">
+                <span>📊 空间多级测算矩阵</span>
+                <span style="font-size:12px; color:var(--muted); font-weight:400;">五浪 / ABC / 子浪动态收敛</span>
+            </div>
+
+            <div class="summary">
+                <div class="summary-item">
+                    <div class="label">浪1幅度</div>
+                    <div class="value" id="sumW1">--</div>
+                </div>
+                <div class="summary-item">
+                    <div class="label">当前阶段</div>
+                    <div class="value" id="sumStage">--</div>
+                </div>
+                <div class="summary-item">
+                    <div class="label">大3核心区</div>
+                    <div class="value" id="sumW3">--</div>
+                </div>
+                <div class="summary-item">
+                    <div class="label">大5核心区</div>
+                    <div class="value" id="sumW5">--</div>
+                </div>
+            </div>
+
+            <div id="structureValidation" class="validation-box warn">
+                等待输入 P0、P1 后进行普通推动浪结构校验。
+            </div>
+
+            <div class="section">
+                <h3>一、主浪结构摘要</h3>
+                <table id="summaryTable">
+                    <thead>
+                        <tr>
+                            <th>节点</th>
+                            <th>价格</th>
+                            <th>状态</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <div class="section">
+                <h3>二、大2浪潜在筑底防守位</h3>
+                <table id="wave2Table">
+                    <thead>
+                        <tr>
+                            <th>回撤比例</th>
+                            <th>目标价</th>
+                            <th>说明</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <div class="section">
+                <h3>三、大3浪核心区间</h3>
+                <table id="wave3Table">
+                    <thead>
+                        <tr>
+                            <th>延伸比例</th>
+                            <th>目标价 / 区间</th>
+                            <th>说明</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+                <div id="wave3AlertBox"></div>
+            </div>
+
+            <div class="section">
+                <h3>四、大4浪潜在筑底防守位</h3>
+                <table id="wave4Table">
+                    <thead>
+                        <tr>
+                            <th>回撤比例</th>
+                            <th>目标价 / 区间</th>
+                            <th>规则校验</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+                <div class="notice">
+                    标准推动浪中，大4浪通常不应明显跌破大1浪高点 P1；若跌破，需要警惕浪型划分错误或市场结构转弱。
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>五、大5浪核心区间</h3>
+                <div id="wave5Box"></div>
+            </div>
+
+            <div class="section">
+                <h3>六、ABC 调整浪预测</h3>
+                <div id="abcBox"></div>
+            </div>
+
+            <div class="section" id="subResultSection" style="display:none;">
+                <h3>七、子浪波段推演与共振观察</h3>
+                <div id="subResults"></div>
+            </div>
+
+        </div>
+
+    </main>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script type="module" src="src/apps/wave-app.js"></script>
+
+</body>
+</html>

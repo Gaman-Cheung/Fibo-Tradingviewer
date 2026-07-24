@@ -1,0 +1,16 @@
+{
+  "name": "fibo-tradingviewer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "http-server . -p 4173 -c-1",
+    "test": "node --test tests/unit/*.test.js",
+    "test:e2e": "playwright test",
+    "test:all": "npm test && npm run test:e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.0",
+    "http-server": "^14.1.1"
+  }
+}
+

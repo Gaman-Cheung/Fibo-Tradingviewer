@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Terminal</title>
+    <link rel="icon" type="image/png" href="logo.png">
+
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <link rel="stylesheet" href="assets/css/tokens.css">
+    <link rel="stylesheet" href="assets/css/components.css">
+    <link rel="stylesheet" href="assets/css/terminal.css">
+</head>
+<body>
+
+    <div id="loader">Syncing...</div>
+
+    <div class="header">
+        <div class="header-left">
+            <h1><img src="logo.png" alt="Logo" class="app-logo"> TradingViewer</h1>
+            <div class="tab-container">
+                <button class="tab-btn" data-fibo-click="switchTab('pool')" id="btn-pool">
+                    <span class="material-icons" style="font-size: 18px;">inventory_2</span> Pool
+                </button>
+                <button class="tab-btn active" data-fibo-click="switchTab('v6')" id="btn-v6">
+                    <span class="material-icons" style="font-size: 18px;">travel_explore</span> Look first
+                </button>
+                <button class="tab-btn" data-fibo-click="switchTab('v7')" id="btn-v7">
+                    <span class="material-icons" style="font-size: 18px;">track_changes</span> Then leap
+                </button>
+            </div>
+        </div>
+        <div class="mobile-header-tools mobile-only">
+            <button type="button" class="btn-util mobile-icon-btn" data-fibo-click="openMobileActions()" title="Cloud & actions"><span class="material-icons">cloud_done</span></button>
+            <button type="button" class="btn-util mobile-icon-btn" data-fibo-click="openMobileActions()" title="More"><span class="material-icons">more_horiz</span></button>
+        </div>
+        <div class="header-reminder" title="慢速滚动；鼠标悬停暂停">
+            <span class="material-icons">campaign</span>
+            <div class="marquee-viewport"><div class="marquee-track" id="reminderMarqueeText"></div></div>
+            <button type="button" class="marquee-edit" data-fibo-click="openNoteEditor('marquee')" title="编辑滚动提醒">
+                <span class="material-icons">edit</span>
+            </button>
+        </div>
+        <div class="util-btns">
+            <button type="button" class="btn-util btn-pro-tips" data-fibo-click="openNoteEditor('tips')"><span class="material-icons" style="font-size:16px;">menu_book</span> Pro Tips</button>
+            <button class="btn-util btn-switch-system" data-fibo-click="window.location.href='https://gaman-cheung.github.io/Fibo-Tradingviewer/WaveAnalysis.html'"><span class="material-icons" style="font-size:16px;">functions</span> 波浪推演矩阵</button>
+            <button class="btn-util btn-cloud-down" data-fibo-click="loadFromCloud()" id="btn-pull"><span class="material-icons" style="font-size:16px;">cloud_download</span> Pull from Cloud</button>
+            <button class="btn-util btn-cloud-up" data-fibo-click="saveToCloud()" id="btn-push"><span class="material-icons" style="font-size:16px;">cloud_upload</span> Push to Cloud</button>
+            
+            <button class="btn-util" data-fibo-click="exportData()"><span class="material-icons" style="font-size:16px;">save_alt</span> Local Backup</button>
+            <button class="btn-util" data-fibo-click="document.getElementById('importFile').click()"><span class="material-icons" style="font-size:16px;">folder_open</span></button>
+            
+            <button id="logoutBtn" class="btn-util btn-logout" style="margin-left: 10px;"><span class="material-icons" style="font-size:16px;">logout</span> Log Out</button>
+            <input type="file" id="importFile" style="display:none;" accept=".json" data-fibo-change="importData(event)">
+        </div>
+    </div>
+
+    <div id="tab-pool" class="tab-content">
+        <div class="pool-toolbar">
+            <h2>Instrument Pool</h2>
+            <input id="poolSearch" class="pool-search" type="search" placeholder="Search ticker / code" data-fibo-input="renderInstrumentPool()">
+            <span class="pool-count" id="poolCount">0 instruments</span>
+            <button type="button" class="btn-add" data-fibo-click="openInstrumentDialog()"><span class="material-icons">add</span> Add Instrument</button>
+        </div>
+        <div id="instrumentPoolGrid" class="pool-grid"></div>
+        <details class="trash-panel">
+            <summary>Recently Removed <span id="trashCount"></span></summary>
+            <div id="instrumentTrashList" class="trash-list"></div>
+        </details>
+    </div>
+
+    <div id="tab-v6" class="tab-content active">
+        <div class="table-card">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="col-base">Ticker</th>
+                        <th class="col-base">High</th>
+                        <th class="col-base">Low</th>
+                        <th class="col-base">Current</th>
+                        <th class="col-base">Entry <button class="help-icon" data-fibo-click="openHelp('entry')" title="Entry 说明">?</button></th>
+                        <th class="col-base">Prev Close <button class="help-icon" data-fibo-click="openHelp('previous')" title="Prev Close 说明">?</button></th>
+                        <th class="col-base">% Baseline <button class="help-icon" data-fibo-click="openHelp('baseline')" title="Baseline 说明">?</button></th>
+                        <th class="col-retrace">📉 23.6% <button class="help-icon" data-fibo-click="openHelp('fibonacci')" title="斐波那契说明">?</button></th>
+                        <th class="col-retrace">📉 38.2%</th>
+                        <th class="col-retrace">⚖️ 50.0%</th>
+                        <th class="col-retrace">💎 61.8%</th>
+                        <th class="col-retrace">🚨 78.6%</th>
+                        <th class="col-retrace">🧛 88.6%</th>
+                        <th class="col-target">Previous High <button class="help-icon" data-fibo-click="openHelp('targets')" title="目标位说明">?</button></th>
+                        <th class="col-target">🚀 127.2%</th>
+                        <th class="col-target">🌕 161.8%</th>
+                        <th class="col-target">🌌 261.8%</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBodyV6"></tbody>
+            </table>
+        </div>
+        <button data-fibo-click="createDesktopInstrumentRow()" class="btn-add"><span class="material-icons">add</span> Add Look first Row</button>
+    </div>
+
+    <div id="tab-v7" class="tab-content">
+        <div class="v7-top-scroll" id="v7TopScroll" title="完整视图横向滚动条"><div class="v7-top-scroll-inner" id="v7TopScrollInner"></div></div>
+        <div class="table-card" id="v7TableCard">
+            <table id="v7Table">
+                <thead>
+                    <tr>
+                        <th class="col-base">Ticker</th>
+                        <th class="col-base">Current / Zone</th>
+                        <th class="col-retrace">Support / %</th>
+                        <th class="col-retrace">Pressure / %</th>
+                        <th class="col-target">Auto T1 / %</th>
+                        <th class="col-target">Auto T2 / %</th>
+                        <th class="col-target">R:R <button class="help-icon" data-fibo-click="openHelp('rr')" title="R:R 说明">?</button></th>
+                        <th class="col-indicator detail-col">VR (5D) <button class="help-icon" data-fibo-click="openHelp('volume')" title="VR 说明">?</button></th>
+                        <th class="col-indicator detail-col">Stop <button class="help-icon" data-fibo-click="openHelp('stop')" title="Stop 说明">?</button></th>
+                        <th class="col-target detail-col">T1 Override</th>
+                        <th class="col-target detail-col">T2 Override</th>
+                        <th class="col-indicator detail-col">Trend (13d) <button class="help-icon" data-fibo-click="openHelp('trend')">?</button></th>
+                        <th class="col-indicator detail-col">RSI (14) <button class="help-icon" data-fibo-click="openHelp('rsi')">?</button></th>
+                        <th class="col-indicator detail-col">MACD Trend <button class="help-icon" data-fibo-click="openHelp('macd')">?</button></th>
+                        <th class="col-ai">🎯 Composite Signal <button class="help-icon" data-fibo-click="openHelp('composite')" title="Composite Signal 说明">?</button></th>
+                    </tr>
+                </thead>
+                <tbody id="tableBodyV7"></tbody>
+            </table>
+        </div>
+        <div class="action-bar">
+            <button data-fibo-click="switchTab('v6')" class="btn-add" style="background:var(--g-red);"><span class="material-icons">add</span> 在 Look first 添加标的</button>
+        </div>
+        <div style="margin-top:10px;color:var(--text-secondary);font-size:12px;line-height:1.6;">
+            High、Low、Current、Entry、Prev Close 与涨跌幅基准统一来自 Look first；Then leap 的 Current 是同一数据源的代理输入。VR (5D) 可直接填写券商软件显示的五日量比。R:R 始终使用 Entry，T1/T2 Override 留空即使用自动目标。
+        </div>
+    </div>
+
+    <div class="note-modal-backdrop" id="noteModalBackdrop" data-fibo-click="handleNoteBackdrop(event)" aria-hidden="true">
+        <div class="note-modal" role="dialog" aria-modal="true" aria-labelledby="noteModalTitle">
+            <div class="note-modal-header">
+                <h2 id="noteModalTitle">Pro Tips</h2>
+                <button type="button" class="note-modal-close" data-fibo-click="closeNoteEditor()" title="关闭"><span class="material-icons">close</span></button>
+            </div>
+            <div class="note-modal-body">
+                <textarea id="noteEditorText" class="note-textarea"></textarea>
+                <div class="note-modal-hint" id="noteModalHint">内容保存在当前浏览器，并包含在 Local Backup 中。</div>
+            </div>
+            <div class="note-modal-footer">
+                <button type="button" class="btn-util" data-fibo-click="closeNoteEditor()">取消</button>
+                <button type="button" class="btn-util btn-note-save" data-fibo-click="saveNoteEditor()"><span class="material-icons" style="font-size:16px;">save</span> 保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="note-modal-backdrop" id="helpModalBackdrop" data-fibo-click="handleHelpBackdrop(event)" aria-hidden="true">
+        <div class="note-modal" role="dialog" aria-modal="true" aria-labelledby="helpModalTitle">
+            <div class="note-modal-header">
+                <h2 id="helpModalTitle">指标说明</h2>
+                <button type="button" class="note-modal-close" data-fibo-click="closeHelp()" title="关闭"><span class="material-icons">close</span></button>
+            </div>
+            <div class="note-modal-body"><div id="helpModalContent" class="help-content"></div></div>
+            <div class="note-modal-footer"><span style="margin-right:auto;color:var(--text-secondary);font-size:11px;">Algorithm Guide v2.0 · 2026-07</span><button type="button" class="btn-util" data-fibo-click="closeHelp()">关闭</button></div>
+        </div>
+    </div>
+
+    <div class="note-modal-backdrop" id="instrumentModalBackdrop" data-fibo-click="handleInstrumentBackdrop(event)" aria-hidden="true">
+        <div class="note-modal" role="dialog" aria-modal="true" aria-labelledby="instrumentModalTitle" style="width:min(560px,94vw);">
+            <div class="note-modal-header">
+                <h2 id="instrumentModalTitle">Add Instrument</h2>
+                <button type="button" class="note-modal-close" data-fibo-click="closeInstrumentDialog()" title="关闭"><span class="material-icons">close</span></button>
+            </div>
+            <div class="note-modal-body">
+                <input type="hidden" id="instrumentEditId">
+                <div class="instrument-dialog-grid">
+                    <div><label for="instrumentTicker">Ticker / Name</label><input id="instrumentTicker" type="text" placeholder="e.g. 弘信电子"></div>
+                    <div><label for="instrumentCode">Code (optional)</label><input id="instrumentCode" type="text" placeholder="e.g. 300657"></div>
+                    <div><label for="instrumentMarket">Market</label><select id="instrumentMarket"><option value="CN-A">A Share</option><option value="HK">Hong Kong</option><option value="US">US</option><option value="INDEX">Index</option><option value="OTHER">Other</option></select></div>
+                </div>
+                <div class="note-modal-hint">Ticker可以修改；永久ID由系统生成且不会因改名或排序改变。</div>
+            </div>
+            <div class="note-modal-footer">
+                <button type="button" class="btn-util" data-fibo-click="closeInstrumentDialog()">Cancel</button>
+                <button type="button" class="btn-util btn-note-save" data-fibo-click="saveInstrumentDialog()"><span class="material-icons" style="font-size:16px;">save</span> Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="note-modal-backdrop mobile-action-sheet" id="mobileActionsBackdrop" data-fibo-click="handleMobileActionsBackdrop(event)" aria-hidden="true">
+        <div class="note-modal" role="dialog" aria-modal="true" aria-labelledby="mobileActionsTitle">
+            <div class="note-modal-header"><h2 id="mobileActionsTitle">Actions</h2><button type="button" class="note-modal-close" data-fibo-click="closeMobileActions()"><span class="material-icons">close</span></button></div>
+            <div class="note-modal-body"><div class="mobile-action-list">
+                <button class="btn-util btn-cloud-down" data-fibo-click="closeMobileActions();loadFromCloud()"><span class="material-icons">cloud_download</span> Pull from Cloud</button>
+                <button class="btn-util btn-cloud-up" data-fibo-click="closeMobileActions();saveToCloud()"><span class="material-icons">cloud_upload</span> Push to Cloud</button>
+                <button class="btn-util" data-fibo-click="closeMobileActions();exportData()"><span class="material-icons">save_alt</span> Local Backup</button>
+                <button class="btn-util" data-fibo-click="closeMobileActions();document.getElementById('importFile').click()"><span class="material-icons">folder_open</span> Import Backup</button>
+                <button class="btn-util" data-fibo-click="closeMobileActions();openNoteEditor('marquee')"><span class="material-icons">campaign</span> Edit Reminder</button>
+                <button class="btn-util btn-logout" data-fibo-click="closeMobileActions();document.getElementById('logoutBtn').click()"><span class="material-icons">logout</span> Log Out</button>
+            </div></div>
+        </div>
+    </div>
+
+    <nav class="mobile-bottom-nav mobile-only" aria-label="Mobile navigation">
+        <button id="mobileNavPool" data-fibo-click="switchTab('pool')"><span class="material-icons">inventory_2</span><span>Pool</span></button>
+        <button id="mobileNavTerminal" data-fibo-click="switchMobileTerminal()"><span class="material-icons">analytics</span><span>Terminal</span></button>
+        <a id="mobileNavWave" href="https://gaman-cheung.github.io/Fibo-Tradingviewer/WaveAnalysis.html"><span class="material-icons">show_chart</span><span>Wave</span></a>
+        <button id="mobileNavTips" data-fibo-click="openNoteEditor('tips')"><span class="material-icons">menu_book</span><span>Pro Tips</span></button>
+    </nav>
+
+    <script type="module" src="src/apps/terminal-app.js"></script>
+</body>
+</html>
