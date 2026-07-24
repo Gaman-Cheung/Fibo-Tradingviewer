@@ -1,0 +1,5 @@
+/* Shared presentation primitives. Page-specific layout remains in page styles. */
+.mobile-only {
+  display: none !important;
+}
+

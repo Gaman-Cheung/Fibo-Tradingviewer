@@ -1,0 +1,190 @@
+/**
+ * Fibo TradingViewer design tokens.
+ *
+ * This is the only owner of shared visual constants. New systems should use
+ * semantic tokens first and must not redefine them in page-specific CSS.
+ * Compatibility aliases at the bottom keep the three legacy pages stable.
+ */
+:root {
+  /* Reference palette: never use these directly in page modules. */
+  --ref-blue-50: #e8f0fe;
+  --ref-blue-100: #d2e3fc;
+  --ref-blue-500: #4285f4;
+  --ref-blue-600: #1a73e8;
+  --ref-blue-700: #3367d6;
+  --ref-blue-800: #1557b0;
+  --ref-red-50: #fce8e6;
+  --ref-red-500: #ea4335;
+  --ref-red-700: #c5221f;
+  --ref-yellow-50: #fef7e0;
+  --ref-yellow-500: #fbbc05;
+  --ref-yellow-800: #b06000;
+  --ref-green-50: #e6f4ea;
+  --ref-green-100: #ceead6;
+  --ref-green-500: #34a853;
+  --ref-green-700: #188038;
+  --ref-green-800: #137333;
+  --ref-purple-500: #6200ee;
+  --ref-neutral-0: #ffffff;
+  --ref-neutral-25: #fcfcfc;
+  --ref-neutral-50: #f8f9fa;
+  --ref-neutral-100: #f1f3f4;
+  --ref-neutral-200: #e8eaed;
+  --ref-neutral-300: #dadce0;
+  --ref-neutral-500: #9aa0a6;
+  --ref-neutral-600: #80868b;
+  --ref-neutral-700: #5f6368;
+  --ref-neutral-800: #3c4043;
+  --ref-neutral-900: #202124;
+
+  /* Semantic color roles: preferred public API. */
+  --color-brand: var(--ref-blue-500);
+  --color-primary: var(--ref-blue-500);
+  --color-primary-action: var(--ref-blue-600);
+  --color-primary-hover: var(--ref-blue-800);
+  --color-primary-strong: var(--ref-blue-700);
+  --color-primary-soft: var(--ref-blue-50);
+  --color-primary-soft-strong: var(--ref-blue-100);
+  --color-success: var(--ref-green-500);
+  --color-success-strong: var(--ref-green-700);
+  --color-success-text: var(--ref-green-800);
+  --color-success-soft: var(--ref-green-50);
+  --color-success-soft-strong: var(--ref-green-100);
+  --color-warning: var(--ref-yellow-500);
+  --color-warning-text: var(--ref-yellow-800);
+  --color-warning-soft: var(--ref-yellow-50);
+  --color-danger: var(--ref-red-500);
+  --color-danger-text: var(--ref-red-700);
+  --color-danger-soft: var(--ref-red-50);
+  --color-accent: var(--ref-purple-500);
+  --color-background: var(--ref-neutral-50);
+  --color-surface: var(--ref-neutral-0);
+  --color-surface-subtle: var(--ref-neutral-25);
+  --color-surface-muted: var(--ref-neutral-100);
+  --color-surface-hover: var(--ref-neutral-100);
+  --color-border: var(--ref-neutral-300);
+  --color-border-subtle: var(--ref-neutral-200);
+  --color-text: var(--ref-neutral-900);
+  --color-text-secondary: var(--ref-neutral-700);
+  --color-text-tertiary: var(--ref-neutral-600);
+  --color-text-placeholder: var(--ref-neutral-500);
+  --color-on-primary: var(--ref-neutral-0);
+  --color-focus-ring: rgba(66, 133, 244, 0.16);
+  --color-overlay: rgba(32, 33, 36, 0.44);
+  --color-glass: rgba(248, 249, 250, 0.76);
+  --color-glass-strong: rgba(255, 255, 255, 0.9);
+
+  /* Typography. */
+  --font-family-sans: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  --font-family-display: var(--font-family-sans);
+  --font-family-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  --font-size-2xs: 10px;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-md: 13px;
+  --font-size-base: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 18px;
+  --font-size-2xl: 22px;
+  --font-size-3xl: 26px;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --line-height-tight: 1.2;
+  --line-height-base: 1.45;
+  --line-height-relaxed: 1.6;
+  --letter-spacing-eyebrow: 0.12em;
+
+  /* Spacing: 4px base grid. */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Shape and control sizing. */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 11px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 20px;
+  --radius-pill: 999px;
+  --control-height-sm: 36px;
+  --control-height-md: 44px;
+  --control-height-lg: 50px;
+  --touch-target-min: 44px;
+  --icon-size-sm: 16px;
+  --icon-size-md: 20px;
+  --icon-size-lg: 24px;
+
+  /* Elevation. */
+  --shadow-low: 0 2px 6px rgba(0, 0, 0, 0.08);
+  --shadow-raised: 0 4px 10px rgba(0, 0, 0, 0.12);
+  --shadow-card: 0 14px 42px rgba(32, 33, 36, 0.11);
+  --shadow-dialog: 0 20px 55px rgba(32, 33, 36, 0.16);
+  --shadow-focus: 0 0 0 3px var(--color-focus-ring);
+
+  /* Motion. Respect reduced-motion in the component that consumes a token. */
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 280ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1.2);
+
+  /* Layout and stacking. Breakpoints are documented in DESIGN_SYSTEM.md. */
+  --page-gutter-mobile: 14px;
+  --page-gutter-tablet: 20px;
+  --page-gutter-desktop: 28px;
+  --content-max-width: 1440px;
+  --header-height: 64px;
+  --z-base: 0;
+  --z-sticky: 100;
+  --z-dropdown: 300;
+  --z-overlay: 600;
+  --z-dialog: 700;
+  --z-toast: 900;
+
+  /* Brand stripe used across Terminal, Wave and future systems. */
+  --brand-blue: var(--ref-blue-500);
+  --brand-red: var(--ref-red-500);
+  --brand-yellow: var(--ref-yellow-500);
+  --brand-green: var(--ref-green-500);
+
+  /* Compatibility aliases retained until page CSS is migrated incrementally. */
+  --g-blue: var(--brand-blue);
+  --g-red: var(--brand-red);
+  --g-yellow: var(--brand-yellow);
+  --g-green: var(--brand-green);
+  --primary: var(--color-primary);
+  --primary-dark: var(--color-primary-strong);
+  --secondary: var(--color-success);
+  --secondary-dark: var(--color-success-strong);
+  --danger: var(--color-danger);
+  --warning: var(--color-warning);
+  --bg: var(--color-background);
+  --bg-color: var(--color-background);
+  --surface: var(--color-surface);
+  --surface-color: var(--color-surface);
+  --border: var(--color-border);
+  --border-color: var(--color-border);
+  --text: var(--color-text);
+  --text-primary: var(--color-text);
+  --muted: var(--color-text-secondary);
+  --color-muted: var(--color-text-secondary);
+  --text-secondary: var(--color-text-secondary);
+  --purple-soft: var(--color-primary-soft);
+  --teal-soft: var(--color-success-soft);
+  --red-soft: var(--color-danger-soft);
+  --shadow1: var(--shadow-low);
+  --shadow2: var(--shadow-raised);
+  --mobile-glass: var(--color-glass);
+}
