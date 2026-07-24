@@ -1298,74 +1298,10 @@ function waveTabDataScore(tab) {
     return score;
 }
 
-function mergeWaveTabData(primary, secondary) {
-    if (!primary?.form || !secondary?.form) return primary;
-    Object.keys(secondary.form).forEach(key => {
-        const current = primary.form[key];
-        const incoming = secondary.form[key];
-        const currentEmpty = current === '' || current === null || current === undefined;
-        if (currentEmpty && incoming !== '' && incoming !== null && incoming !== undefined) primary.form[key] = incoming;
-        if (Array.isArray(current) && Array.isArray(incoming) && key === 'subWaves') {
-            const currentScore = current.reduce((sum,wave) => sum + Object.values(wave || {}).filter(value => String(value ?? '').trim()).length, 0);
-            const incomingScore = incoming.reduce((sum,wave) => sum + Object.values(wave || {}).filter(value => String(value ?? '').trim()).length, 0);
-            if (incomingScore > currentScore) primary.form[key] = incoming;
-        }
-    });
-    return primary;
-}
-
-function dedupeWaveTabsByInstrument() {
-    const byInstrument = new Map();
-    const result = [];
-    appState.tabs.forEach(tab => {
-        if (!tab.instrumentId) { result.push(tab); return; }
-        const existing = byInstrument.get(tab.instrumentId);
-        if (!existing) { byInstrument.set(tab.instrumentId, tab); result.push(tab); return; }
-        const existingScore = waveTabDataScore(existing);
-        const tabScore = waveTabDataScore(tab);
-        const keeper = tabScore > existingScore ? tab : existing;
-        const donor = keeper === tab ? existing : tab;
-        mergeWaveTabData(keeper, donor);
-        if (keeper === tab) {
-            const index = result.indexOf(existing);
-            if (index >= 0) result[index] = keeper;
-            byInstrument.set(tab.instrumentId, keeper);
-        }
-        if (appState.activeTabId === donor.id) appState.activeTabId = keeper.id;
-    });
-    appState.tabs = result;
-}
-
-function remapStoredTerminalRows(redirects) {
-    if (!redirects.size) return;
-    for (const key of ['tv_lookfirst_data_v3','tv_thenleap_data_v3']) {
-        let rows = [];
-        try { rows = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) {}
-        if (!Array.isArray(rows)) continue;
-        const byId = new Map();
-        rows.forEach(row => {
-            const id = redirects.get(row.id) || row.id;
-            const next = { ...row, id };
-            const existing = byId.get(id);
-            if (!existing) { byId.set(id, next); return; }
-            const existingScore = Object.values(existing).filter(value => String(value ?? '').trim()).length;
-            const nextScore = Object.values(next).filter(value => String(value ?? '').trim()).length;
-            const keeper = nextScore > existingScore ? next : existing;
-            const donor = keeper === next ? existing : next;
-            Object.keys(donor).forEach(field => {
-                if ((keeper[field] === '' || keeper[field] === null || keeper[field] === undefined) && donor[field] !== '' && donor[field] !== null && donor[field] !== undefined) keeper[field] = donor[field];
-            });
-            byId.set(id, keeper);
-        });
-        localStorage.setItem(key, JSON.stringify([...byId.values()]));
-    }
-}
-
 function ensureWaveInstrumentLinks(extraTerminalRows = []) {
     const pool = loadSharedInstrumentPool();
     const now = new Date().toISOString();
     const terminalRows = readTerminalInstrumentRows(extraTerminalRows);
-    const preferredIdByTicker = new Map(terminalRows.map(row => [normalizeSharedTicker(row.n), row.id]));
 
     terminalRows.forEach((row,index) => {
         if (pool.items.some(item => item.id === row.id)) return;
@@ -1382,62 +1318,60 @@ function ensureWaveInstrumentLinks(extraTerminalRows = []) {
         pool.items = pool.items.filter(item => !(normalizeSharedTicker(item.ticker) === normalizeSharedTicker('新标的') && !terminalIds.has(item.id) && !richPlaceholderIds.has(item.id)) && !(emptyPlaceholderIds.has(item.id) && !terminalIds.has(item.id)));
     }
 
-    const redirects = new Map();
-    const groups = new Map();
-    pool.items.forEach(item => {
-        const ticker = normalizeSharedTicker(item.ticker);
-        if (!ticker) return;
-        if (!groups.has(ticker)) groups.set(ticker, []);
-        groups.get(ticker).push(item);
-    });
-    groups.forEach((items,ticker) => {
-        if (items.length < 2) return;
-        const preferredId = preferredIdByTicker.get(ticker);
-        const ranked = [...items].sort((a,b) => {
-            const score = item => (item.id === preferredId ? 1000 : 0) + (item.status !== 'archived' ? 100 : 0) + (item.market && item.market !== 'OTHER' ? 20 : 0) + (item.code ? 10 : 0) - (Number(item.order) || 0) / 1000;
-            return score(b) - score(a);
-        });
-        const canonical = ranked[0];
-        ranked.slice(1).forEach(duplicate => {
-            redirects.set(duplicate.id, canonical.id);
-            if (!canonical.code && duplicate.code) canonical.code = duplicate.code;
-            if ((!canonical.market || canonical.market === 'OTHER') && duplicate.market) canonical.market = duplicate.market;
-        });
-        canonical.status = items.some(item => item.status !== 'archived') ? 'active' : canonical.status;
-        const validOrders = items.map(item => Number(item.order)).filter(Number.isFinite);
-        canonical.order = canonical.id === preferredId && Number.isFinite(Number(canonical.order))
-            ? Number(canonical.order)
-            : (validOrders.length ? Math.min(...validOrders) : pool.items.indexOf(canonical));
-        canonical.updatedAt = now;
-    });
-    if (redirects.size) {
-        appState.tabs.forEach(tab => { if (redirects.has(tab.instrumentId)) tab.instrumentId = redirects.get(tab.instrumentId); });
-        pool.items = pool.items.filter(item => !redirects.has(item.id));
-        redirects.forEach((canonicalId,duplicateId) => {
-            pool.tombstones = [...pool.tombstones.filter(entry => entry.id !== duplicateId), { id:duplicateId, deletedAt:now, mergedInto:canonicalId }];
-        });
-        remapStoredTerminalRows(redirects);
-    }
-
     const deletedIds = new Set((pool.tombstones || []).map(entry => entry.id));
     appState.tabs = appState.tabs.filter(tab => !tab.instrumentId || !deletedIds.has(tab.instrumentId));
     const byId = new Map(pool.items.map(item => [item.id, item]));
-    const byTicker = new Map(pool.items.map(item => [normalizeSharedTicker(item.ticker), item]));
+    const activeByTicker = new Map();
+    pool.items.filter(item => item.status !== 'archived').forEach(item => {
+        const ticker = normalizeSharedTicker(item.ticker);
+        if (!activeByTicker.has(ticker)) activeByTicker.set(ticker, []);
+        activeByTicker.get(ticker).push(item);
+    });
 
+    // Repair duplicate tab IDs without merging their data. The richer tab keeps
+    // the old ID; the other tab must be linked independently.
+    const tabGroups = new Map();
+    const repairedDuplicateTabs = new WeakSet();
+    appState.tabs.forEach(tab => {
+        if (!tab.instrumentId) return;
+        if (!tabGroups.has(tab.instrumentId)) tabGroups.set(tab.instrumentId, []);
+        tabGroups.get(tab.instrumentId).push(tab);
+    });
+    tabGroups.forEach(tabs => {
+        if (tabs.length < 2) return;
+        const keeper = [...tabs].sort((a,b) => waveTabDataScore(b) - waveTabDataScore(a))[0];
+        tabs.forEach(tab => {
+            if (tab !== keeper) {
+                tab.instrumentId = '';
+                repairedDuplicateTabs.add(tab);
+            }
+        });
+    });
+
+    const usedTabIds = new Set(appState.tabs.map(tab => tab.instrumentId).filter(Boolean));
     appState.tabs.forEach((tab, index) => {
         let item = tab.instrumentId ? byId.get(tab.instrumentId) : null;
-        if (!item) item = byTicker.get(normalizeSharedTicker(tab.name || tab.form?.symbolName));
+        const tickerKey = normalizeSharedTicker(tab.name || tab.form?.symbolName);
+        if (!item) {
+            const candidates = (activeByTicker.get(tickerKey) || []).filter(candidate => !usedTabIds.has(candidate.id));
+            // Ticker fallback is allowed only when it is unambiguous. A duplicate
+            // tab-ID repair may also claim the sole remaining matching pool row.
+            const totalMatches = activeByTicker.get(tickerKey) || [];
+            if (totalMatches.length === 1 || (repairedDuplicateTabs.has(tab) && candidates.length === 1)) item = candidates[0] || totalMatches[0];
+        }
         if (!item) {
             const ticker = String(tab.name || tab.form?.symbolName || `Instrument ${index + 1}`).trim();
             item = { id:createSharedInstrumentId(), ticker, code:"", market:"OTHER", order:pool.items.length, status:"active", createdAt:now, updatedAt:now, deletedAt:null };
-            pool.items.push(item); byId.set(item.id,item); byTicker.set(normalizeSharedTicker(item.ticker),item);
+            pool.items.push(item);
+            byId.set(item.id,item);
+            if (!activeByTicker.has(normalizeSharedTicker(item.ticker))) activeByTicker.set(normalizeSharedTicker(item.ticker), []);
+            activeByTicker.get(normalizeSharedTicker(item.ticker)).push(item);
         }
         tab.instrumentId = item.id;
+        usedTabIds.add(item.id);
         tab.name = item.ticker;
         if (tab.form) tab.form.symbolName = item.ticker;
     });
-
-    dedupeWaveTabsByInstrument();
     pool.items.filter(item => item.status !== "archived").forEach(item => {
         if (appState.tabs.some(tab => tab.instrumentId === item.id)) return;
         const tab = createEmptyTab(item.ticker);

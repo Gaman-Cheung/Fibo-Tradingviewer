@@ -784,35 +784,110 @@
 
         function migrateInstrumentIdentity(v6Data, v7Data) {
             const pool = loadInstrumentPool();
-            const byId = new Map(pool.items.map(item => [item.id, item]));
-            const byTicker = new Map(pool.items.map(item => [normalizeInstrumentName(item.ticker), item]));
             const now = new Date().toISOString();
 
-            v6Data.forEach((row, index) => {
-                const tickerKey = normalizeInstrumentName(row.n);
-                let item = row.id ? byId.get(row.id) : null;
-                if (!item && tickerKey) item = byTicker.get(tickerKey);
-                if (!item) {
-                    item = { id:createInstrumentId(), ticker:String(row.n || '').trim() || `Instrument ${index + 1}`, code:'', market:'CN-A', order:index, status:'active', createdAt:now, updatedAt:now, deletedAt:null };
-                    pool.items.push(item);
+            // Permanent IDs identify rows. Ticker is only an editable label and is
+            // deliberately allowed to repeat.
+            const tombstonedIds = new Set((pool.tombstones || []).map(entry => entry?.id).filter(Boolean));
+            const uniquePoolItems = [];
+            const byId = new Map();
+            pool.items.forEach(item => {
+                if (!item?.id) return;
+                if (!byId.has(item.id)) {
                     byId.set(item.id, item);
-                    byTicker.set(normalizeInstrumentName(item.ticker), item);
+                    uniquePoolItems.push(item);
                 }
-                row.id = item.id;
-                if (String(row.n || '').trim()) item.ticker = String(row.n).trim();
-                if (item.status !== 'archived') item.order = index;
+            });
+            pool.items = uniquePoolItems;
+
+            const newUniqueId = () => {
+                let id = createInstrumentId();
+                while (byId.has(id) || tombstonedIds.has(id)) id = createInstrumentId();
+                return id;
+            };
+            const createPoolItem = (id, row, order) => {
+                const item = {
+                    id,
+                    ticker:String(row?.n || '').trim() || `Instrument ${order + 1}`,
+                    code:'', market:'CN-A', order, status:'active',
+                    createdAt:now, updatedAt:now, deletedAt:null
+                };
+                pool.items.push(item);
+                byId.set(id, item);
+                return item;
+            };
+            const rowDataScore = row => ['h','l','c','e','p'].reduce((score,key) => score + (String(row?.[key] ?? '').trim() ? 1 : 0), 0);
+
+            // If an earlier migration gave several Look First rows the same ID,
+            // the richest row keeps it and every other row gets a fresh ID.
+            const duplicateGroups = new Map();
+            v6Data.forEach((row,index) => {
+                if (!row?.id) return;
+                if (!duplicateGroups.has(row.id)) duplicateGroups.set(row.id, []);
+                duplicateGroups.get(row.id).push(index);
+            });
+            const keeperIndexById = new Map();
+            duplicateGroups.forEach((indices,id) => {
+                keeperIndexById.set(id, [...indices].sort((a,b) => rowDataScore(v6Data[b]) - rowDataScore(v6Data[a]) || a - b)[0]);
             });
 
-            const v6ByTicker = new Map(v6Data.map(row => [normalizeInstrumentName(row.n), row.id]));
-            v7Data.forEach((row, index) => {
-                if (!row.id) row.id = v6ByTicker.get(normalizeInstrumentName(row.n)) || byTicker.get(normalizeInstrumentName(row.n))?.id || '';
-                if (!row.id && normalizeInstrumentName(row.n)) {
-                    const item = { id:createInstrumentId(), ticker:String(row.n).trim(), code:'', market:'CN-A', order:pool.items.length + index, status:'active', createdAt:now, updatedAt:now, deletedAt:null };
-                    pool.items.push(item);
-                    byId.set(item.id, item);
-                    byTicker.set(normalizeInstrumentName(item.ticker), item);
-                    row.id = item.id;
+            const usedV6Ids = new Set();
+            v6Data.forEach((row, index) => {
+                const originalId = row.id;
+                const duplicateId = originalId && duplicateGroups.get(originalId)?.length > 1;
+                let id = originalId && (!duplicateId || keeperIndexById.get(originalId) === index) && !usedV6Ids.has(originalId)
+                    ? originalId
+                    : '';
+
+                // Legacy rows without an ID may claim a same-Ticker pool item only
+                // when there is exactly one unambiguous, currently unused candidate.
+                if (!id) {
+                    const tickerKey = normalizeInstrumentName(row.n);
+                    const candidates = pool.items.filter(item =>
+                        !tombstonedIds.has(item.id) &&
+                        !usedV6Ids.has(item.id) &&
+                        normalizeInstrumentName(item.ticker) === tickerKey
+                    );
+                    if (!originalId && tickerKey && candidates.length === 1) id = candidates[0].id;
                 }
+                if (!id) id = newUniqueId();
+
+                row.id = id;
+                usedV6Ids.add(id);
+                let item = byId.get(id);
+                if (!item) item = createPoolItem(id, row, index);
+                if (String(row.n || '').trim()) item.ticker = String(row.n).trim();
+                item.status = 'active';
+                item.deletedAt = null;
+                item.order = index;
+                item.updatedAt = now;
+            });
+
+            // A live Look First row wins over an old tombstone for that exact ID.
+            pool.tombstones = (pool.tombstones || []).filter(entry => !usedV6Ids.has(entry.id));
+
+            const v6ByTicker = new Map();
+            v6Data.forEach(row => {
+                const key = normalizeInstrumentName(row.n);
+                if (!v6ByTicker.has(key)) v6ByTicker.set(key, []);
+                v6ByTicker.get(key).push(row.id);
+            });
+            const usedV7Ids = new Set();
+            v7Data.forEach((row, index) => {
+                let id = row.id && usedV6Ids.has(row.id) && !usedV7Ids.has(row.id) ? row.id : '';
+                const tickerKey = normalizeInstrumentName(row.n);
+                const tickerCandidates = (v6ByTicker.get(tickerKey) || []).filter(candidate => !usedV7Ids.has(candidate));
+
+                // Prefer the row at the same position when its label also matches;
+                // otherwise only link a single unambiguous same-Ticker candidate.
+                if (!id && v6Data[index] && !usedV7Ids.has(v6Data[index].id) && normalizeInstrumentName(v6Data[index].n) === tickerKey) id = v6Data[index].id;
+                if (!id && tickerKey && tickerCandidates.length === 1) id = tickerCandidates[0];
+                if (!id) {
+                    id = newUniqueId();
+                    createPoolItem(id, row, pool.items.length);
+                }
+                row.id = id;
+                usedV7Ids.add(id);
             });
 
             pool.items.forEach((item, index) => {
@@ -995,8 +1070,6 @@
             const market = document.getElementById('instrumentMarket').value;
             if (!ticker) return alert('Ticker / Name is required.');
             const pool = loadInstrumentPool();
-            const duplicate = pool.items.find(item => item.status !== 'archived' && item.id !== id && (normalizeInstrumentName(item.ticker) === normalizeInstrumentName(ticker) || (code && item.code === code && item.market === market)));
-            if (duplicate) return alert('This instrument already exists in the pool.');
             const now = new Date().toISOString();
             if (id) {
                 const item = pool.items.find(entry => entry.id === id);
@@ -1921,14 +1994,18 @@
         }
 
         function migrateExecutionFields(v6Data, v7Data) {
-            const byId = new Map(), byTicker = new Map();
+            const byId = new Map(), tickerGroups = new Map();
             (v7Data || []).forEach(row => {
                 if (row?.id) byId.set(String(row.id), row);
                 const ticker = String(row?.n || '').trim().toUpperCase();
-                if (ticker && !byTicker.has(ticker)) byTicker.set(ticker, row);
+                if (ticker) {
+                    if (!tickerGroups.has(ticker)) tickerGroups.set(ticker, []);
+                    tickerGroups.get(ticker).push(row);
+                }
             });
             return (v6Data || []).map(row => {
-                const legacy = (row?.id ? byId.get(String(row.id)) : null) || byTicker.get(String(row?.n || '').trim().toUpperCase()) || {};
+                const tickerMatches = tickerGroups.get(String(row?.n || '').trim().toUpperCase()) || [];
+                const legacy = (row?.id ? byId.get(String(row.id)) : null) || (tickerMatches.length === 1 ? tickerMatches[0] : null) || {};
                 return {
                     ...row,
                     e: row?.e ?? '',
