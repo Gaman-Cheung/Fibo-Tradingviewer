@@ -42,10 +42,10 @@
         <button class="btn-util btn-switch-system" data-fibo-click="window.location.href='TrendTracker.html'">
             <span class="material-icons" style="font-size:16px;">timeline</span> Trend Tracker
         </button>
-        <button class="btn-util btn-cloud-down" data-fibo-click="pullFromCloud()" id="btn-pull">
+        <button class="btn-util btn-cloud-down fibo-button fibo-button--cloud-down" data-fibo-click="pullFromCloud()" id="btn-pull">
             <span class="material-icons" style="font-size:16px;">cloud_download</span> Pull from Cloud
         </button>
-        <button class="btn-util btn-cloud-up" data-fibo-click="pushToCloud()" id="btn-push">
+        <button class="btn-util btn-cloud-up fibo-button fibo-button--cloud-up" data-fibo-click="pushToCloud()" id="btn-push">
             <span class="material-icons" style="font-size:16px;">cloud_upload</span> Push to Cloud
         </button>
         
@@ -86,8 +86,8 @@
     <div class="note-modal" role="dialog" aria-modal="true" aria-labelledby="waveMobileActionsTitle">
         <div class="note-modal-header"><h2 id="waveMobileActionsTitle">Actions</h2><button type="button" class="note-modal-close" data-fibo-click="closeWaveMobileActions()"><span class="material-icons">close</span></button></div>
         <div class="note-modal-body"><div class="mobile-action-list">
-            <button class="btn-util btn-cloud-down" data-fibo-click="closeWaveMobileActions();pullFromCloud()"><span class="material-icons">cloud_download</span> Pull from Cloud</button>
-            <button class="btn-util btn-cloud-up" data-fibo-click="closeWaveMobileActions();pushToCloud()"><span class="material-icons">cloud_upload</span> Push to Cloud</button>
+            <button class="btn-util btn-cloud-down fibo-button fibo-button--cloud-down" data-fibo-click="closeWaveMobileActions();pullFromCloud()"><span class="material-icons">cloud_download</span> Pull from Cloud</button>
+            <button class="btn-util btn-cloud-up fibo-button fibo-button--cloud-up" data-fibo-click="closeWaveMobileActions();pushToCloud()"><span class="material-icons">cloud_upload</span> Push to Cloud</button>
             <button class="btn-util" data-fibo-click="closeWaveMobileActions();downloadLocalBackup()"><span class="material-icons">save_alt</span> Local Backup</button>
             <button class="btn-util" data-fibo-click="closeWaveMobileActions();document.getElementById('backupFile').click()"><span class="material-icons">folder_open</span> Import Backup</button>
             <button class="btn-util" data-fibo-click="closeWaveMobileActions();openWaveNoteEditor('marquee')"><span class="material-icons">campaign</span> Edit Reminder</button>

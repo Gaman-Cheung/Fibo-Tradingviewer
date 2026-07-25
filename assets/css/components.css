@@ -35,10 +35,10 @@
 .fibo-button .material-icons,.fibo-header__actions .material-icons { font-size:16px; }
 .fibo-header__actions > .fibo-button--system { border-color:var(--color-system-control-border); background:var(--color-background); color:var(--color-text); }
 .fibo-header__actions > .fibo-button--system:hover { background:var(--color-surface-muted); box-shadow:0 1px 3px rgba(60,64,67,.3); }
-.fibo-header__actions > .fibo-button--cloud-down { border-color:var(--color-primary); background:var(--color-primary-soft); color:var(--color-primary); }
-.fibo-header__actions > .fibo-button--cloud-down:hover { background:var(--color-primary-soft-strong); color:var(--color-primary-hover); }
-.fibo-header__actions > .fibo-button--cloud-up { border-color:var(--color-success-strong); background:var(--color-success-soft); color:var(--color-success-strong); }
-.fibo-header__actions > .fibo-button--cloud-up:hover { background:var(--color-success-soft-strong); color:var(--color-success-text); }
+.fibo-button.fibo-button--cloud-down { border-color:var(--color-primary); background:var(--color-primary-soft); color:var(--color-primary); }
+.fibo-button.fibo-button--cloud-down:hover { background:var(--color-primary-soft-strong); color:var(--color-primary-hover); }
+.fibo-button.fibo-button--cloud-up { border-color:var(--color-success-strong); background:var(--color-success-soft); color:var(--color-success-strong); }
+.fibo-button.fibo-button--cloud-up:hover { background:var(--color-success-soft-strong); color:var(--color-success-text); }
 .fibo-header__actions > .fibo-button--logout { margin-left:10px; }
 .fibo-header__actions > .fibo-button--logout:hover { border-color:#f5c2c7; background:#fdf2f2; color:var(--color-danger-text); }
 

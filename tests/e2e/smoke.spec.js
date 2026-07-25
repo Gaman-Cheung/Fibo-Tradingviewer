@@ -130,6 +130,8 @@ test('all systems share the established header geometry', async ({ page }, testI
       const action=document.querySelector('.fibo-header__actions > button, .fibo-header__actions > a');
       const mobileTool=document.querySelector('.fibo-header__mobile button');
       const systemAction=document.querySelector('.fibo-header__actions > .fibo-button--system, .fibo-header__actions > .btn-switch-system, .fibo-header__actions > .btn-pro-tips');
+      const pullAction=document.querySelector('.fibo-header__actions > .fibo-button--cloud-down');
+      const pushAction=document.querySelector('.fibo-header__actions > .fibo-button--cloud-up');
       const headerStyle=getComputedStyle(header);
       const actionStyle=action?getComputedStyle(action):null;
       const systemStyle=systemAction?getComputedStyle(systemAction):null;
@@ -137,7 +139,12 @@ test('all systems share the established header geometry', async ({ page }, testI
         logo:logo.width, reminder:reminder.height, headerDisplay:headerStyle.display, headerAlign:headerStyle.alignItems,
         actionRadius:actionStyle?.borderRadius, actionHeight:action?.getBoundingClientRect().height,
         actionFontSize:actionStyle?.fontSize, systemBorder:systemStyle?.borderColor,
-        systemBackground:systemStyle?.backgroundColor, mobileToolHeight:mobileTool?.getBoundingClientRect().height
+        systemBackground:systemStyle?.backgroundColor,
+        pullColor:pullAction?getComputedStyle(pullAction).color:null,
+        pullBackground:pullAction?getComputedStyle(pullAction).backgroundColor:null,
+        pushColor:pushAction?getComputedStyle(pushAction).color:null,
+        pushBackground:pushAction?getComputedStyle(pushAction).backgroundColor:null,
+        mobileToolHeight:mobileTool?.getBoundingClientRect().height
       };
     });
     expect(geometry.logo).toBe(testInfo.project.name==='iphone'?34:36);
@@ -149,6 +156,10 @@ test('all systems share the established header geometry', async ({ page }, testI
       expect(geometry.headerAlign).toBe('center');
       expect(geometry.systemBorder).toBe('rgb(60, 64, 67)');
       expect(geometry.systemBackground).toBe('rgb(248, 249, 250)');
+      expect(geometry.pullColor).toBe('rgb(66, 133, 244)');
+      expect(geometry.pullBackground).toBe('rgb(232, 240, 254)');
+      expect(geometry.pushColor).toBe('rgb(24, 128, 56)');
+      expect(geometry.pushBackground).toBe('rgb(230, 244, 234)');
     }
     if(testInfo.project.name==='iphone') expect(geometry.mobileToolHeight).toBe(40);
     results.push(geometry);

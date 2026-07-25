@@ -99,6 +99,19 @@ test('all workspace systems consume the shared header component contract', () =>
   }
 });
 
+test('all cloud actions use the shared blue pull and green push variants', () => {
+  for (const name of ['Terminal.html','WaveAnalysis.html','TrendTracker.html']) {
+    const source=fs.readFileSync(path.join(root,name),'utf8');
+    const buttons=source.match(/<button\b[\s\S]*?<\/button>/gi) || [];
+    const pullButtons=buttons.filter(button=>button.includes('cloud_download'));
+    const pushButtons=buttons.filter(button=>button.includes('cloud_upload'));
+    assert.ok(pullButtons.length >= 1, `${name}: Pull action missing`);
+    assert.ok(pushButtons.length >= 1, `${name}: Push action missing`);
+    for(const button of pullButtons) assert.match(button,/fibo-button--cloud-down/,`${name}: Pull must use shared blue variant`);
+    for(const button of pushButtons) assert.match(button,/fibo-button--cloud-up/,`${name}: Push must use shared green variant`);
+  }
+});
+
 test('authentication entry exposes one unified, accessible form', () => {
   const source = fs.readFileSync(path.join(root,'TradingViewer.html'),'utf8');
   const controller = fs.readFileSync(path.join(root,'src/apps/auth-app.js'),'utf8');
