@@ -14,7 +14,10 @@ Wave HTML ───────> wave-app ───────> shared identity
 Tracker HTML ----> tracker-app ----> Pool permanent ID + market repository
                          |---------> pure MA / MACD / scenario engine
                          `---------> single-instrument cards and canvas
-GitHub Action ----> BaoStock Python ----> additive market tables in Supabase
+GitHub Action (primary) -----\
+                             > shared BaoStock sync core ----> full-market tables in Supabase
+Manual Windows launcher -----/              |
+                                            `---- smoke / daily / backfill / repair
 ```
 
 ## Ownership
@@ -26,6 +29,8 @@ GitHub Action ----> BaoStock Python ----> additive market tables in Supabase
 - Wave calculations: `src/wave/`.
 - Trend calculations: `src/tracker/`.
 - BaoStock code normalization and Tracker queries: `src/core/market-code.js` and `src/core/market-repository.js`.
+- Full-market synchronization: GitHub Action and `SyncBaoStock.cmd` both call `scripts/sync_baostock.py`; neither implementation may duplicate sync rules.
+- BaoStock connectivity/local CSV diagnostics: `scripts/test_baostock_local.py`; it never writes Supabase.
 - DOM, navigation, drag/drop, modal and responsive behavior: `src/apps/`.
 - The declarative event controller replaces executable HTML event attributes and keeps handlers module-scoped.
 

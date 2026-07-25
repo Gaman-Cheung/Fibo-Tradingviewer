@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { inferMainlandMarket, migrateLegacyMarket, toBaoStockCode } from '../../src/core/market-code.js';
+import { buildFrontAdjustedSeries } from '../../src/core/front-adjusted-series.js';
 import { runMigrations, CURRENT_SCHEMA_VERSION } from '../../src/core/migrations.js';
 import { analyzeTrend, appendProvisionalCurrent, maSnapshot, macd, projectScenario, turnState } from '../../src/tracker/trend-engine.js';
 
@@ -50,4 +51,18 @@ test('Current is appended as a provisional value without mutating official close
   const preview=appendProvisionalCurrent(official,13);
   assert.deepEqual(official,[10,11,12]);
   assert.deepEqual(preview,[10,11,12,13]);
+});
+
+test('raw close and pctChg reconstruct a stable front-adjusted series', () => {
+  const raw=[
+    {trade_date:'2026-01-02',close:10,pct_chg:0},
+    {trade_date:'2026-01-05',close:5.5,pct_chg:10},
+    {trade_date:'2026-01-06',close:6.05,pct_chg:10}
+  ];
+  const adjusted=buildFrontAdjustedSeries([...raw].reverse());
+  assert.deepEqual(adjusted.map(row=>row.trade_date),['2026-01-02','2026-01-05','2026-01-06']);
+  assert.ok(Math.abs(adjusted[0].close-5)<1e-12);
+  assert.ok(Math.abs(adjusted[1].close-5.5)<1e-12);
+  assert.equal(adjusted[2].close,6.05);
+  assert.equal(adjusted[0].raw_close,10);
 });

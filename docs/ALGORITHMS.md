@@ -31,7 +31,7 @@ This document records current behavior; it is not investment advice. Changes req
 
 ## Trend Tracker
 
-- Always calculate MA5/10/13/20/30/60/120/144/240 from official front-adjusted closes.
+- Always calculate MA5/10/13/20/30/60/120/144/240 from BaoStock front-adjusted closes. The full-market source reconstructs that series backwards from official raw Close and `pctChg`, anchored to the latest official raw Close; live smoke validation against `adjustflag=2` must remain within `1e-4` relative error.
 - Exact slope recurrence: `ΔMA_N = (C_t - C_{t-N}) / N`; near-flat means `|ΔMA / MA_prev| <= 0.01%`.
 - First slope sign change is Turn Alert; three consecutive same-direction slopes are Turn Confirmed.
 - First official close crossing a critical MA is Watch; two official closes on the same side are Confirmed.

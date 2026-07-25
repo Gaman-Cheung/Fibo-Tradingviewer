@@ -112,6 +112,34 @@ test('all cloud actions use the shared blue pull and green push variants', () =>
   }
 });
 
+test('local BaoStock launcher keeps credentials and its environment out of Git', () => {
+  const ignore=fs.readFileSync(path.join(root,'.gitignore'),'utf8');
+  const launcher=fs.readFileSync(path.join(root,'SyncBaoStock.cmd'),'utf8');
+  const runner=fs.readFileSync(path.join(root,'scripts/run-baostock-local.ps1'),'utf8');
+  const example=fs.readFileSync(path.join(root,'.env.local.example'),'utf8');
+  const workflow=fs.readFileSync(path.join(root,'.github/workflows/sync-baostock.yml'),'utf8');
+  assert.match(ignore,/^\.env\.local$/m);
+  assert.match(ignore,/^\.venv\/$/m);
+  assert.match(launcher,/run-baostock-local\.ps1/);
+  assert.match(runner,/\.env\.local/);
+  assert.match(runner,/scripts[\\/]sync_baostock\.py|sync_baostock\.py/);
+  assert.match(example,/PASTE_YOUR_SERVICE_ROLE_OR_SB_SECRET_KEY_HERE/);
+  assert.doesNotMatch(example,/sb_secret_[A-Za-z0-9_-]{20,}/);
+  assert.match(workflow,/cron:\s*'0 11 \* \* 1-5'/);
+  for(const mode of ['smoke','daily','backfill','repair']) assert.match(workflow,new RegExp(`\\b${mode}\\b`));
+  assert.match(workflow,/baostock-full-market-sync/);
+  assert.match(ignore,/^local-market-data\/$/m);
+});
+
+test('full-market schema is additive and does not bind prices to permanent IDs', () => {
+  const migration=fs.readFileSync(path.join(root,'supabase/migrations/20260725_baostock_full_market.sql'),'utf8');
+  assert.match(migration,/create table if not exists public\.market_daily_bar/i);
+  assert.match(migration,/primary key \(provider, market, code, trade_date\)/i);
+  assert.match(migration,/create table if not exists public\.market_sync_checkpoint/i);
+  assert.doesNotMatch(migration,/instrument_id/i);
+  assert.doesNotMatch(migration,/drop table/i);
+});
+
 test('authentication entry exposes one unified, accessible form', () => {
   const source = fs.readFileSync(path.join(root,'TradingViewer.html'),'utf8');
   const controller = fs.readFileSync(path.join(root,'src/apps/auth-app.js'),'utf8');

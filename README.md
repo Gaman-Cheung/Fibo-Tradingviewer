@@ -12,11 +12,24 @@ Static multi-page trading journal and Elliott Wave analysis system for GitHub Pa
 
 ## Trend Tracker market sync
 
-1. Apply `supabase/migrations/20260724_trend_tracker.sql` in the Supabase SQL editor.
-2. Add GitHub Actions secrets `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
-3. Manually run **Sync BaoStock closes** once; it then runs at 19:30 China time on weekdays.
+1. Apply `supabase/migrations/20260724_trend_tracker.sql`, then `supabase/migrations/20260725_baostock_full_market.sql` in the Supabase SQL editor.
+2. Add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` as GitHub repository Actions secrets.
+3. Manually run the **Sync BaoStock full market** Action in `smoke` mode.
+4. After smoke passes, run it once in `backfill` mode. The job resumes from its per-date checkpoint after interruption.
+5. The scheduled Action then runs `daily` at 19:00 Asia/Shanghai on weekdays.
 
-The service-role key never enters browser code. New symbols backfill 300 sessions, routine runs upsert the latest five sessions, and the workflow's `full_repair` input forces a full refresh.
+The database stores the latest 400 trading sessions for every SH/SZ A-share. Tracker matches the shared history by explicit Market + six-digit Code; Pool and permanent IDs never own or duplicate prices.
+
+`SyncBaoStock.cmd` is the fallback entry and calls the exact same synchronization core:
+
+```text
+SyncBaoStock.cmd smoke
+SyncBaoStock.cmd daily
+SyncBaoStock.cmd backfill
+SyncBaoStock.cmd repair 2026-01-01 2026-01-31
+```
+
+Smoke does not require or write Supabase. Other local modes create an ignored `.venv`, read the ignored `.env.local`, and write directly to Supabase. The service-role key never enters browser code or Git. `scripts/test_baostock_local.py` remains a separate local-CSV diagnostic.
 
 ## Local development
 
@@ -33,6 +46,7 @@ Open `http://127.0.0.1:4173/TradingViewer.html`. ES Modules are intentionally no
 
 ```powershell
 npm test
+npm run test:sync
 npm run test:e2e
 ```
 

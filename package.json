@@ -5,6 +5,7 @@
   "scripts": {
     "start": "http-server . -p 4173 -c-1",
     "test": "node --test tests/unit/*.test.js",
+    "test:sync": "python -m unittest discover -s tests/python",
     "test:e2e": "playwright test",
     "test:all": "npm test && npm run test:e2e"
   },
@@ -13,4 +14,3 @@
     "http-server": "^14.1.1"
   }
 }
-

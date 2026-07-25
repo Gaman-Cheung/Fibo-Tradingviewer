@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 const supabaseMock = `
 window.supabase={createClient(){
- const chain={select(){return this},eq(){return this},order(){return Promise.resolve({data:[],error:null})},single(){return Promise.resolve({data:null,error:{code:'PGRST116'}})},upsert(){return Promise.resolve({data:null,error:null})}};
+ const chain={select(){return this},eq(){return this},limit(){return this},order(){return Promise.resolve({data:[],error:null})},single(){return Promise.resolve({data:null,error:{code:'PGRST116'}})},maybeSingle(){return Promise.resolve({data:null,error:null})},upsert(){return Promise.resolve({data:null,error:null})}};
  return {auth:{getSession:async()=>({data:{session:{user:{id:'test'}}},error:null}),getUser:async()=>({data:{user:{id:'test'}},error:null}),signOut:async()=>({error:null}),signInWithPassword:async()=>({data:{user:{id:'test'}},error:null}),signUp:async()=>({data:{user:{id:'test'}},error:null})},from(){return Object.create(chain)}};
 }};`;
 
