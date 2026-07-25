@@ -12,17 +12,17 @@
 </head>
 <body>
   <div id="trackerLoader" class="tracker-loader">Loading market history…</div>
-  <header class="tracker-header fibo-header">
-    <div class="tracker-brand fibo-header__brand"><h1><img src="logo.png" alt="Logo" class="fibo-header__logo">Trend Tracker</h1></div>
-    <div class="mobile-tools fibo-header__mobile mobile-only">
+  <header class="fibo-header">
+    <div class="fibo-header__brand"><h1><img src="logo.png" alt="Logo" class="fibo-header__logo">Trend Tracker</h1></div>
+    <div class="fibo-header__mobile mobile-only">
       <button class="fibo-button" data-fibo-click="openNote('tips')" title="Pro Tips"><span class="material-icons">menu_book</span></button>
       <button class="fibo-button" data-fibo-click="openActions()" title="More"><span class="material-icons">more_horiz</span></button>
     </div>
-    <div class="tracker-reminder fibo-header__reminder">
-      <span class="material-icons">campaign</span><div class="tracker-marquee fibo-header__marquee"><span id="trackerMarquee"></span></div>
+    <div class="fibo-header__reminder">
+      <span class="material-icons">campaign</span><div class="fibo-header__marquee"><span id="trackerMarquee"></span></div>
       <button class="fibo-header__marquee-edit" data-fibo-click="openNote('marquee')" title="Edit reminder"><span class="material-icons">edit</span></button>
     </div>
-    <div class="desktop-tools fibo-header__actions">
+    <div class="fibo-header__actions">
       <button class="fibo-button fibo-button--system" data-fibo-click="openNote('tips')"><span class="material-icons">menu_book</span>Pro Tips</button>
       <a class="fibo-button fibo-button--system" href="Terminal.html"><span class="material-icons">analytics</span>交易终端</a>
       <a class="fibo-button fibo-button--system" href="WaveAnalysis.html"><span class="material-icons">show_chart</span>波浪推演矩阵</a>

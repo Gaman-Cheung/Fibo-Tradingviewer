@@ -64,6 +64,7 @@
   --color-surface-hover: var(--ref-neutral-100);
   --color-border: var(--ref-neutral-300);
   --color-border-subtle: var(--ref-neutral-200);
+  --color-system-control-border: var(--ref-neutral-800);
   --color-text: var(--ref-neutral-900);
   --color-text-secondary: var(--ref-neutral-700);
   --color-text-tertiary: var(--ref-neutral-600);

@@ -74,7 +74,7 @@ for (const [pageName,selector] of [
   ['TradingViewer.html','.login-card'],
   ['Terminal.html?tab=v6','.header'],
   ['WaveAnalysis.html','#chart']
-  ,['TrendTracker.html','.tracker-header']
+  ,['TrendTracker.html','.fibo-header']
 ]) {
   test(`${pageName} loads its modular entry`, async ({ page }) => {
     const errors=[];
@@ -124,15 +124,32 @@ test('all systems share the established header geometry', async ({ page }, testI
   for (const name of ['Terminal.html?tab=v6','WaveAnalysis.html','TrendTracker.html']) {
     await page.goto(`/${name}`);
     const geometry=await page.evaluate(()=>{
+      const header=document.querySelector('.fibo-header');
       const logo=document.querySelector('.fibo-header__logo').getBoundingClientRect();
       const reminder=document.querySelector('.fibo-header__reminder').getBoundingClientRect();
       const action=document.querySelector('.fibo-header__actions > button, .fibo-header__actions > a');
       const mobileTool=document.querySelector('.fibo-header__mobile button');
-      return {logo:logo.width,reminder:reminder.height,actionRadius:action?getComputedStyle(action).borderRadius:null,actionHeight:action?.getBoundingClientRect().height,mobileToolHeight:mobileTool?.getBoundingClientRect().height};
+      const systemAction=document.querySelector('.fibo-header__actions > .fibo-button--system, .fibo-header__actions > .btn-switch-system, .fibo-header__actions > .btn-pro-tips');
+      const headerStyle=getComputedStyle(header);
+      const actionStyle=action?getComputedStyle(action):null;
+      const systemStyle=systemAction?getComputedStyle(systemAction):null;
+      return {
+        logo:logo.width, reminder:reminder.height, headerDisplay:headerStyle.display, headerAlign:headerStyle.alignItems,
+        actionRadius:actionStyle?.borderRadius, actionHeight:action?.getBoundingClientRect().height,
+        actionFontSize:actionStyle?.fontSize, systemBorder:systemStyle?.borderColor,
+        systemBackground:systemStyle?.backgroundColor, mobileToolHeight:mobileTool?.getBoundingClientRect().height
+      };
     });
     expect(geometry.logo).toBe(testInfo.project.name==='iphone'?34:36);
     expect(geometry.reminder).toBe(testInfo.project.name==='iphone'?38:44);
     expect(geometry.actionRadius).toBe('6px');
+    expect(geometry.actionFontSize).toBe('13px');
+    if(testInfo.project.name==='desktop-chromium') {
+      expect(geometry.headerDisplay).toBe('flex');
+      expect(geometry.headerAlign).toBe('center');
+      expect(geometry.systemBorder).toBe('rgb(60, 64, 67)');
+      expect(geometry.systemBackground).toBe('rgb(248, 249, 250)');
+    }
     if(testInfo.project.name==='iphone') expect(geometry.mobileToolHeight).toBe(40);
     results.push(geometry);
   }
@@ -154,9 +171,9 @@ test('tracker uses Pool code and mobile Pro Tips without a cloud shortcut', asyn
     expect(layout.left).toBe(16); expect(layout.right).toBe(16); expect(layout.radius).toBe('8px');
   }
   if (testInfo.project.name === 'iphone') {
-    await expect(page.locator('.mobile-tools .material-icons').first()).toHaveText('menu_book');
-    await page.locator('.mobile-tools [data-fibo-click="openNote(\'tips\')"]').click();
-  } else await page.locator('.desktop-tools [data-fibo-click="openNote(\'tips\')"]').click();
+    await expect(page.locator('.fibo-header__mobile .material-icons').first()).toHaveText('menu_book');
+    await page.locator('.fibo-header__mobile [data-fibo-click="openNote(\'tips\')"]').click();
+  } else await page.locator('.fibo-header__actions [data-fibo-click="openNote(\'tips\')"]').click();
   await expect(page.locator('#trackerNoteBackdrop')).toHaveClass(/open/);
 });
 

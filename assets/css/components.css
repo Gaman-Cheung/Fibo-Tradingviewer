@@ -17,7 +17,9 @@
 }
 .fibo-header__reminder > .material-icons { flex:0 0 auto; margin:0 8px 0 6px; font-size:18px; color:var(--color-text-secondary); }
 .fibo-header__marquee { flex:1; min-width:0; height:36px; display:flex; align-items:center; overflow:hidden; white-space:nowrap; border-radius:6px; background:var(--color-surface); box-shadow:0 1px 3px rgba(0,0,0,.1); }
-.fibo-header__marquee > * { display:inline-block; min-width:max-content; padding-left:100%; font-size:13px; font-weight:700; }
+.fibo-header__marquee > * { display:inline-block; min-width:max-content; padding-left:100%; font-size:13px; font-weight:700; animation:fibo-header-marquee var(--marquee-duration,36s) linear infinite; }
+.fibo-header__reminder:hover .fibo-header__marquee > * { animation-play-state:paused; }
+@keyframes fibo-header-marquee { from { transform:translateX(0); } to { transform:translateX(-100%); } }
 .fibo-header__marquee-edit { flex:0 0 36px; align-self:stretch; margin-left:4px; padding:0; border:0; border-radius:6px; background:transparent; color:var(--color-text-secondary); cursor:pointer; }
 .fibo-header__marquee-edit:hover { background:var(--color-surface); color:var(--color-primary); box-shadow:0 1px 3px rgba(0,0,0,.1); }
 .fibo-header__marquee-edit .material-icons { font-size:17px; vertical-align:middle; }
@@ -31,11 +33,14 @@
 }
 .fibo-button:hover,.fibo-header__actions > button:hover,.fibo-header__actions > a:hover { background:var(--color-surface-hover); color:var(--color-text); }
 .fibo-button .material-icons,.fibo-header__actions .material-icons { font-size:16px; }
-.fibo-button--system { border-color:var(--color-text-secondary); background:var(--color-background); color:var(--color-text); }
-.fibo-button--cloud-down { border-color:var(--color-primary); background:var(--color-primary-soft); color:var(--color-primary); }
-.fibo-button--cloud-up { border-color:var(--color-success-strong); background:var(--color-success-soft); color:var(--color-success-strong); }
-.fibo-button--logout { margin-left:10px; }
-.fibo-button--logout:hover { border-color:#f5c2c7; background:#fdf2f2; color:var(--color-danger-text); }
+.fibo-header__actions > .fibo-button--system { border-color:var(--color-system-control-border); background:var(--color-background); color:var(--color-text); }
+.fibo-header__actions > .fibo-button--system:hover { background:var(--color-surface-muted); box-shadow:0 1px 3px rgba(60,64,67,.3); }
+.fibo-header__actions > .fibo-button--cloud-down { border-color:var(--color-primary); background:var(--color-primary-soft); color:var(--color-primary); }
+.fibo-header__actions > .fibo-button--cloud-down:hover { background:var(--color-primary-soft-strong); color:var(--color-primary-hover); }
+.fibo-header__actions > .fibo-button--cloud-up { border-color:var(--color-success-strong); background:var(--color-success-soft); color:var(--color-success-strong); }
+.fibo-header__actions > .fibo-button--cloud-up:hover { background:var(--color-success-soft-strong); color:var(--color-success-text); }
+.fibo-header__actions > .fibo-button--logout { margin-left:10px; }
+.fibo-header__actions > .fibo-button--logout:hover { border-color:#f5c2c7; background:#fdf2f2; color:var(--color-danger-text); }
 
 /* Shared modal geometry used by system-neutral editors and action sheets. */
 .fibo-modal-backdrop { display:none; position:fixed; inset:0; z-index:var(--z-dialog); padding:24px; align-items:center; justify-content:center; background:rgba(32,33,36,.48); }
@@ -60,4 +65,8 @@
   .fibo-header__marquee { height:30px; }
   .fibo-header__marquee-edit { flex-basis:30px; }
   .fibo-modal-backdrop { padding:14px; }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .fibo-header__marquee > * { animation:none; padding-left:0; }
 }
