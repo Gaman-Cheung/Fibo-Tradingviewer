@@ -23,8 +23,12 @@ This file is mandatory reading before changing the project.
 
 - Read `docs/DESIGN_SYSTEM.md` before creating or restyling any page or shared component.
 - `assets/css/tokens.css` is the only owner of shared visual constants and `:root` design variables.
-- New page CSS must use semantic tokens, must not copy the legacy aliases, and must not redefine shared tokens.
-- Token value changes are cross-system UI changes and require desktop and iPhone regression tests.
+- `assets/css/components.css` is the only owner of shared component geometry and interaction states.
+- New page CSS must use semantic tokens, must not copy legacy aliases, redefine shared tokens, or override a shared component's dimensions, spacing, typography, radius or state styling.
+- A visual pattern used by two systems is shared. Before a third system uses it, promote it to `components.css`; never copy the two existing implementations into the new page.
+- Page CSS may arrange shared components and style genuinely page-specific content only. It must not create a visually similar substitute for Header, Button, Modal, Form Control, Card or Mobile Navigation.
+- Do not append compensating override blocks to make a page resemble another page. Fix the owning shared primitive and migrate all consumers together.
+- Token or shared-component changes are cross-system UI changes and require Terminal/Wave/Tracker desktop and iPhone regression tests.
 
 Do not copy a core implementation into an app. Do not make a pure algorithm import an app module.
 
@@ -32,7 +36,7 @@ Do not copy a core implementation into an app. Do not make a pure algorithm impo
 
 1. Read `docs/SYSTEM_MAP.md`, `docs/DATA_CONTRACTS.md`, the relevant algorithm section and `docs/DESIGN_SYSTEM.md` for UI work.
 2. Change only the owning module and its tests.
-3. Run `npm test`. For UI changes also run `npm run test:e2e` in both configured projects.
+3. Run `npm test`. For UI changes also run `npm run test:e2e` in both configured projects and compare shared-component geometry across every consuming page.
 4. Report exactly which modules and contracts changed. Explicitly say when algorithms were untouched.
 
 ## Compatibility

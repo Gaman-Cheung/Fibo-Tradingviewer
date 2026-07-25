@@ -63,12 +63,39 @@ test('design tokens are centralized and loaded before page styles', () => {
     ['TrendTracker.html','tracker.css']
   ]) {
     const html = fs.readFileSync(path.join(root,htmlName),'utf8');
-    assert.ok(html.indexOf('assets/css/tokens.css') < html.indexOf(`assets/css/${pageCss}`), htmlName);
+    const tokensIndex = html.indexOf('assets/css/tokens.css');
+    const componentsIndex = html.indexOf('assets/css/components.css');
+    const pageIndex = html.indexOf(`assets/css/${pageCss}`);
+    assert.ok(tokensIndex >= 0 && tokensIndex < componentsIndex, `${htmlName}: tokens must load before components`);
+    assert.ok(componentsIndex < pageIndex, `${htmlName}: components must load before page CSS`);
   }
 
   for (const pageCss of ['auth.css','terminal.css','wave.css','tracker.css']) {
     const css = fs.readFileSync(path.join(root,'assets/css',pageCss),'utf8');
     assert.doesNotMatch(css, /(^|\})\s*:root\s*\{/m, pageCss);
+  }
+});
+
+test('page styles cannot override shared header geometry', () => {
+  for (const pageCss of ['auth.css','terminal.css','wave.css','tracker.css']) {
+    const css = fs.readFileSync(path.join(root,'assets/css',pageCss),'utf8');
+    assert.doesNotMatch(
+      css,
+      /(?:^|[},])\s*[^{}]*\.fibo-header(?:__|\b)[^{}]*\{/m,
+      `${pageCss}: shared fibo-header selectors belong in components.css`
+    );
+  }
+});
+
+test('all workspace systems consume the shared header component contract', () => {
+  const components=fs.readFileSync(path.join(root,'assets/css/components.css'),'utf8');
+  for(const selector of ['.fibo-header','.fibo-header__logo','.fibo-header__reminder','.fibo-header__actions','.fibo-modal']) assert.match(components,new RegExp(selector.replace('.','\\.')));
+  for(const name of ['Terminal.html','WaveAnalysis.html','TrendTracker.html']) {
+    const source=fs.readFileSync(path.join(root,name),'utf8');
+    assert.match(source,/class="[^"]*fibo-header[^"]*"/,name);
+    assert.match(source,/fibo-header__logo/,name);
+    assert.match(source,/fibo-header__reminder/,name);
+    assert.match(source,/fibo-header__actions/,name);
   }
 });
 

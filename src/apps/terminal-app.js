@@ -174,6 +174,22 @@ import { readJson } from '../core/storage.js';
 
         function getInstrumentById(id) { return loadInstrumentPool().items.find(item => item.id === id) || null; }
 
+        function instrumentMetaButtonHtml(instrumentId) {
+            const instrument = getInstrumentById(instrumentId);
+            const ready = /^(?:SH|SZ)$/.test(String(instrument?.market || '')) && /^\d{6}$/.test(String(instrument?.code || ''));
+            const summary = [instrument?.code, instrument?.market].filter(Boolean).join(' · ');
+            const title = ready ? `${summary} — Edit instrument` : `Code / Market incomplete${summary ? ` (${summary})` : ''} — Edit instrument`;
+            return `<button type="button" class="instrument-meta-button desktop-only ${ready ? 'is-ready' : ''}" data-fibo-click="openInstrumentDialog('${escapePoolHtml(instrumentId)}')" title="${escapePoolHtml(title)}" aria-label="${escapePoolHtml(title)}"><span class="material-icons">tune</span></button>`;
+        }
+
+        function refreshInstrumentMetaButtons(instrumentId) {
+            document.querySelectorAll(`tr[data-instrument-id="${instrumentId}"] .instrument-meta-button`).forEach(button => {
+                const wrapper = document.createElement('span');
+                wrapper.innerHTML = instrumentMetaButtonHtml(instrumentId);
+                button.replaceWith(wrapper.firstElementChild);
+            });
+        }
+
         function isInstrumentActive(id) { const item = getInstrumentById(id); return !item || item.status !== 'archived'; }
 
         function migrateInstrumentIdentity(v6Data, v7Data) {
@@ -355,6 +371,7 @@ import { readJson } from '../core/storage.js';
             if (!ticker) return alert('Ticker / Name is required.');
             const pool = loadInstrumentPool();
             const now = new Date().toISOString();
+            let affectedId = id;
             if (id) {
                 const item = pool.items.find(entry => entry.id === id);
                 if (!item) return;
@@ -363,16 +380,16 @@ import { readJson } from '../core/storage.js';
                     const rows = readStoredRows(key); rows.forEach(row => { if (row.id === id) row.n = ticker; }); localStorage.setItem(key, JSON.stringify(rows));
                 }
                 document.querySelectorAll(`[data-instrument-id="${id}"] .name`).forEach(input => { input.value = ticker; });
-                document.querySelectorAll(`[data-instrument-id="${id}"] .ticker-market-code`).forEach(meta => { meta.textContent = [code, market].filter(Boolean).join(' · '); });
             } else {
                 const newId = createInstrumentId();
+                affectedId = newId;
                 const activeCount = pool.items.filter(item => item.status !== 'archived').length;
                 pool.items.push({ id:newId, ticker, code, market, order:activeCount, status:'active', createdAt:now, updatedAt:now, deletedAt:null });
                 const rows = readStoredRows('tv_lookfirst_data_v3'); rows.push({ id:newId, n:ticker, h:'', l:'', c:'' }); localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify(rows));
                 localStorage.setItem(ACTIVE_INSTRUMENT_KEY, newId);
                 addV6Row(ticker, '', '', '', newId);
             }
-            saveInstrumentPool(pool); closeInstrumentDialog(); renderInstrumentPool();
+            saveInstrumentPool(pool); refreshInstrumentMetaButtons(affectedId); closeInstrumentDialog(); renderInstrumentPool();
         }
 
         function openInstrument(id) {
@@ -662,10 +679,8 @@ import { readJson } from '../core/storage.js';
         function addV6Row(n='', h='', l='', c='', instrumentId='', entry='', previous='', baseline='current') {
             const tr = document.createElement('tr');
             tr.dataset.instrumentId = instrumentId;
-            const instrument = getInstrumentById(instrumentId);
-            const marketMeta = [instrument?.code, instrument?.market].filter(Boolean).join(' · ');
             tr.innerHTML = `
-                <td><input type="text" class="input-name name" value="${escapePoolHtml(n)}" placeholder="TICKER" data-fibo-input="handleDesktopTickerInput(this)"><div class="ticker-market-code">${escapePoolHtml(marketMeta)}</div></td>
+                <td><div class="ticker-input-shell"><input type="text" class="input-name name" value="${escapePoolHtml(n)}" placeholder="TICKER" data-fibo-input="handleDesktopTickerInput(this)">${instrumentMetaButtonHtml(instrumentId)}</div></td>
                 <td><input type="number" class="high" value="${h}" data-fibo-input="calcV6(this)"></td>
                 <td><input type="number" class="low" value="${l}" data-fibo-input="calcV6(this)"></td>
                 <td><input type="number" class="current" value="${c}" data-fibo-input="calcV6(this)"></td>
@@ -982,12 +997,9 @@ import { readJson } from '../core/storage.js';
         function addV7Row(n='', t='sideways', r='', m='neutral', s='', g='', v='', g1='', instrumentId='') {
             const tr = document.createElement('tr');
             tr.dataset.instrumentId = instrumentId;
-            const instrument = getInstrumentById(instrumentId);
-            const marketMeta = [instrument?.code, instrument?.market].filter(Boolean).join(' · ');
             tr.innerHTML = `
                 <td>
-                    <input type="text" class="input-name name" value="${escapePoolHtml(n)}" readonly title="标的来自 Instrument Pool">
-                    <div class="ticker-market-code">${escapePoolHtml(marketMeta)}</div>
+                    <div class="ticker-input-shell"><input type="text" class="input-name name" value="${escapePoolHtml(n)}" readonly title="标的来自 Instrument Pool">${instrumentMetaButtonHtml(instrumentId)}</div>
                 </td>
                 <td class="market-cell"><input type="number" class="current-proxy" placeholder="Current"><div class="market-summary">-</div></td>
                 <td class="support-cell auto-level">-</td>

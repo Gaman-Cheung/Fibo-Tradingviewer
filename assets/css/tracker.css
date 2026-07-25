@@ -5,9 +5,6 @@ button,a { -webkit-tap-highlight-color:transparent; }
 .tracker-loader { display:none; position:fixed; inset:0; z-index:var(--z-toast); place-items:center; background:var(--color-overlay); color:var(--color-on-primary); font-weight:var(--font-weight-bold); }
 .tracker-loader.open { display:grid; }
 .tracker-header { display:grid; grid-template-columns:auto minmax(240px,1fr) auto; align-items:center; gap:var(--space-4); padding:var(--space-4) var(--page-gutter-desktop); background:var(--color-surface); box-shadow:var(--shadow-low); }
-.tracker-brand { display:flex; align-items:center; gap:var(--space-3); }
-.tracker-brand img { width:38px; height:38px; border-radius:var(--radius-pill); border:2px solid var(--color-primary); }
-.tracker-brand h1 { margin:0; font-size:var(--font-size-2xl); }
 .tracker-reminder { min-width:0; display:flex; align-items:center; gap:var(--space-2); padding:var(--space-1); border-radius:var(--radius-md); background:var(--color-surface-muted); color:var(--color-text-secondary); }
 .tracker-marquee { min-width:0; flex:1; overflow:hidden; padding:var(--space-2); border-radius:var(--radius-sm); background:var(--color-surface); white-space:nowrap; }
 .tracker-marquee span { display:inline-block; min-width:max-content; padding-left:100%; font-weight:var(--font-weight-semibold); animation:tracker-marquee var(--marquee-duration,36s) linear infinite; }
@@ -68,7 +65,6 @@ th:first-child,td:first-child { text-align:left; }
   .mobile-only { display:flex !important; }
   .desktop-tools { display:none; }
   .tracker-header { grid-template-columns:1fr auto; padding:var(--space-3) var(--page-gutter-mobile); }
-  .tracker-brand h1 { font-size:var(--font-size-xl); }.tracker-brand img { width:34px;height:34px; }
   .mobile-tools { display:flex; gap:var(--space-2); }.mobile-tools button { border:1px solid var(--color-border); background:var(--color-glass-strong); }
   .tracker-reminder { grid-column:1/-1; grid-row:2; }
   .tracker-main { width:calc(100% - 2 * var(--page-gutter-mobile)); margin-top:var(--space-3); }
@@ -82,3 +78,34 @@ th:first-child,td:first-child { text-align:left; }
   .action-sheet { align-items:flex-end; padding:0; }.action-sheet .tracker-modal { width:100%; border-radius:24px 24px 0 0; padding-bottom:env(safe-area-inset-bottom); }
 }
 @media (prefers-reduced-motion:reduce) { .tracker-marquee span { animation:none; padding-left:0; } }
+
+/* Align Tracker geometry with the established Terminal/Wave system. */
+body { box-sizing:border-box; padding:16px; }
+body::before { display:none; }
+.tracker-header { padding:0; background:transparent; box-shadow:none; }
+.tracker-reminder { padding:4px; background:var(--color-surface-muted); }
+.desktop-tools { justify-content:flex-end; }
+.desktop-tools > button,.desktop-tools > a { min-height:31px; padding:6px 12px; border-radius:6px; font-size:13px; }
+.tracker-main { box-sizing:border-box; width:100%; max-width:none; margin:0 0 var(--space-16); }
+.tracker-card,.conclusion-card { padding:16px; border:1px solid var(--color-border-subtle); border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,.08); }
+.instrument-panel { min-height:60px; padding:12px 16px; }
+.instrument-panel > div:first-child { display:flex; align-items:center; gap:10px; min-width:0; }
+.instrument-panel select { min-width:240px; min-height:36px; margin:0; padding:6px 10px; border-radius:4px; font-size:14px; }
+.instrument-code { margin:0; font-size:11px; }
+.field-grid label input,.field-grid label select,.scenario-controls label input,.scenario-controls label select { min-height:36px; border-radius:4px; }
+.tracker-modal textarea { box-sizing:border-box; width:100%; min-height:340px; margin:0; }
+.tracker-modal .primary { border-color:var(--color-primary); background:var(--color-primary); color:var(--color-on-primary); }
+.action-list { box-sizing:border-box; width:100%; }
+.action-list .fibo-button--logout { margin-left:0; }
+
+@media (max-width:768px) {
+  body { padding:10px 10px 94px; }
+  .tracker-header { padding:10px; }
+  .tracker-main { width:100%; margin-top:12px; }
+  .instrument-panel > div:first-child { width:100%; display:grid; grid-template-columns:1fr auto; gap:4px 8px; }
+  .instrument-panel .eyebrow { grid-column:1/-1; }
+  .instrument-panel select { width:100%; min-width:0; min-height:44px; }
+  .field-grid label input,.field-grid label select,.scenario-controls label input,.scenario-controls label select { min-height:44px; }
+  .tracker-card,.conclusion-card { padding:16px; }
+  .fibo-modal__body.action-list { display:grid; }
+}

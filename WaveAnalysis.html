@@ -14,25 +14,25 @@
 
 <body>
 
-<header>
-    <div class="header-left">
-        <h1><img src="logo.png" alt="Logo" class="app-logo"> Wave Theory Trading System</h1>
+<header class="fibo-header">
+    <div class="header-left fibo-header__brand">
+        <h1><img src="logo.png" alt="Logo" class="app-logo fibo-header__logo"> Wave Theory Trading System</h1>
     </div>
 
-    <div class="mobile-header-tools mobile-only">
-        <button type="button" class="btn-util mobile-icon-btn" data-fibo-click="openWaveNoteEditor('tips')" title="Pro Tips"><span class="material-icons">menu_book</span></button>
-        <button type="button" class="btn-util mobile-icon-btn" data-fibo-click="openWaveMobileActions()"><span class="material-icons">more_horiz</span></button>
+    <div class="mobile-header-tools fibo-header__mobile mobile-only">
+        <button type="button" class="btn-util fibo-button mobile-icon-btn" data-fibo-click="openWaveNoteEditor('tips')" title="Pro Tips"><span class="material-icons">menu_book</span></button>
+        <button type="button" class="btn-util fibo-button mobile-icon-btn" data-fibo-click="openWaveMobileActions()"><span class="material-icons">more_horiz</span></button>
     </div>
 
-    <div class="header-reminder" title="慢速滚动；鼠标悬停暂停">
+    <div class="header-reminder fibo-header__reminder" title="慢速滚动；鼠标悬停暂停">
         <span class="material-icons">campaign</span>
-        <div class="marquee-viewport"><div class="marquee-track" id="waveReminderMarqueeText"></div></div>
-        <button type="button" class="marquee-edit" data-fibo-click="openWaveNoteEditor('marquee')" title="编辑滚动提醒">
+        <div class="marquee-viewport fibo-header__marquee"><div class="marquee-track" id="waveReminderMarqueeText"></div></div>
+        <button type="button" class="marquee-edit fibo-header__marquee-edit" data-fibo-click="openWaveNoteEditor('marquee')" title="编辑滚动提醒">
             <span class="material-icons">edit</span>
         </button>
     </div>
 
-    <div class="util-btns">
+    <div class="util-btns fibo-header__actions">
         <button type="button" class="btn-util btn-pro-tips" data-fibo-click="openWaveNoteEditor('tips')">
             <span class="material-icons" style="font-size:16px;">menu_book</span> Pro Tips
         </button>

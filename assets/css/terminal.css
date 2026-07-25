@@ -227,7 +227,11 @@
         .instrument-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
         .instrument-name { font-size:16px; font-weight:900; overflow-wrap:anywhere; }
         .instrument-code { color:var(--text-secondary); font-size:11px; margin-top:3px; }
-        .ticker-market-code { margin-top:3px; color:var(--text-secondary); font:500 10px/1.25 var(--font-family-mono); overflow-wrap:anywhere; }
+        .ticker-input-shell { display:flex; align-items:center; justify-content:center; gap:4px; min-height:34px; }
+        .instrument-meta-button { width:28px; height:34px; flex:0 0 28px; display:inline-flex; align-items:center; justify-content:center; padding:0; border:1px solid var(--border-color); border-radius:4px; background:var(--surface-color); color:var(--text-secondary); cursor:pointer; transition:.18s; }
+        .instrument-meta-button .material-icons { font-size:17px; }
+        .instrument-meta-button:hover { border-color:var(--g-blue); color:var(--g-blue); background:#e8f0fe; }
+        .instrument-meta-button.is-ready { border-color:var(--g-blue); color:var(--g-blue); background:#e8f0fe; }
         .instrument-meta { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:14px 0; }
         .instrument-meta div { background:#f8f9fa; border-radius:6px; padding:8px; text-align:center; font-size:11px; color:var(--text-secondary); }
         .instrument-meta strong { display:block; margin-top:3px; color:var(--text-primary); font-size:13px; }
@@ -250,6 +254,7 @@
         #loader { display: none; position: fixed; top: 16px; right: 50%; transform: translateX(50%); background: #333; color: white; padding: 8px 24px; border-radius: 20px; font-size: 14px; font-weight: bold; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
 
         @media (max-width: 768px) {
+            .desktop-only { display:none !important; }
             body { padding:10px; padding-top:max(10px,env(safe-area-inset-top)); padding-bottom:calc(86px + env(safe-area-inset-bottom)); }
             .mobile-only { display:flex !important; }
             .header {

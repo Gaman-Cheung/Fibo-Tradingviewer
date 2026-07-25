@@ -17,6 +17,41 @@ Load styles in this order:
 - A page stylesheet owns only the layout and presentation unique to that page.
 - A page stylesheet must not declare `:root`, redefine a shared token, or copy the token set.
 
+## Conformance levels
+
+Visual consistency is a contract, not a request to make pages merely look similar.
+
+1. **Token conformance**: colors, type, spacing, radii, shadows and motion come from `tokens.css`.
+2. **Component conformance**: shared controls use the same classes and the single implementation in `components.css`.
+3. **Composition conformance**: page CSS may arrange those components, but may not replace or reskin them.
+4. **Regression conformance**: desktop and iPhone tests compare shared geometry across all consuming systems.
+
+Passing token conformance alone is insufficient. A new system fails this contract if it creates a second Header, Button, Modal, Card, Form Control or Mobile Navigation implementation, even when the copied values happen to use tokens.
+
+## Shared component ownership
+
+The following families are shared primitives. Their reusable geometry, typography, spacing, radius, focus, hover, disabled and mobile states belong in `assets/css/components.css`:
+
+| Family | Required shared class/owner | Page CSS may control |
+|---|---|---|
+| System header | `fibo-header*` | Placement within the page only |
+| Buttons and header tools | `fibo-button*` | Which action appears and where |
+| Dialogs/action sheets | `fibo-modal*` | Dialog content and page-specific width variant |
+| Cards | shared card primitive | Grid position and page-specific content flow |
+| Inputs/selects/textarea | shared form-control primitive | Field grouping and column layout |
+| Mobile bottom navigation | shared mobile-nav primitive | Active destination only |
+| Marquee and Pro Tips | shared header/content services | Text and behavior supplied by the app controller |
+
+If a reusable primitive is not yet present, extract it before building the new page. Do not implement a page-prefixed approximation first and normalize it later.
+
+### Two-page rule
+
+The first page may own a genuinely unique pattern. Once a second system needs the same pattern, that change must promote the reusable portion to `components.css`. A third implementation is never allowed.
+
+### No compensation layers
+
+Do not append a late CSS block whose purpose is to counteract earlier page styles. Replace the obsolete declaration or move the common rule to its owner. Media queries may adapt layout at documented breakpoints, but may not fork shared component geometry by page.
+
 ## Token model
 
 Use tokens in this order of preference:
@@ -37,6 +72,15 @@ The legacy aliases (`--g-blue`, `--primary`, `--bg`, `--text`, and similar names
 - Interactive controls must have a minimum 44px mobile touch target and a visible focus state.
 - Mobile prioritizes one complete instrument or section at a time; supporting controls may fold into menus or cards.
 - Mobile navigation uses Pool, Terminal, Wave and Tracker. Shared Pro Tips lives in the header; cloud actions live in the overflow menu.
+
+## Shared system header
+
+- Terminal, Wave and Trend Tracker use the `fibo-header` component family from `assets/css/components.css`.
+- Shared geometry is fixed at a 36px desktop Logo, 24px title, 44px reminder and 6px utility-button radius; mobile uses a 34px Logo, 18px title, 38px reminder and 40px header tools.
+- Page styles may control placement around the header, but must not redefine its Logo, reminder or utility-button dimensions.
+- System-neutral editors use the shared `fibo-modal` geometry; page modules retain ownership of modal content and behavior.
+
+The page stylesheet must not contain selectors beginning with `.fibo-header` or `.fibo-modal` for geometry overrides. A required variant must be named and implemented centrally in `components.css` before use.
 
 ## Responsive contract
 
@@ -81,3 +125,20 @@ New pages should use the smallest number of breakpoints necessary and preserve s
 - Changing an existing token is a cross-system visual change and requires desktop and iPhone regression tests.
 - Removing or renaming a compatibility alias requires migrating all consumers in the same change.
 - New pages must load `tokens.css` first and pass the shared token contract test.
+- Every system page must load `components.css` after `tokens.css` and before its page stylesheet.
+- New or restyled systems must begin from the shared component inventory, not from a blank page-specific component set.
+- A shared-component change must be checked on every consumer; a screenshot of only the changed page is not acceptance evidence.
+- Functional E2E success is insufficient for UI acceptance. Tests must compare at least Logo, title, reminder, header tool, primary control, modal and mobile-navigation geometry where those components exist.
+- Any deliberate visual divergence must be authorized explicitly, documented here as a named variant, implemented in `components.css`, and covered by a test. Page-local exceptions are not allowed.
+
+## New-system acceptance checklist
+
+Before a new entry page is accepted:
+
+1. Its HTML loads `tokens.css`, then `components.css`, then the page stylesheet.
+2. Shared UI is composed from the component inventory; no shared family is reimplemented with a page prefix.
+3. Page CSS contains no shared-token declarations and no shared-component geometry overrides.
+4. Desktop widths and iPhone viewports have no unintended horizontal overflow.
+5. Cross-page geometry assertions pass for all shared components, not only the new page.
+6. Focus, keyboard operation, 44px mobile targets, reduced motion and iOS safe areas remain valid.
+7. `npm test`, both Playwright projects and `git diff --check` pass.
