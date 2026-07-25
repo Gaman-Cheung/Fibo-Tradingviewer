@@ -1,15 +1,25 @@
-name: Sync BaoStock closes
+name: Sync BaoStock full market
 
 on:
   schedule:
-    - cron: '30 11 * * 1-5'
+    # GitHub cron is UTC: 11:00 UTC = 19:00 Asia/Shanghai.
+    - cron: '0 11 * * 1-5'
   workflow_dispatch:
     inputs:
-      full_repair:
-        description: 'Force a full 300-session refresh'
+      mode:
+        description: 'Synchronization mode'
+        required: true
+        type: choice
+        options: [smoke, daily, backfill, repair]
+        default: smoke
+      start_date:
+        description: 'Repair start date (YYYY-MM-DD)'
         required: false
-        type: boolean
-        default: false
+        type: string
+      end_date:
+        description: 'Repair end date (YYYY-MM-DD)'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -17,7 +27,10 @@ permissions:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 180
+    concurrency:
+      group: baostock-full-market-sync
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,8 +38,20 @@ jobs:
           python-version: '3.11'
           cache: pip
       - run: pip install -r scripts/requirements.txt
-      - run: python scripts/sync_baostock.py
+      - run: python -m unittest discover -s tests/python
+      - name: Run shared BaoStock synchronizer
+        shell: bash
         env:
+          REQUESTED_MODE: ${{ github.event.inputs.mode }}
+          REPAIR_START: ${{ github.event.inputs.start_date }}
+          REPAIR_END: ${{ github.event.inputs.end_date }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          FULL_REPAIR: ${{ inputs.full_repair || 'false' }}
+        run: |
+          MODE="${REQUESTED_MODE:-daily}"
+          ARGS=(--mode "$MODE" --sessions 400)
+          if [[ "$MODE" == "repair" ]]; then
+            [[ -n "$REPAIR_START" && -n "$REPAIR_END" ]] || { echo "repair requires start_date and end_date"; exit 2; }
+            ARGS+=(--start "$REPAIR_START" --end "$REPAIR_END")
+          fi
+          python scripts/sync_baostock.py "${ARGS[@]}"
