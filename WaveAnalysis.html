@@ -20,7 +20,7 @@
     </div>
 
     <div class="mobile-header-tools mobile-only">
-        <button type="button" class="btn-util mobile-icon-btn" data-fibo-click="openWaveMobileActions()"><span class="material-icons">cloud_done</span></button>
+        <button type="button" class="btn-util mobile-icon-btn" data-fibo-click="openWaveNoteEditor('tips')" title="Pro Tips"><span class="material-icons">menu_book</span></button>
         <button type="button" class="btn-util mobile-icon-btn" data-fibo-click="openWaveMobileActions()"><span class="material-icons">more_horiz</span></button>
     </div>
 
@@ -38,6 +38,9 @@
         </button>
         <button class="btn-util btn-switch-system" data-fibo-click="window.location.href='https://gaman-cheung.github.io/Fibo-Tradingviewer/Terminal.html'">
             <span class="material-icons" style="font-size:16px;">analytics</span> 交易终端
+        </button>
+        <button class="btn-util btn-switch-system" data-fibo-click="window.location.href='TrendTracker.html'">
+            <span class="material-icons" style="font-size:16px;">timeline</span> Trend Tracker
         </button>
         <button class="btn-util btn-cloud-down" data-fibo-click="pullFromCloud()" id="btn-pull">
             <span class="material-icons" style="font-size:16px;">cloud_download</span> Pull from Cloud
@@ -97,7 +100,7 @@
     <a href="https://gaman-cheung.github.io/Fibo-Tradingviewer/Terminal.html?tab=pool"><span class="material-icons">inventory_2</span><span>Pool</span></a>
     <a href="https://gaman-cheung.github.io/Fibo-Tradingviewer/Terminal.html?tab=v6"><span class="material-icons">analytics</span><span>Terminal</span></a>
     <button class="active"><span class="material-icons">show_chart</span><span>Wave</span></button>
-    <button data-fibo-click="openWaveNoteEditor('tips')"><span class="material-icons">menu_book</span><span>Pro Tips</span></button>
+    <a href="TrendTracker.html"><span class="material-icons">timeline</span><span>Tracker</span></a>
 </nav>
 
 <div class="note-modal-backdrop" id="waveInstrumentPickerBackdrop" data-fibo-click="handleWaveInstrumentPickerBackdrop(event)" aria-hidden="true">

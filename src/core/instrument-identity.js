@@ -5,6 +5,7 @@
  */
 import { STORAGE_KEYS } from './config.js';
 import { readJson, writeJson } from './storage.js';
+import { migrateLegacyMarket, normalizeSecurityCode } from './market-code.js';
 
 export function normalizeTicker(value) {
   return String(value || '').trim().toUpperCase();
@@ -19,7 +20,7 @@ export function normalizeInstrumentPool(value) {
   const pool = value && typeof value === 'object' ? value : {};
   return {
     version: 1,
-    items: Array.isArray(pool.items) ? pool.items : [],
+    items: Array.isArray(pool.items) ? pool.items.map(item => ({ ...item, code:normalizeSecurityCode(item?.code), market:migrateLegacyMarket(item?.market,item?.code) })) : [],
     tombstones: Array.isArray(pool.tombstones) ? pool.tombstones : []
   };
 }
@@ -71,7 +72,7 @@ export function migrateTerminalIdentity(v6Data, v7Data, sourcePool, options = {}
     return id;
   };
   const createItem = (id, row, order) => {
-    const item = { id, ticker:String(row?.n || '').trim() || `Instrument ${order + 1}`, code:'', market:'CN-A', order, status:'active', createdAt:now, updatedAt:now, deletedAt:null };
+    const item = { id, ticker:String(row?.n || '').trim() || `Instrument ${order + 1}`, code:'', market:'OTHER', order, status:'active', createdAt:now, updatedAt:now, deletedAt:null };
     pool.items.push(item); byId.set(id, item); return item;
   };
   const score = row => ['h','l','c','e','p'].reduce((total,key) => total + (String(row?.[key] ?? '').trim() ? 1 : 0), 0);
@@ -122,4 +123,3 @@ export function migrateTerminalIdentity(v6Data, v7Data, sourcePool, options = {}
   });
   return { v6Data, v7Data, pool };
 }
-

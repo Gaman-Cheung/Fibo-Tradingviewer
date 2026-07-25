@@ -29,3 +29,15 @@ This document records current behavior; it is not investment advice. Changes req
 - Filled points are validated directionally; incomplete points remain scenario projections.
 - Retracement/extension matrices, ABC projections, sub-wave targets and cluster tolerance retain the values in the legacy source.
 
+## Trend Tracker
+
+- Always calculate MA5/10/13/20/30/60/120/144/240 from official front-adjusted closes.
+- Exact slope recurrence: `ΔMA_N = (C_t - C_{t-N}) / N`; near-flat means `|ΔMA / MA_prev| <= 0.01%`.
+- First slope sign change is Turn Alert; three consecutive same-direction slopes are Turn Confirmed.
+- First official close crossing a critical MA is Watch; two official closes on the same side are Confirmed.
+- Manual Current appends a provisional close for preview only. Primary conclusions remain based on official closes.
+- Long background uses MA240 price side and slope. Current structure uses ordered MA5/10/20 plus short slopes.
+- MACD uses 12/26/9 EMA, DIF/DEA, histogram strength, crosses and zero axis. It confirms MA structure and has no weighted score or automatic divergence in v1.
+- Flat scenarios repeat Current/last close. Trend scenarios use bounded log-return drift. Custom targets use log-linear interpolation.
+- Volatility bounds use 20-session log-return sigma and `±σ√d`; they are scenario ranges, not probability claims.
+- Tracker rules never feed Terminal Composite Signal.

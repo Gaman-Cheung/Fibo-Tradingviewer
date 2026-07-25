@@ -227,6 +227,7 @@
         .instrument-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
         .instrument-name { font-size:16px; font-weight:900; overflow-wrap:anywhere; }
         .instrument-code { color:var(--text-secondary); font-size:11px; margin-top:3px; }
+        .ticker-market-code { margin-top:3px; color:var(--text-secondary); font:500 10px/1.25 var(--font-family-mono); overflow-wrap:anywhere; }
         .instrument-meta { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:14px 0; }
         .instrument-meta div { background:#f8f9fa; border-radius:6px; padding:8px; text-align:center; font-size:11px; color:var(--text-secondary); }
         .instrument-meta strong { display:block; margin-top:3px; color:var(--text-primary); font-size:13px; }

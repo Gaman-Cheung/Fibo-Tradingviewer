@@ -11,6 +11,9 @@ import { runMigrations } from '../core/migrations.js';
 import { getAutoPlan as calculateAutoPlan, movePct as calculateMovePct, getStopCandidates as calculateStopCandidates } from '../terminal/fibonacci.js';
 import { calculateTechnicalScore, classifyCompositeSignal } from '../terminal/composite-signal.js';
 import { normalizeTicker, createPermanentId, loadInstrumentPool as loadPoolCore, saveInstrumentPool as savePoolCore, mergeInstrumentPools as mergePoolsCore, migrateTerminalIdentity } from '../core/instrument-identity.js';
+import { MARKET_OPTIONS, normalizeSecurityCode } from '../core/market-code.js';
+import { syncMarketBindings } from '../core/market-repository.js';
+import { readJson } from '../core/storage.js';
 
 // ================= Supabase 配置区域 =================
             // ⚠️ 请在这里填入你的真实数据
@@ -84,6 +87,8 @@ import { normalizeTicker, createPermanentId, loadInstrumentPool as loadPoolCore,
                 if (error) {
                     alert("❌ Cloud Sync Failed: " + error.message);
                 } else {
+                    const bindingResult = await syncMarketBindings(supabaseClient, user.id, instrumentPool).catch(bindingError => ({ error:bindingError }));
+                    if (bindingResult?.error) console.warn('Tracker bindings were not synced. Apply the Trend Tracker Supabase migration.', bindingResult.error);
                     const btn = document.getElementById('btn-push');
                     const orig = btn.innerHTML;
                     btn.innerHTML = '<span class="material-icons" style="font-size:16px;">check</span> Saved to Cloud';
@@ -300,7 +305,7 @@ import { normalizeTicker, createPermanentId, loadInstrumentPool as loadPoolCore,
             const pool = loadInstrumentPool();
             const id = createInstrumentId();
             const now = new Date().toISOString();
-            pool.items.push({ id, ticker:'', code:'', market:'CN-A', order:pool.items.filter(item => item.status !== 'archived').length, status:'active', createdAt:now, updatedAt:now, deletedAt:null });
+            pool.items.push({ id, ticker:'', code:'', market:'OTHER', order:pool.items.filter(item => item.status !== 'archived').length, status:'active', createdAt:now, updatedAt:now, deletedAt:null });
             saveInstrumentPool(pool);
             addV6Row('', '', '', '', id);
             saveLocalV6();
@@ -329,7 +334,7 @@ import { normalizeTicker, createPermanentId, loadInstrumentPool as loadPoolCore,
             document.getElementById('instrumentEditId').value = item?.id || '';
             document.getElementById('instrumentTicker').value = item?.ticker || '';
             document.getElementById('instrumentCode').value = item?.code || '';
-            document.getElementById('instrumentMarket').value = item?.market || 'CN-A';
+            document.getElementById('instrumentMarket').value = MARKET_OPTIONS.includes(item?.market) ? item.market : 'OTHER';
             const backdrop = document.getElementById('instrumentModalBackdrop');
             backdrop.classList.add('open'); backdrop.setAttribute('aria-hidden','false');
             setTimeout(() => document.getElementById('instrumentTicker').focus(), 0);
@@ -345,7 +350,7 @@ import { normalizeTicker, createPermanentId, loadInstrumentPool as loadPoolCore,
         function saveInstrumentDialog() {
             const id = document.getElementById('instrumentEditId').value;
             const ticker = document.getElementById('instrumentTicker').value.trim();
-            const code = document.getElementById('instrumentCode').value.trim();
+            const code = normalizeSecurityCode(document.getElementById('instrumentCode').value);
             const market = document.getElementById('instrumentMarket').value;
             if (!ticker) return alert('Ticker / Name is required.');
             const pool = loadInstrumentPool();
@@ -358,6 +363,7 @@ import { normalizeTicker, createPermanentId, loadInstrumentPool as loadPoolCore,
                     const rows = readStoredRows(key); rows.forEach(row => { if (row.id === id) row.n = ticker; }); localStorage.setItem(key, JSON.stringify(rows));
                 }
                 document.querySelectorAll(`[data-instrument-id="${id}"] .name`).forEach(input => { input.value = ticker; });
+                document.querySelectorAll(`[data-instrument-id="${id}"] .ticker-market-code`).forEach(meta => { meta.textContent = [code, market].filter(Boolean).join(' · '); });
             } else {
                 const newId = createInstrumentId();
                 const activeCount = pool.items.filter(item => item.status !== 'archived').length;
@@ -656,8 +662,10 @@ import { normalizeTicker, createPermanentId, loadInstrumentPool as loadPoolCore,
         function addV6Row(n='', h='', l='', c='', instrumentId='', entry='', previous='', baseline='current') {
             const tr = document.createElement('tr');
             tr.dataset.instrumentId = instrumentId;
+            const instrument = getInstrumentById(instrumentId);
+            const marketMeta = [instrument?.code, instrument?.market].filter(Boolean).join(' · ');
             tr.innerHTML = `
-                <td><input type="text" class="input-name name" value="${escapePoolHtml(n)}" placeholder="TICKER" data-fibo-input="handleDesktopTickerInput(this)"></td>
+                <td><input type="text" class="input-name name" value="${escapePoolHtml(n)}" placeholder="TICKER" data-fibo-input="handleDesktopTickerInput(this)"><div class="ticker-market-code">${escapePoolHtml(marketMeta)}</div></td>
                 <td><input type="number" class="high" value="${h}" data-fibo-input="calcV6(this)"></td>
                 <td><input type="number" class="low" value="${l}" data-fibo-input="calcV6(this)"></td>
                 <td><input type="number" class="current" value="${c}" data-fibo-input="calcV6(this)"></td>
@@ -974,9 +982,12 @@ import { normalizeTicker, createPermanentId, loadInstrumentPool as loadPoolCore,
         function addV7Row(n='', t='sideways', r='', m='neutral', s='', g='', v='', g1='', instrumentId='') {
             const tr = document.createElement('tr');
             tr.dataset.instrumentId = instrumentId;
+            const instrument = getInstrumentById(instrumentId);
+            const marketMeta = [instrument?.code, instrument?.market].filter(Boolean).join(' · ');
             tr.innerHTML = `
                 <td>
                     <input type="text" class="input-name name" value="${escapePoolHtml(n)}" readonly title="标的来自 Instrument Pool">
+                    <div class="ticker-market-code">${escapePoolHtml(marketMeta)}</div>
                 </td>
                 <td class="market-cell"><input type="number" class="current-proxy" placeholder="Current"><div class="market-summary">-</div></td>
                 <td class="support-cell auto-level">-</td>
@@ -1163,7 +1174,8 @@ import { normalizeTicker, createPermanentId, loadInstrumentPool as loadPoolCore,
                     marquee: localStorage.getItem(HEADER_NOTE_KEYS.marquee) || '',
                     tips: localStorage.getItem(HEADER_NOTE_KEYS.tips) || ''
                 },
-                instrumentPool: loadInstrumentPool()
+                instrumentPool: loadInstrumentPool(),
+                trendTracker: readJson(localStorage, 'tv_trend_tracker_state_v1', null)
             };
             const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(combinedData, null, 2)], { type: "application/json" }));
             a.download = `Fibo_System_Backup_${new Date().toISOString().slice(0, 10)}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
@@ -1180,6 +1192,7 @@ import { normalizeTicker, createPermanentId, loadInstrumentPool as loadPoolCore,
                     if (data.headerNotes && Object.prototype.hasOwnProperty.call(data.headerNotes, 'marquee')) localStorage.setItem(HEADER_NOTE_KEYS.marquee, data.headerNotes.marquee || '');
                     if (data.headerNotes && Object.prototype.hasOwnProperty.call(data.headerNotes, 'tips')) localStorage.setItem(HEADER_NOTE_KEYS.tips, data.headerNotes.tips || '');
                     if (data.instrumentPool?.items && Array.isArray(data.instrumentPool.items)) saveInstrumentPool(data.instrumentPool);
+                    if (data.trendTracker && typeof data.trendTracker === 'object') localStorage.setItem('tv_trend_tracker_state_v1', JSON.stringify(data.trendTracker));
                     location.reload();
                 } catch (err) { alert("❌ Invalid backup file."); }
             };

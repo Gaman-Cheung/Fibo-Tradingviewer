@@ -7,7 +7,7 @@ This file is mandatory reading before changing the project.
 1. `instrument.id` is the only identity key. Ticker/name is mutable and may repeat.
 2. Never merge, delete, reorder or remap records solely because their Tickers match.
 3. Do not change trading weights, thresholds, labels or formulas without explicit user authorization.
-4. Keep the public entry filenames `TradingViewer.html`, `Terminal.html`, `WaveAnalysis.html` and all storage/Supabase wire keys compatible.
+4. Keep the public entry filenames `TradingViewer.html`, `Terminal.html`, `WaveAnalysis.html`, `TrendTracker.html` and all storage/Supabase wire keys compatible.
 5. A data-contract change requires an idempotent migration and a regression test.
 
 ## Module boundaries
@@ -15,6 +15,7 @@ This file is mandatory reading before changing the project.
 - `src/core`: shared configuration, identity, storage, migration and cloud wire formats.
 - `src/terminal`: pure Look First/Then Leap calculations. No DOM, storage or network access.
 - `src/wave`: pure Wave calculations and validation. No DOM, storage or network access.
+- `src/tracker`: pure MA, MACD, confirmation and scenario calculations. No DOM, storage or network access.
 - `src/apps`: page controllers and rendering adapters. They may access the DOM and call core services.
 - `assets/css`: tokens, common components and page-specific presentation.
 

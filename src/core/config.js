@@ -5,7 +5,8 @@
 export const ROUTES = Object.freeze({
   auth: 'https://gaman-cheung.github.io/Fibo-Tradingviewer/TradingViewer.html',
   terminal: 'https://gaman-cheung.github.io/Fibo-Tradingviewer/Terminal.html',
-  wave: 'https://gaman-cheung.github.io/Fibo-Tradingviewer/WaveAnalysis.html'
+  wave: 'https://gaman-cheung.github.io/Fibo-Tradingviewer/WaveAnalysis.html',
+  tracker: 'https://gaman-cheung.github.io/Fibo-Tradingviewer/TrendTracker.html'
 });
 
 export const SUPABASE_PROFILES = Object.freeze({
@@ -18,6 +19,10 @@ export const SUPABASE_PROFILES = Object.freeze({
     key: 'sb_publishable_uj_ViNAQS0Bv6Oy6qGzUmA_n7WAFsZc'
   }),
   wave: Object.freeze({
+    url: 'https://azquoojnwadtekkhxhui.supabase.co',
+    key: 'sb_publishable_uj_ViNAQS0Bv6Oy6qGzUmA_n7WAFsZc'
+  }),
+  tracker: Object.freeze({
     url: 'https://azquoojnwadtekkhxhui.supabase.co',
     key: 'sb_publishable_uj_ViNAQS0Bv6Oy6qGzUmA_n7WAFsZc'
   })
@@ -33,6 +38,7 @@ export const STORAGE_KEYS = Object.freeze({
   waveState: 'wave_matrix_tabs_v3',
   marquee: 'tv_header_marquee_v1',
   tips: 'tv_header_tips_v1',
+  trackerState: 'tv_trend_tracker_state_v1',
   migrationVersion: 'fibo_schema_migration_version'
 });
 

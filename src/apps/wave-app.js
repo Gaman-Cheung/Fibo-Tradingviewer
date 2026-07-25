@@ -11,6 +11,7 @@ import { rangeOf as calculateRange, directionSign as calculateDirection, addByDi
 import { validateWaveStructure as validateWaveStructurePure } from '../wave/wave-validation.js';
 import { buildWaveModel } from '../wave/wave-model.js';
 import { normalizeTicker, createPermanentId, loadInstrumentPool as loadPoolCore, saveInstrumentPool as savePoolCore, mergeInstrumentPools as mergePoolsCore } from '../core/instrument-identity.js';
+import { syncMarketBindings } from '../core/market-repository.js';
 
 // 1. 初始化 Supabase 配置（请替换为您的实际凭证）
 const supabaseClient = getSupabaseClient('wave');
@@ -135,7 +136,7 @@ function ensureWaveInstrumentLinks(extraTerminalRows = []) {
 
     terminalRows.forEach((row,index) => {
         if (pool.items.some(item => item.id === row.id)) return;
-        pool.items.push({ id:row.id, ticker:String(row.n).trim(), code:'', market:'CN-A', order:index, status:'active', createdAt:now, updatedAt:now, deletedAt:null });
+        pool.items.push({ id:row.id, ticker:String(row.n).trim(), code:'', market:'OTHER', order:index, status:'active', createdAt:now, updatedAt:now, deletedAt:null });
     });
     const terminalIds = new Set(terminalRows.map(row => row.id));
     pool.tombstones = (pool.tombstones || []).filter(entry => !terminalIds.has(entry.id));
@@ -757,6 +758,10 @@ async function pushToCloud() {
 
     const { error } = await upsertCloudRow(supabaseClient, { user_id:user.id, wp_data:appState });
 
+    if (!error) {
+        const bindingResult = await syncMarketBindings(supabaseClient, user.id, appState.instrumentPool).catch(bindingError => ({ error:bindingError }));
+        if (bindingResult?.error) console.warn('Tracker bindings were not synced. Apply the Trend Tracker Supabase migration.', bindingResult.error);
+    }
     if (error) {
         alert("同步至云端失败：" + error.message);
     } else {

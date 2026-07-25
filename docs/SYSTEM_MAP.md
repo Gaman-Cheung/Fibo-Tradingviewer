@@ -10,6 +10,13 @@ Wave HTML ───────> wave-app ───────> shared identity
                          └─────────> tables, tabs, mobile cards and canvas
 ```
 
+```text
+Tracker HTML ----> tracker-app ----> Pool permanent ID + market repository
+                         |---------> pure MA / MACD / scenario engine
+                         `---------> single-instrument cards and canvas
+GitHub Action ----> BaoStock Python ----> additive market tables in Supabase
+```
+
 ## Ownership
 
 - Shared permanent identity and Pool reconciliation: `src/core/instrument-identity.js`.
@@ -17,6 +24,8 @@ Wave HTML ───────> wave-app ───────> shared identity
 - Supabase payload compatibility: `src/core/cloud-payload.js`.
 - Terminal calculations: `src/terminal/`.
 - Wave calculations: `src/wave/`.
+- Trend calculations: `src/tracker/`.
+- BaoStock code normalization and Tracker queries: `src/core/market-code.js` and `src/core/market-repository.js`.
 - DOM, navigation, drag/drop, modal and responsive behavior: `src/apps/`.
 - The declarative event controller replaces executable HTML event attributes and keeps handlers module-scoped.
 
@@ -25,7 +34,7 @@ The HTML entrypoints contain structure only. Page CSS consumes shared tokens and
 ## Presentation layers
 
 ```text
-tokens.css -> components.css -> auth.css / terminal.css / wave.css
+tokens.css -> components.css -> auth.css / terminal.css / wave.css / tracker.css
 ```
 
 - Shared visual constants and compatibility aliases: `assets/css/tokens.css`.

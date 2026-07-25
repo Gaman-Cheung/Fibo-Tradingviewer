@@ -1,0 +1,2 @@
+baostock==0.8.9
+requests==2.32.3

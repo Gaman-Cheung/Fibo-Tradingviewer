@@ -34,7 +34,7 @@
             </div>
         </div>
         <div class="mobile-header-tools mobile-only">
-            <button type="button" class="btn-util mobile-icon-btn" data-fibo-click="openMobileActions()" title="Cloud & actions"><span class="material-icons">cloud_done</span></button>
+            <button type="button" class="btn-util mobile-icon-btn" data-fibo-click="openNoteEditor('tips')" title="Pro Tips"><span class="material-icons">menu_book</span></button>
             <button type="button" class="btn-util mobile-icon-btn" data-fibo-click="openMobileActions()" title="More"><span class="material-icons">more_horiz</span></button>
         </div>
         <div class="header-reminder" title="慢速滚动；鼠标悬停暂停">
@@ -47,6 +47,7 @@
         <div class="util-btns">
             <button type="button" class="btn-util btn-pro-tips" data-fibo-click="openNoteEditor('tips')"><span class="material-icons" style="font-size:16px;">menu_book</span> Pro Tips</button>
             <button class="btn-util btn-switch-system" data-fibo-click="window.location.href='https://gaman-cheung.github.io/Fibo-Tradingviewer/WaveAnalysis.html'"><span class="material-icons" style="font-size:16px;">functions</span> 波浪推演矩阵</button>
+            <button class="btn-util btn-switch-system" data-fibo-click="window.location.href='TrendTracker.html'"><span class="material-icons" style="font-size:16px;">timeline</span> Trend Tracker</button>
             <button class="btn-util btn-cloud-down" data-fibo-click="loadFromCloud()" id="btn-pull"><span class="material-icons" style="font-size:16px;">cloud_download</span> Pull from Cloud</button>
             <button class="btn-util btn-cloud-up" data-fibo-click="saveToCloud()" id="btn-push"><span class="material-icons" style="font-size:16px;">cloud_upload</span> Push to Cloud</button>
             
@@ -177,7 +178,7 @@
                 <div class="instrument-dialog-grid">
                     <div><label for="instrumentTicker">Ticker / Name</label><input id="instrumentTicker" type="text" placeholder="e.g. 弘信电子"></div>
                     <div><label for="instrumentCode">Code (optional)</label><input id="instrumentCode" type="text" placeholder="e.g. 300657"></div>
-                    <div><label for="instrumentMarket">Market</label><select id="instrumentMarket"><option value="CN-A">A Share</option><option value="HK">Hong Kong</option><option value="US">US</option><option value="INDEX">Index</option><option value="OTHER">Other</option></select></div>
+                    <div><label for="instrumentMarket">Market</label><select id="instrumentMarket"><option value="SH">Shanghai</option><option value="SZ">Shenzhen</option><option value="BJ">Beijing</option><option value="HK">Hong Kong</option><option value="US">US</option><option value="OTHER">Other</option></select></div>
                 </div>
                 <div class="note-modal-hint">Ticker可以修改；永久ID由系统生成且不会因改名或排序改变。</div>
             </div>
@@ -206,7 +207,7 @@
         <button id="mobileNavPool" data-fibo-click="switchTab('pool')"><span class="material-icons">inventory_2</span><span>Pool</span></button>
         <button id="mobileNavTerminal" data-fibo-click="switchMobileTerminal()"><span class="material-icons">analytics</span><span>Terminal</span></button>
         <a id="mobileNavWave" href="https://gaman-cheung.github.io/Fibo-Tradingviewer/WaveAnalysis.html"><span class="material-icons">show_chart</span><span>Wave</span></a>
-        <button id="mobileNavTips" data-fibo-click="openNoteEditor('tips')"><span class="material-icons">menu_book</span><span>Pro Tips</span></button>
+        <a id="mobileNavTracker" href="TrendTracker.html"><span class="material-icons">timeline</span><span>Tracker</span></a>
     </nav>
 
     <script type="module" src="src/apps/terminal-app.js"></script>

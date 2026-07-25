@@ -1,6 +1,6 @@
 # Fibo Design System
 
-This document is the visual contract for Terminal, Wave, Auth and future systems. It governs presentation only; it must never encode trading logic or data behavior.
+This document is the visual contract for Terminal, Wave, Trend Tracker, Auth and future systems. It governs presentation only; it must never encode trading logic or data behavior.
 
 ## Source of truth
 
@@ -36,6 +36,7 @@ The legacy aliases (`--g-blue`, `--primary`, `--bg`, `--text`, and similar names
 - Layout follows the 4px spacing grid. Avoid one-off values unless the geometry of an existing visualization requires them.
 - Interactive controls must have a minimum 44px mobile touch target and a visible focus state.
 - Mobile prioritizes one complete instrument or section at a time; supporting controls may fold into menus or cards.
+- Mobile navigation uses Pool, Terminal, Wave and Tracker. Shared Pro Tips lives in the header; cloud actions live in the overflow menu.
 
 ## Responsive contract
 
@@ -80,4 +81,3 @@ New pages should use the smallest number of breakpoints necessary and preserve s
 - Changing an existing token is a cross-system visual change and requires desktop and iPhone regression tests.
 - Removing or renaming a compatibility alias requires migrating all consumers in the same change.
 - New pages must load `tokens.css` first and pass the shared token contract test.
-
