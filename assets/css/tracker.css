@@ -17,6 +17,7 @@ button,a { -webkit-tap-highlight-color:transparent; }
 .conclusion-card strong { display:block; margin-top:var(--space-2); font-size:var(--font-size-xl); }
 .conclusion-card.accent { border-top:4px solid var(--color-primary); }
 .tracker-grid { display:grid; grid-template-columns:minmax(260px,.72fr) minmax(0,1.8fr); gap:var(--space-4); margin-bottom:var(--space-4); }
+.tracker-grid > * { min-width:0; }
 .lower-grid { grid-template-columns:1fr 1fr; }
 .section-heading { display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); margin-bottom:var(--space-4); }
 .section-heading.compact { margin-top:var(--space-6); }

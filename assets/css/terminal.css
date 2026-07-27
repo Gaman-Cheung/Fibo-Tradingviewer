@@ -130,11 +130,6 @@
         .compact-target .target-price { display:block; font-weight:900; font-size:14px; color:var(--text-primary); }
         .compact-target .target-pct { display:block; font-weight:900; font-size:12px; color:var(--g-red); }
         .compact-target small { display:block; color:var(--text-secondary); font-size:9px; }
-        .help-icon {
-            width:18px; height:18px; padding:0; margin-left:3px; vertical-align:middle; border:1px solid #aeb4bd;
-            border-radius:50%; background:#fff; color:#5f6368; cursor:pointer; font:900 11px/16px Roboto,sans-serif;
-        }
-        .help-icon:hover { border-color:var(--g-blue); color:var(--g-blue); background:#e8f0fe; }
         .help-content { color:var(--text-primary); font-size:14px; line-height:1.7; }
         .help-content h3 { margin:16px 0 6px; font-size:14px; }
         .help-content h3:first-child { margin-top:0; }

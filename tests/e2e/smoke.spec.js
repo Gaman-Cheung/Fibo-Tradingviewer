@@ -2,8 +2,22 @@ import { test, expect } from '@playwright/test';
 
 const supabaseMock = `
 window.supabase={createClient(){
- const chain={select(){return this},eq(){return this},limit(){return this},order(){return Promise.resolve({data:[],error:null})},single(){return Promise.resolve({data:null,error:{code:'PGRST116'}})},maybeSingle(){return Promise.resolve({data:null,error:null})},upsert(){return Promise.resolve({data:null,error:null})}};
- return {auth:{getSession:async()=>({data:{session:{user:{id:'test'}}},error:null}),getUser:async()=>({data:{user:{id:'test'}},error:null}),signOut:async()=>({error:null}),signInWithPassword:async()=>({data:{user:{id:'test'}},error:null}),signUp:async()=>({data:{user:{id:'test'}},error:null})},from(){return Object.create(chain)}};
+ const marketRows=Array.from({length:130},(_,index)=>{
+   const date=new Date(Date.UTC(2026,0,2+index));
+   const close=index===20?80:index===70?160:100+index*.2;
+   const previous=index===0?close:index-1===20?80:index-1===70?160:100+(index-1)*.2;
+   return {trade_date:date.toISOString().slice(0,10),close,pct_chg:index?(close/previous-1)*100:0,trade_status:1,synced_at:'2026-07-27T11:00:00Z'};
+ }).reverse();
+ function builder(table){
+   return {
+     select(){return this},eq(){return this},limit(){return this},
+     order(){return Promise.resolve({data:table==='market_daily_bar'?marketRows:[],error:null})},
+     single(){return Promise.resolve({data:null,error:{code:'PGRST116'}})},
+     maybeSingle(){return Promise.resolve({data:table==='market_sync_checkpoint'?{last_status:'success'}:null,error:null})},
+     upsert(){return Promise.resolve({data:null,error:null})}
+   };
+ }
+ return {auth:{getSession:async()=>({data:{session:{user:{id:'test'}}},error:null}),getUser:async()=>({data:{user:{id:'test'}},error:null}),signOut:async()=>({error:null}),signInWithPassword:async()=>({data:{user:{id:'test'}},error:null}),signUp:async()=>({data:{user:{id:'test'}},error:null})},from(table){return builder(table)}};
 }};`;
 
 test.beforeEach(async ({ page }) => {
@@ -186,6 +200,52 @@ test('tracker uses Pool code and mobile Pro Tips without a cloud shortcut', asyn
     await page.locator('.fibo-header__mobile [data-fibo-click="openNote(\'tips\')"]').click();
   } else await page.locator('.fibo-header__actions [data-fibo-click="openNote(\'tips\')"]').click();
   await expect(page.locator('#trackerNoteBackdrop')).toHaveClass(/open/);
+});
+
+test('tracker chart exposes official markers, dates and separate Current preview', async ({ page }) => {
+  await page.goto('/TrendTracker.html');
+  const canvas=page.locator('#trackerChart');
+  await expect(canvas).toHaveAttribute('aria-label',/Trend chart range 2026-01-12 to 2026-05-11\./);
+  await expect(canvas).toHaveAttribute('aria-label',/High close 160\.000 on 2026-03-13\./);
+  await expect(canvas).toHaveAttribute('aria-label',/Low close 80\.000 on 2026-01-22\./);
+  await expect(canvas).toHaveAttribute('aria-label',/Latest close 125\.800 on 2026-05-11\./);
+  await expect(canvas).not.toHaveAttribute('aria-label',/Current preview/);
+
+  await page.locator('#trackerCurrent').fill('220');
+  await expect(canvas).toHaveAttribute('aria-label',/Current preview 220\.000\./);
+  await expect(canvas).toHaveAttribute('aria-label',/High close 160\.000/);
+  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test('tracker MA Status and Scenario Lab share the read-only help modal', async ({ page }) => {
+  await page.goto('/TrendTracker.html');
+  const helpButtons=page.locator('.fibo-help-button');
+  await expect(helpButtons).toHaveCount(2);
+
+  await helpButtons.nth(0).click();
+  await expect(page.locator('#trackerHelpBackdrop')).toHaveClass(/open/);
+  await expect(page.locator('#trackerHelpTitle')).toContainText('MA Status');
+  await expect(page.locator('#trackerHelpContent')).toContainText('ΔMA');
+  await expect(page.locator('#trackerHelpContent')).toContainText('(preview)');
+  await page.locator('#trackerHelpBackdrop [data-fibo-click="closeTrackerHelp()"]' ).last().click();
+  await expect(page.locator('#trackerHelpBackdrop')).not.toHaveClass(/open/);
+
+  await helpButtons.nth(1).click();
+  await expect(page.locator('#trackerHelpTitle')).toContainText('Scenario Lab');
+  await expect(page.locator('#trackerHelpContent')).toContainText('Trend continuation');
+  await expect(page.locator('#trackerHelpContent')).toContainText('Composite Signal');
+  await page.locator('#trackerHelpBackdrop').click({position:{x:2,y:2}});
+  await expect(page.locator('#trackerHelpBackdrop')).not.toHaveClass(/open/);
+});
+
+test('terminal keeps its established help control', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium','Terminal table help controls are desktop-only.');
+  await page.goto('/Terminal.html?tab=v6');
+  const help=page.locator('.help-icon').first();
+  await expect(help).toBeVisible();
+  const geometry=await help.evaluate(node=>({width:node.getBoundingClientRect().width,height:node.getBoundingClientRect().height,borderRadius:getComputedStyle(node).borderRadius}));
+  expect(geometry).toEqual({width:18,height:18,borderRadius:'50%'});
 });
 
 test('wave controller loads the shared Pool instrument and opens Pro Tips', async ({ page }, testInfo) => {

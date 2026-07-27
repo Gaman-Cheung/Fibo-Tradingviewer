@@ -60,20 +60,20 @@
 
         <section class="tracker-card chart-card">
           <div class="section-heading"><div><span class="eyebrow">CLOSE + MA</span><h2>Trend structure</h2></div><span id="profileValue" class="profile-badge"></span></div>
-          <canvas id="trackerChart" height="360"></canvas>
+          <canvas id="trackerChart" height="360" role="img" aria-label="Trend chart has no official close data."></canvas>
           <div class="chart-legend"><span><i class="close-line"></i>Close</span><span>虚线末点 = Current preview</span></div>
         </section>
       </div>
 
       <div class="tracker-grid lower-grid">
         <section class="tracker-card">
-          <div class="section-heading"><div><span class="eyebrow">MA STATUS</span><h2>Turn and confirmation</h2></div></div>
+          <div class="section-heading"><div><span class="eyebrow">MA STATUS</span><h2>Turn and confirmation</h2></div><button type="button" class="fibo-help-button" data-fibo-click="openTrackerHelp('ma-status')" aria-label="MA Status 详细说明" title="MA Status 详细说明">?</button></div>
           <div class="table-wrap"><table><thead><tr><th>MA</th><th>Value</th><th>ΔMA</th><th>Direction</th><th>Turn</th></tr></thead><tbody id="maTableBody"></tbody></table></div>
           <div id="macdSummary" class="macd-summary"></div>
         </section>
 
         <section class="tracker-card scenario-card">
-          <div class="section-heading"><div><span class="eyebrow">SCENARIO LAB</span><h2>Path projection</h2></div></div>
+          <div class="section-heading"><div><span class="eyebrow">SCENARIO LAB</span><h2>Path projection</h2></div><button type="button" class="fibo-help-button" data-fibo-click="openTrackerHelp('scenario')" aria-label="Scenario Lab 详细说明" title="Scenario Lab 详细说明">?</button></div>
           <div class="scenario-controls">
             <label>Mode<select id="scenarioMode" data-fibo-change="renderTracker()"><option value="flat">Flat</option><option value="trend">Trend continuation</option><option value="custom">Custom target</option></select></label>
             <label>Trading days<input id="scenarioHorizon" type="number" min="1" max="240" value="20" data-fibo-input="renderTracker()"></label>
@@ -88,6 +88,7 @@
   </main>
 
   <div class="modal-backdrop fibo-modal-backdrop" id="trackerNoteBackdrop" data-fibo-click="handleNoteBackdrop(event)" aria-hidden="true"><div class="tracker-modal fibo-modal"><header class="fibo-modal__header"><h2 id="trackerNoteTitle">Pro Tips</h2><button class="fibo-modal__close" data-fibo-click="closeNote()"><span class="material-icons">close</span></button></header><div class="fibo-modal__body"><textarea id="trackerNoteText"></textarea></div><footer class="fibo-modal__footer"><button class="fibo-button" data-fibo-click="closeNote()">Cancel</button><button class="fibo-button primary" data-fibo-click="saveNote()">Save</button></footer></div></div>
+  <div class="modal-backdrop fibo-modal-backdrop" id="trackerHelpBackdrop" data-fibo-click="handleTrackerHelpBackdrop(event)" aria-hidden="true"><div class="tracker-modal fibo-modal" role="dialog" aria-modal="true" aria-labelledby="trackerHelpTitle"><header class="fibo-modal__header"><h2 id="trackerHelpTitle">Indicator Guide</h2><button type="button" class="fibo-modal__close" data-fibo-click="closeTrackerHelp()" aria-label="关闭说明"><span class="material-icons">close</span></button></header><div id="trackerHelpContent" class="fibo-modal__body fibo-help-content"></div><footer class="fibo-modal__footer"><button type="button" class="fibo-button" data-fibo-click="closeTrackerHelp()">Close</button></footer></div></div>
   <div class="modal-backdrop fibo-modal-backdrop action-sheet" id="trackerActionsBackdrop" data-fibo-click="handleActionsBackdrop(event)" aria-hidden="true"><div class="tracker-modal fibo-modal"><header class="fibo-modal__header"><h2>Actions</h2><button class="fibo-modal__close" data-fibo-click="closeActions()"><span class="material-icons">close</span></button></header><div class="action-list fibo-modal__body"><button class="fibo-button fibo-button--cloud-down" data-fibo-click="closeActions();pullTrackerCloud()"><span class="material-icons">cloud_download</span>Pull from Cloud</button><button class="fibo-button fibo-button--cloud-up" data-fibo-click="closeActions();pushTrackerCloud()"><span class="material-icons">cloud_upload</span>Push to Cloud</button><button class="fibo-button" data-fibo-click="closeActions();openNote('marquee')"><span class="material-icons">campaign</span>Edit Reminder</button><button class="fibo-button fibo-button--logout" data-fibo-click="closeActions();logout()"><span class="material-icons">logout</span>Log Out</button></div></div></div>
 
   <nav class="mobile-bottom-nav mobile-only"><a href="Terminal.html?tab=pool"><span class="material-icons">inventory_2</span><span>Pool</span></a><a href="Terminal.html?tab=v6"><span class="material-icons">analytics</span><span>Terminal</span></a><a href="WaveAnalysis.html"><span class="material-icons">show_chart</span><span>Wave</span></a><button class="active"><span class="material-icons">timeline</span><span>Tracker</span></button></nav>

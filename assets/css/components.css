@@ -33,6 +33,25 @@
 }
 .fibo-button:hover,.fibo-header__actions > button:hover,.fibo-header__actions > a:hover { background:var(--color-surface-hover); color:var(--color-text); }
 .fibo-button .material-icons,.fibo-header__actions .material-icons { font-size:16px; }
+.help-icon {
+  box-sizing:border-box; width:18px; height:18px; min-height:18px; padding:0; margin-left:3px; vertical-align:middle;
+  border:1px solid var(--color-border); border-radius:50%; background:var(--color-surface); color:var(--color-text-secondary);
+  font:900 11px/16px var(--font-family-sans); text-align:center; cursor:pointer;
+}
+.fibo-help-button { position:relative; width:32px; height:32px; min-height:32px; flex:0 0 32px; padding:0; border:0; background:transparent; color:transparent; font-size:0; cursor:pointer; }
+.fibo-help-button::before {
+  content:'?'; position:absolute; left:50%; top:50%; box-sizing:border-box; width:18px; height:18px;
+  transform:translate(-50%,-50%); border:1px solid var(--color-border); border-radius:50%; background:var(--color-surface);
+  color:var(--color-text-secondary); font:900 11px/16px var(--font-family-sans); text-align:center;
+}
+.help-icon:hover,.fibo-help-button:hover::before { border-color:var(--color-primary); background:var(--color-primary-soft); color:var(--color-primary); }
+.fibo-help-button:focus-visible,.help-icon:focus-visible { outline:2px solid var(--color-primary); outline-offset:2px; }
+.fibo-help-content { color:var(--color-text); font-size:14px; line-height:1.7; }
+.fibo-help-content h3 { margin:16px 0 6px; font-size:14px; }
+.fibo-help-content h3:first-child { margin-top:0; }
+.fibo-help-content p,.fibo-help-content ul { margin:6px 0; }
+.fibo-help-content code { padding:2px 5px; border-radius:4px; background:var(--color-surface-muted); font-family:var(--font-family-mono); }
+.fibo-help-content .formula { padding:10px 12px; border-left:3px solid var(--color-primary); background:var(--color-primary-soft); }
 .fibo-header__actions > .fibo-button--system { border-color:var(--color-system-control-border); background:var(--color-background); color:var(--color-text); }
 .fibo-header__actions > .fibo-button--system:hover { background:var(--color-surface-muted); box-shadow:0 1px 3px rgba(60,64,67,.3); }
 .fibo-button.fibo-button--cloud-down { border-color:var(--color-primary); background:var(--color-primary-soft); color:var(--color-primary); }
@@ -65,6 +84,7 @@
   .fibo-header__marquee { height:30px; }
   .fibo-header__marquee-edit { flex-basis:30px; }
   .fibo-modal-backdrop { padding:14px; }
+  .fibo-help-button { width:44px; height:44px; min-height:44px; flex-basis:44px; }
 }
 
 @media (prefers-reduced-motion:reduce) {
