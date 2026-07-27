@@ -5,12 +5,22 @@
  */
 
 export const TRACKER_CHART_WINDOW = 120;
-export const TRACKER_FORECAST_RATIO = 0.3;
+export const TRACKER_FORECAST_MIN_RATIO = 0.04;
+export const TRACKER_FORECAST_MAX_RATIO = 0.25;
+export const TRACKER_HISTORY_Y_PADDING_RATIO = 0.08;
+export const TRACKER_FORECAST_Y_LIMIT_RATIO = 0.15;
 
-export function buildTrackerChartXModel(pointCount, horizon, plot, forecastRatio=TRACKER_FORECAST_RATIO) {
+export function trackerForecastRatio(pointCount, horizon) {
+  const historyIntervals=Math.max(1,Math.floor(Number(pointCount)||0)-1);
+  const forecastCount=Math.max(1,Math.floor(Number(horizon)||1));
+  const naturalRatio=forecastCount/(historyIntervals+forecastCount);
+  return Math.max(TRACKER_FORECAST_MIN_RATIO,Math.min(TRACKER_FORECAST_MAX_RATIO,naturalRatio));
+}
+
+export function buildTrackerChartXModel(pointCount, horizon, plot) {
   const left=Number(plot?.left)||0;
   const right=Number(plot?.right)||left;
-  const ratio=Math.max(0.1,Math.min(0.8,Number(forecastRatio)||TRACKER_FORECAST_RATIO));
+  const ratio=trackerForecastRatio(pointCount,horizon);
   const historyRight=left+(right-left)*(1-ratio);
   const historyCount=Math.max(0,Math.floor(Number(pointCount)||0));
   const forecastCount=Math.max(1,Math.floor(Number(horizon)||1));
@@ -19,6 +29,37 @@ export function buildTrackerChartXModel(pointCount, horizon, plot, forecastRatio
     : left+(historyRight-left)*index/(historyCount-1));
   const forecast=Array.from({length:forecastCount},(_,index)=>historyRight+(right-historyRight)*(index+1)/forecastCount);
   return { left, right, historyRight, history, forecast, forecastRatio:ratio };
+}
+
+function finitePrices(values) {
+  return (Array.isArray(values)?values:[]).map(Number).filter(value=>Number.isFinite(value));
+}
+
+export function buildTrackerChartYModel(historyValues, forecastValues, options={}) {
+  const history=finitePrices(historyValues);
+  if(!history.length)return null;
+  const forecast=finitePrices(forecastValues);
+  const historyMin=Math.min(...history),historyMax=Math.max(...history);
+  const historySpan=historyMax-historyMin || Math.abs(historyMax)*.02 || 1;
+  const paddingRatio=Number.isFinite(Number(options.paddingRatio))?Math.max(0,Number(options.paddingRatio)):TRACKER_HISTORY_Y_PADDING_RATIO;
+  const limitRatio=Number.isFinite(Number(options.limitRatio))?Math.max(paddingRatio,Number(options.limitRatio)):TRACKER_FORECAST_Y_LIMIT_RATIO;
+  const forecastMin=forecast.length?Math.min(...forecast):historyMin;
+  const forecastMax=forecast.length?Math.max(...forecast):historyMax;
+  const paddedMin=historyMin-historySpan*paddingRatio;
+  const paddedMax=historyMax+historySpan*paddingRatio;
+  const allowedMin=historyMin-historySpan*limitRatio;
+  const allowedMax=historyMax+historySpan*limitRatio;
+  const min=Math.min(paddedMin,Math.max(allowedMin,forecastMin));
+  const max=Math.max(paddedMax,Math.min(allowedMax,forecastMax));
+  return { min,max,historyMin,historyMax,historySpan,forecastMin,forecastMax,clippedLow:forecastMin<min,clippedHigh:forecastMax>max,paddingRatio,limitRatio };
+}
+
+export function trackerChartEdge(value, yModel) {
+  const number=Number(value);
+  if(!Number.isFinite(number)||!yModel)return '';
+  if(number>yModel.max)return 'high';
+  if(number<yModel.min)return 'low';
+  return '';
 }
 
 function validPrice(value) {

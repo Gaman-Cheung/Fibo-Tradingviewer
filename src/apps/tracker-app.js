@@ -13,7 +13,7 @@ import { getAuthenticatedUser, loadCloudRow, upsertCloudRow } from '../core/clou
 import { buildCloudPayload, unpackCloudPayload } from '../core/cloud-payload.js';
 import { loadDailyCloses, loadMarketSyncState, loadTrackerState, saveTrackerState, syncMarketBindings } from '../core/market-repository.js';
 import { MA_PERIODS, DEFAULT_VISIBLE_MAS, analyzeTrend, appendProvisionalCurrent, sma } from '../tracker/trend-engine.js';
-import { buildTrackerChartModel, buildTrackerChartXModel } from '../tracker/chart-model.js';
+import { buildTrackerChartModel, buildTrackerChartXModel, buildTrackerChartYModel, trackerChartEdge } from '../tracker/chart-model.js';
 import { buildScenarioComparison } from '../tracker/scenario-comparison.js';
 import { formatTurnLabel } from '../tracker/status-presenter.js';
 import { runCloudPushFeedback } from './cloud-action-feedback.js';
@@ -35,7 +35,7 @@ const TRACKER_HELP_TOPICS = {
   },
   scenario: {
     title:'Scenario Lab · 情景路径说明',
-    html:`<h3>三种情景同时对照</h3><p><strong>Flat</strong>：未来价格保持在起点。<br><strong>Trend continuation</strong>：延续近期对数收益率方向，并用近期波动率限制斜率，避免无限外推。<br><strong>Custom target</strong>：从起点以对数线性路径推演到手动 Target。三种情景共用同一个期限并同时展示，不再通过 Mode 单选。</p><h3>起点与输入优先级</h3><p>填写 Current 时，三种情景均以 <strong>Current Preview</strong> 为起点；未填写时以 BaoStock 最新正式收盘价为起点。<strong>Trading days</strong> 设置 1–240 个交易日；填写 <strong>Target date</strong> 后，系统按起止日期估算工作日并优先使用该结果。Target 只影响 Custom target；Target 为空、非法或不大于零时，Custom 显示 <strong>Set Target</strong> 且不绘制路径，Flat 与 Trend 仍正常运行。</p><h3>Reset</h3><p>Reset 只把当前标的的 Trading days 恢复为 20，并清空 Target 与 Target date。它不会清除 Current、VR、MA 显示开关或其他标的数据。</p><h3>如何读三行结果</h3><p>蓝色 Flat、绿色 Trend 和红色 Custom 每一行，都是把对应假设路径加入历史后，在<strong>情景最后一天</strong>重新计算出的“长期背景 · 当前结构 · 事件结论”。它们不是页面左侧的当前正式状态。</p><h3>长期背景</h3><ul><li><strong>Long Bull</strong>：终点价格不低于 MA240，且 MA240 方向为 up。</li><li><strong>Long Bear</strong>：终点价格低于 MA240，且 MA240 方向为 down。</li><li><strong>Transition</strong>：不满足上述两组完整条件，包括 MA240 数据不足、价格侧与斜率方向不一致等过渡状态。</li></ul><h3>当前结构</h3><ul><li><strong>Uptrend</strong>：MA5 &gt; MA10 &gt; MA20，同时 MA5、MA10 均为 up。</li><li><strong>Downtrend</strong>：MA5 &lt; MA10 &lt; MA20，同时 MA5、MA10 均为 down。</li><li><strong>Range</strong>：不满足完整 Uptrend 或 Downtrend 条件；它表示均线结构未形成单边排列，不是波动区间数值。</li></ul><h3>事件结论</h3><ul><li><strong>反转确认</strong>：Long Bear + Uptrend，并且 MA20 方向连续确认、最近两个计算收盘位于 MA60 上方。</li><li><strong>下跌反抽</strong>：Long Bear + Uptrend，但尚未同时满足上述 MA20 与 MA60 确认条件。</li><li><strong>调整探底</strong>：Long Bull + Downtrend。</li><li><strong>反转观察</strong>：Transition，且出现 MA20 Turn Alert 或价格首次切换到 MA60 另一侧。</li><li><strong>震荡等待</strong>：前述优先条件均未触发，且结构为 Range。</li><li><strong>趋势延续</strong>：前述特殊组合均未触发，系统保留默认结论；它是分类结果，不等于趋势强度评分。</li></ul><h3>波动范围</h3><div class="formula"><code>情景上下界 = 路径价格 × exp(±σ√d)</code></div><p>σ 来自近 20 个交易日的对数收益率。上下界保留在结果行中，不额外画成六条线。它只是波动情景范围，不是置信区间、概率预测或止盈目标。</p><h3>边界</h3><p>Scenario终点状态是条件推演，不是发生概率、目标价承诺或交易信号。Scenario Lab不改变MA、MACD、Terminal Composite Signal或任何交易评分。</p>`
+    html:`<h3>三种情景同时对照</h3><p><strong>Flat</strong>：未来价格保持在起点。<br><strong>Trend continuation</strong>：延续近期对数收益率方向，并用近期波动率限制斜率，避免无限外推。<br><strong>Custom target</strong>：从起点以对数线性路径推演到手动 Target。三种情景共用同一个期限并同时展示，不再通过 Mode 单选。</p><h3>起点与输入优先级</h3><p>填写 Current 时，三种情景均以 <strong>Current Preview</strong> 为起点；未填写时以 BaoStock 最新正式收盘价为起点。<strong>Trading days</strong> 设置 1–240 个交易日；填写 <strong>Target date</strong> 后，系统按起止日期估算工作日并优先使用该结果。Target 只影响 Custom target；Target 为空、非法或不大于零时，Custom 显示 <strong>Set Target</strong> 且不绘制路径，Flat 与 Trend 仍正常运行。</p><h3>主图显示</h3><p>右侧预测尾部按未来天数动态占用约 4%–25% 的宽度，短期情景不会压缩历史走势。纵轴以可见 Close 与 MA 为主，Scenario 最多向历史价格范围外扩展 15%；更远的路径会在边缘截断并显示同色方向箭头，精确终点仍以下方结果行为准。</p><h3>Reset</h3><p>Reset 只把当前标的的 Trading days 恢复为 20，并清空 Target 与 Target date。它不会清除 Current、VR、MA 显示开关或其他标的数据。</p><h3>如何读三行结果</h3><p>蓝色 Flat、绿色 Trend 和红色 Custom 每一行，都是把对应假设路径加入历史后，在<strong>情景最后一天</strong>重新计算出的“长期背景 · 当前结构 · 事件结论”。它们不是页面左侧的当前正式状态。</p><h3>长期背景</h3><ul><li><strong>Long Bull</strong>：终点价格不低于 MA240，且 MA240 方向为 up。</li><li><strong>Long Bear</strong>：终点价格低于 MA240，且 MA240 方向为 down。</li><li><strong>Transition</strong>：不满足上述两组完整条件，包括 MA240 数据不足、价格侧与斜率方向不一致等过渡状态。</li></ul><h3>当前结构</h3><ul><li><strong>Uptrend</strong>：MA5 &gt; MA10 &gt; MA20，同时 MA5、MA10 均为 up。</li><li><strong>Downtrend</strong>：MA5 &lt; MA10 &lt; MA20，同时 MA5、MA10 均为 down。</li><li><strong>Range</strong>：不满足完整 Uptrend 或 Downtrend 条件；它表示均线结构未形成单边排列，不是波动区间数值。</li></ul><h3>事件结论</h3><ul><li><strong>反转确认</strong>：Long Bear + Uptrend，并且 MA20 方向连续确认、最近两个计算收盘位于 MA60 上方。</li><li><strong>下跌反抽</strong>：Long Bear + Uptrend，但尚未同时满足上述 MA20 与 MA60 确认条件。</li><li><strong>调整探底</strong>：Long Bull + Downtrend。</li><li><strong>反转观察</strong>：Transition，且出现 MA20 Turn Alert 或价格首次切换到 MA60 另一侧。</li><li><strong>震荡等待</strong>：前述优先条件均未触发，且结构为 Range。</li><li><strong>趋势延续</strong>：前述特殊组合均未触发，系统保留默认结论；它是分类结果，不等于趋势强度评分。</li></ul><h3>波动范围</h3><div class="formula"><code>情景上下界 = 路径价格 × exp(±σ√d)</code></div><p>σ 来自近 20 个交易日的对数收益率。上下界保留在结果行中，不额外画成六条线。它只是波动情景范围，不是置信区间、概率预测或止盈目标。</p><h3>边界</h3><p>Scenario终点状态是条件推演，不是发生概率、目标价承诺或交易信号。Scenario Lab不改变MA、MACD、Terminal Composite Signal或任何交易评分。</p>`
   }
 };
 let pool = loadInstrumentPool();
@@ -224,14 +224,16 @@ function scenarioCanvasColor(key) {
   return cssTokenColor(style.token,style.fallback);
 }
 
-function scenarioChartAriaLabel(chart,scenarios,meta) {
+function scenarioChartAriaLabel(chart,scenarios,meta,edges={}) {
   const active=scenarios.find(item=>item.enabled&&item.projection?.path?.length);
   const horizon=active?.projection.path.length || Math.max(1,Math.min(240,Number(meta?.horizon)||20));
   const horizonText=meta?.targetDate ? `Forecast target date ${meta.targetDate}.` : `Forecast horizon ${horizon} trading days.`;
   const summaries=scenarios.map(scenario=>{
     if(!scenario.enabled) return 'Custom target is not set.';
     const end=scenario.projection?.path?.at(-1);
-    return Number.isFinite(end) ? `${scenario.label} forecast ends at ${end.toFixed(3)}.` : `${scenario.label} forecast is unavailable.`;
+    if(!Number.isFinite(end))return `${scenario.label} forecast is unavailable.`;
+    const edge=edges[scenario.key];
+    return `${scenario.label} forecast ends at ${end.toFixed(3)}.${edge?` It continues beyond the ${edge==='high'?'upper':'lower'} chart edge.`:''}`;
   });
   return `${chart.ariaLabel} ${horizonText} ${summaries.join(' ')}`;
 }
@@ -251,17 +253,18 @@ function drawChart(values,dates,hasPreview,scenarios,meta={}) {
   }));
   const activeScenarios=scenarios.filter(item=>item.enabled&&item.projection?.path?.length);
   const projectionValues=activeScenarios.flatMap(item=>item.projection.path);
-  const numbers=[...closeValues,...maSeries.flatMap(item=>item.values),...projectionValues].filter(Number.isFinite); if(!numbers.length)return;
-  let min=Math.min(...numbers),max=Math.max(...numbers); const margin=(max-min||max*.02||1)*.08; min-=margin;max+=margin;
+  const historyNumbers=[...closeValues,...maSeries.flatMap(item=>item.values)].filter(Number.isFinite);
+  const yModel=buildTrackerChartYModel(historyNumbers,projectionValues); if(!yModel)return;
+  const {min,max}=yModel;
   const horizon=activeScenarios[0]?.projection.path.length || Math.max(1,Math.min(240,Number(meta.horizon)||20));
   const xModel=buildTrackerChartXModel(chart.points.length,horizon,plot);
   const x=index=>xModel.history[index] ?? xModel.historyRight;
   const y=value=>plot.top+(max-value)/(max-min)*(plot.bottom-plot.top);
+  canvas.dataset.forecastRatio=xModel.forecastRatio.toFixed(4);
+  canvas.dataset.forecastHorizon=String(horizon);
 
   ctx.strokeStyle=cssTokenColor('--color-border-subtle','#e8eaed');ctx.lineWidth=1;
   for(let i=0;i<5;i++){const gridY=plot.top+(plot.bottom-plot.top)*i/4;ctx.beginPath();ctx.moveTo(plot.left,gridY);ctx.lineTo(plot.right,gridY);ctx.stroke();}
-  ctx.save();ctx.strokeStyle=cssTokenColor('--color-border','#dadce0');ctx.setLineDash([3,4]);ctx.beginPath();ctx.moveTo(xModel.historyRight,plot.top);ctx.lineTo(xModel.historyRight,plot.bottom);ctx.stroke();ctx.restore();
-  ctx.fillStyle=cssTokenColor('--color-text-secondary','#5f6368');ctx.font='700 9px Arial, sans-serif';ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.fillText('FORECAST',(xModel.historyRight+plot.right)/2,plot.top-10);
 
   const officialPoints=chart.points.filter(point=>!point.isPreview);
   ctx.strokeStyle=cssTokenColor('--color-text','#202124');ctx.lineWidth=2;ctx.beginPath();
@@ -270,11 +273,16 @@ function drawChart(values,dates,hasPreview,scenarios,meta={}) {
 
   maSeries.forEach(item=>{ctx.strokeStyle=item.color;ctx.lineWidth=item.width;ctx.beginPath();let started=false;item.values.forEach((value,index)=>{if(!Number.isFinite(value))return;const px=x(index),py=y(value);if(!started){ctx.moveTo(px,py);started=true}else ctx.lineTo(px,py);});ctx.stroke();});
 
-  const start=closeValues.at(-1);
+  const start=closeValues.at(-1), endpointEdges={};
   activeScenarios.forEach(scenario=>{
     const color=scenarioCanvasColor(scenario.key), path=scenario.projection.path;
-    ctx.save();ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.beginPath();ctx.moveTo(xModel.historyRight,y(start));path.forEach((value,index)=>ctx.lineTo(xModel.forecast[index],y(value)));ctx.stroke();ctx.setLineDash([]);ctx.beginPath();ctx.arc(xModel.forecast[path.length-1],y(path.at(-1)),3,0,Math.PI*2);ctx.fill();ctx.restore();
+    ctx.save();ctx.beginPath();ctx.rect(plot.left,plot.top,plot.right-plot.left,plot.bottom-plot.top);ctx.clip();ctx.strokeStyle=color;ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.beginPath();ctx.moveTo(xModel.historyRight,y(start));path.forEach((value,index)=>ctx.lineTo(xModel.forecast[index],y(value)));ctx.stroke();ctx.restore();
+    const edge=trackerChartEdge(path.at(-1),yModel); endpointEdges[scenario.key]=edge;
+    if(edge)drawScenarioEdgeMarker(ctx,{x:xModel.forecast[path.length-1],edge,color,plot});
+    else {ctx.save();ctx.fillStyle=color;ctx.beginPath();ctx.arc(xModel.forecast[path.length-1],y(path.at(-1)),3,0,Math.PI*2);ctx.fill();ctx.restore();}
   });
+  canvas.dataset.forecastClipped=Object.entries(endpointEdges).filter(([,edge])=>edge).map(([key,edge])=>`${key}:${edge}`).join(',');
+  canvas.setAttribute('aria-label',scenarioChartAriaLabel(chart,scenarios,meta,endpointEdges));
 
   const placed=[];
   const historyPlot={...plot,right:xModel.historyRight};
@@ -282,9 +290,20 @@ function drawChart(values,dates,hasPreview,scenarios,meta={}) {
   if(chart.preview)drawChartCallout(ctx,{...chart.preview,label:'Preview',kinds:['preview'],x:x(chart.preview.index),y:y(chart.preview.value)},historyPlot,placed);
 
   ctx.fillStyle=cssTokenColor('--color-text-secondary','#5f6368');ctx.font='10px Arial, sans-serif';ctx.textBaseline='bottom';
-  ctx.textAlign='left';ctx.fillText(chart.startDate||'--',plot.left,height-8);
-  ctx.textAlign='right';ctx.fillText(chart.endDate||'--',xModel.historyRight-4,height-8);
-  ctx.fillText(meta.targetDate || `Day ${horizon}`,plot.right,height-8);
+  const startLabel=chart.startDate||'--', latestLabel=chart.endDate||'--', forecastLabel=meta.targetDate || `Day ${horizon}`;
+  const latestRight=xModel.historyRight-4, forecastLeft=plot.right-ctx.measureText(forecastLabel).width;
+  const latestBaseline=latestRight>forecastLeft-8?height-20:height-8;
+  ctx.textAlign='left';ctx.fillText(startLabel,plot.left,height-8);
+  ctx.textAlign='right';ctx.fillText(latestLabel,latestRight,latestBaseline);
+  ctx.fillText(forecastLabel,plot.right,height-8);
+}
+
+function drawScenarioEdgeMarker(ctx,{x,edge,color,plot}) {
+  const markerX=Math.max(plot.left+5,Math.min(plot.right-5,x));
+  ctx.save();ctx.fillStyle=color;ctx.beginPath();
+  if(edge==='high'){ctx.moveTo(markerX,plot.top+1);ctx.lineTo(markerX-5,plot.top+9);ctx.lineTo(markerX+5,plot.top+9);}
+  else {ctx.moveTo(markerX,plot.bottom-1);ctx.lineTo(markerX-5,plot.bottom-9);ctx.lineTo(markerX+5,plot.bottom-9);}
+  ctx.closePath();ctx.fill();ctx.restore();
 }
 
 function drawChartCallout(ctx,marker,plot,placed) {

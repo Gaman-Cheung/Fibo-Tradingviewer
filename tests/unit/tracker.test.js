@@ -4,7 +4,7 @@ import { inferMainlandMarket, migrateLegacyMarket, toBaoStockCode } from '../../
 import { buildFrontAdjustedSeries } from '../../src/core/front-adjusted-series.js';
 import { runMigrations, CURRENT_SCHEMA_VERSION } from '../../src/core/migrations.js';
 import { analyzeTrend, appendProvisionalCurrent, maSnapshot, macd, projectScenario, turnState } from '../../src/tracker/trend-engine.js';
-import { buildTrackerChartModel, buildTrackerChartXModel, TRACKER_CHART_WINDOW, TRACKER_FORECAST_RATIO } from '../../src/tracker/chart-model.js';
+import { buildTrackerChartModel, buildTrackerChartXModel, buildTrackerChartYModel, trackerChartEdge, trackerForecastRatio, TRACKER_CHART_WINDOW, TRACKER_FORECAST_MIN_RATIO, TRACKER_FORECAST_MAX_RATIO } from '../../src/tracker/chart-model.js';
 import { buildScenarioComparison } from '../../src/tracker/scenario-comparison.js';
 import { formatTurnLabel } from '../../src/tracker/status-presenter.js';
 import { loadLatestOfficialClose } from '../../src/core/market-repository.js';
@@ -195,15 +195,39 @@ test('chart model aligns dates and combines coincident high low latest markers',
   assert.match(model.ariaLabel,/2026-01-02 to 2026-01-06/);
 });
 
-test('chart x model reserves 30 percent for the complete forecast without overflow', () => {
+test('chart x model gives short horizons a compact tail and caps long forecasts', () => {
   const plot={left:32,right:968};
-  const model=buildTrackerChartXModel(120,240,plot);
-  assert.equal(model.forecastRatio,TRACKER_FORECAST_RATIO);
-  assert.equal(model.history[0],plot.left);
-  assert.equal(model.history.at(-1),model.historyRight);
-  assert.equal(model.historyRight,plot.left+(plot.right-plot.left)*.7);
-  assert.ok(model.forecast[0]>model.historyRight);
-  assert.equal(model.forecast.length,240);
-  assert.equal(model.forecast.at(-1),plot.right);
-  assert.ok(model.forecast.every(value=>value>model.historyRight&&value<=plot.right));
+  assert.equal(trackerForecastRatio(120,1),TRACKER_FORECAST_MIN_RATIO);
+  assert.ok(Math.abs(trackerForecastRatio(120,20)-20/139)<1e-12);
+  assert.equal(trackerForecastRatio(120,60),TRACKER_FORECAST_MAX_RATIO);
+  assert.equal(trackerForecastRatio(120,240),TRACKER_FORECAST_MAX_RATIO);
+  for(const horizon of [1,20,60,240]){
+    const model=buildTrackerChartXModel(120,horizon,plot);
+    assert.equal(model.history[0],plot.left);
+    assert.equal(model.history.at(-1),model.historyRight);
+    assert.ok(model.historyRight>=plot.left+(plot.right-plot.left)*.75);
+    assert.ok(model.forecast[0]>model.historyRight);
+    assert.equal(model.forecast.length,horizon);
+    assert.equal(model.forecast.at(-1),plot.right);
+    assert.ok(model.forecast.every(value=>value>model.historyRight&&value<=plot.right));
+  }
+});
+
+test('chart y model preserves history readability and flags forecasts beyond 15 percent', () => {
+  const normal=buildTrackerChartYModel([40,100],[50,105]);
+  assert.equal(normal.historySpan,60);
+  assert.equal(normal.min,35.2);
+  assert.equal(normal.max,105);
+  assert.equal(normal.clippedLow,false);
+  assert.equal(normal.clippedHigh,false);
+  assert.equal(trackerChartEdge(105,normal),'');
+
+  const extreme=buildTrackerChartYModel([40,100],[0,200]);
+  assert.equal(extreme.min,31);
+  assert.equal(extreme.max,109);
+  assert.equal(extreme.clippedLow,true);
+  assert.equal(extreme.clippedHigh,true);
+  assert.equal(trackerChartEdge(0,extreme),'low');
+  assert.equal(trackerChartEdge(200,extreme),'high');
+  assert.equal(trackerChartEdge(70,extreme),'');
 });

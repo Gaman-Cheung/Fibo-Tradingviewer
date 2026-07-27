@@ -290,28 +290,38 @@ test('Tracker compares all Scenario paths and resets only the active Scenario in
   await expect(page.locator('[data-scenario="flat"]')).toContainText('Flat');
   await expect(page.locator('[data-scenario="trend"]')).toContainText('Trend continuation');
   const custom=page.locator('[data-scenario="custom"]');
+  const canvas=page.locator('#trackerChart');
   await expect(custom).toHaveClass(/is-disabled/);
   await expect(custom).toContainText('Set Target');
-  await expect(page.locator('#trackerChart')).toHaveAttribute('aria-label',/Flat forecast ends at/);
-  await expect(page.locator('#trackerChart')).toHaveAttribute('aria-label',/Trend continuation forecast ends at/);
-  await expect(page.locator('#trackerChart')).toHaveAttribute('aria-label',/Custom target is not set/);
+  await expect(canvas).toHaveAttribute('aria-label',/Flat forecast ends at/);
+  await expect(canvas).toHaveAttribute('aria-label',/Trend continuation forecast ends at/);
+  await expect(canvas).toHaveAttribute('aria-label',/Custom target is not set/);
 
   const legendColors=await page.evaluate(()=>Object.fromEntries(['flat','trend','custom'].map(key=>[
     key,getComputedStyle(document.querySelector(`.scenario-line--${key}`)).borderTopColor
   ])));
   expect(legendColors).toEqual({flat:'rgb(66, 133, 244)',trend:'rgb(52, 168, 83)',custom:'rgb(234, 67, 53)'});
 
+  await page.locator('#scenarioTargetDate').fill('2026-05-12');
+  await page.locator('#scenarioTargetDate').blur();
+  await expect(canvas).toHaveAttribute('data-forecast-horizon','1');
+  await expect(canvas).toHaveAttribute('data-forecast-ratio','0.0400');
+  await page.locator('#scenarioTargetDate').fill('');
+  await page.locator('#scenarioTargetDate').blur();
+
   await page.locator('#scenarioHorizon').fill('13');
   await page.locator('#scenarioTarget').fill('42.96');
   await expect(custom).not.toHaveClass(/is-disabled/);
   await expect(custom.locator('.scenario-result-row__numbers strong')).toContainText('Day 13: 42.960');
-  await expect(page.locator('#trackerChart')).toHaveAttribute('aria-label',/Forecast horizon 13 trading days/);
-  await expect(page.locator('#trackerChart')).toHaveAttribute('aria-label',/Custom target forecast ends at 42\.960/);
+  await expect(canvas).toHaveAttribute('aria-label',/Forecast horizon 13 trading days/);
+  await expect(canvas).toHaveAttribute('aria-label',/Custom target forecast ends at 42\.960/);
+  await expect(canvas).toHaveAttribute('aria-label',/beyond the lower chart edge/);
+  await expect(canvas).toHaveAttribute('data-forecast-clipped',/custom:low/);
 
   await page.locator('#scenarioTargetDate').fill('2026-06-01');
   await page.locator('#scenarioTargetDate').blur();
   await expect(custom.locator('.scenario-result-row__numbers strong')).toContainText('2026-06-01: 42.960');
-  await expect(page.locator('#trackerChart')).toHaveAttribute('aria-label',/Forecast target date 2026-06-01/);
+  await expect(canvas).toHaveAttribute('aria-label',/Forecast target date 2026-06-01/);
 
   const geometry=await page.evaluate(()=>{
     const date=document.getElementById('scenarioTargetDate').getBoundingClientRect();
