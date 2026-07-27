@@ -227,6 +227,12 @@ test('tracker MA Status and Scenario Lab share the read-only help modal', async 
   await expect(page.locator('#trackerHelpBackdrop')).toHaveClass(/open/);
   await expect(page.locator('#trackerHelpTitle')).toContainText('MA Status');
   await expect(page.locator('#trackerHelpContent')).toContainText('ΔMA');
+  await expect(page.locator('#trackerHelpContent')).toContainText('Up Confirmed');
+  await expect(page.locator('#trackerHelpContent')).toContainText('Down Confirmed');
+  await expect(page.locator('#trackerHelpContent')).toContainText('insufficient');
+  await expect(page.locator('#trackerHelpContent')).toContainText('golden cross');
+  await expect(page.locator('#trackerHelpContent')).toContainText('below zero axis');
+  await expect(page.locator('#trackerHelpContent')).toContainText('strengthening');
   await expect(page.locator('#trackerHelpContent')).toContainText('(preview)');
   await page.locator('#trackerHelpBackdrop [data-fibo-click="closeTrackerHelp()"]' ).last().click();
   await expect(page.locator('#trackerHelpBackdrop')).not.toHaveClass(/open/);
@@ -234,7 +240,12 @@ test('tracker MA Status and Scenario Lab share the read-only help modal', async 
   await helpButtons.nth(1).click();
   await expect(page.locator('#trackerHelpTitle')).toContainText('Scenario Lab');
   await expect(page.locator('#trackerHelpContent')).toContainText('Trend continuation');
+  for (const state of ['Long Bull','Long Bear','Transition','Uptrend','Downtrend','Range','趋势延续','反转确认','下跌反抽','调整探底','反转观察','震荡等待']) {
+    await expect(page.locator('#trackerHelpContent')).toContainText(state);
+  }
   await expect(page.locator('#trackerHelpContent')).toContainText('Composite Signal');
+  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
   await page.locator('#trackerHelpBackdrop').click({position:{x:2,y:2}});
   await expect(page.locator('#trackerHelpBackdrop')).not.toHaveClass(/open/);
 });

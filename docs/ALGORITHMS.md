@@ -33,7 +33,7 @@ This document records current behavior; it is not investment advice. Changes req
 
 - Always calculate MA5/10/13/20/30/60/120/144/240 from BaoStock front-adjusted closes. The full-market source reconstructs that series backwards from official raw Close and `pctChg`, anchored to the latest official raw Close; live smoke validation against `adjustflag=2` must remain within `1e-4` relative error.
 - Exact slope recurrence: `ΔMA_N = (C_t - C_{t-N}) / N`; near-flat means `|ΔMA / MA_prev| <= 0.01%`.
-- First slope sign change is Turn Alert; three consecutive same-direction slopes are Turn Confirmed.
+- First slope sign change is Turn Alert; three consecutive up slopes display Up Confirmed and three consecutive down slopes display Down Confirmed. These labels confirm direction continuity and do not imply that a new turn just occurred.
 - First official close crossing a critical MA is Watch; two official closes on the same side are Confirmed.
 - Manual Current appends a provisional close for preview only. Primary conclusions remain based on official closes.
 - Long background uses MA240 price side and slope. Current structure uses ordered MA5/10/20 plus short slopes.

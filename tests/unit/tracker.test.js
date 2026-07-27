@@ -5,6 +5,7 @@ import { buildFrontAdjustedSeries } from '../../src/core/front-adjusted-series.j
 import { runMigrations, CURRENT_SCHEMA_VERSION } from '../../src/core/migrations.js';
 import { analyzeTrend, appendProvisionalCurrent, maSnapshot, macd, projectScenario, turnState } from '../../src/tracker/trend-engine.js';
 import { buildTrackerChartModel, TRACKER_CHART_WINDOW } from '../../src/tracker/chart-model.js';
+import { formatTurnLabel } from '../../src/tracker/status-presenter.js';
 
 class MemoryStorage {
   constructor(entries={}) { this.values=new Map(Object.entries(entries)); }
@@ -44,6 +45,9 @@ test('MA recurrence, MACD and scenario outputs are deterministic', () => {
   const scenario=projectScenario(closes,{mode:'custom',horizon:20,target:200});
   assert.equal(scenario.path.length,20);
   assert.ok(Math.abs(scenario.path.at(-1)-200)<1e-9);
+  assert.equal(scenario.analyses.at(-1).background,'Long Bull');
+  assert.equal(scenario.analyses.at(-1).structure,'Uptrend');
+  assert.equal(scenario.analyses.at(-1).event,'趋势延续');
   assert.equal(scenario.probabilityClaim,false);
 });
 
@@ -52,6 +56,16 @@ test('Current is appended as a provisional value without mutating official close
   const preview=appendProvisionalCurrent(official,13);
   assert.deepEqual(official,[10,11,12]);
   assert.deepEqual(preview,[10,11,12,13]);
+});
+
+test('Turn presentation distinguishes alerts from directional confirmation', () => {
+  assert.equal(formatTurnLabel({alert:true,confirmed:false},'up'),'Turn Alert');
+  assert.equal(formatTurnLabel({alert:false,confirmed:true},'up'),'Up Confirmed');
+  assert.equal(formatTurnLabel({alert:false,confirmed:true},'down'),'Down Confirmed');
+  assert.equal(formatTurnLabel({alert:false,confirmed:false},'flat'),'—');
+  assert.equal(formatTurnLabel(null,'insufficient'),'—');
+  assert.equal(formatTurnLabel({alert:false,confirmed:true},'down',true),'Down Confirmed (preview)');
+  assert.equal(formatTurnLabel({alert:true,confirmed:false},'up',true),'Turn Alert (preview)');
 });
 
 test('raw close and pctChg reconstruct a stable front-adjusted series', () => {
