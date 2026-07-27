@@ -12,6 +12,7 @@ import { validateWaveStructure as validateWaveStructurePure } from '../wave/wave
 import { buildWaveModel } from '../wave/wave-model.js';
 import { normalizeTicker, createPermanentId, loadInstrumentPool as loadPoolCore, saveInstrumentPool as savePoolCore, mergeInstrumentPools as mergePoolsCore } from '../core/instrument-identity.js';
 import { syncMarketBindings } from '../core/market-repository.js';
+import { runCloudPushFeedback } from './cloud-action-feedback.js';
 
 // 1. 初始化 Supabase 配置（请替换为您的实际凭证）
 const supabaseClient = getSupabaseClient('wave');
@@ -743,7 +744,7 @@ function restoreSubWaves(list) {
 // ☁️ 上传数据：将当前整个 appState 推送到云端对应的 wp_data 字段中
 // 🛠️ 3. 云端推送
 // ========================================================
-async function pushToCloud() {
+async function performWaveCloudPush() {
     if (typeof saveCurrentTab === 'function') saveCurrentTab();
     ensureWaveInstrumentLinks();
     appState.instrumentPool = loadSharedInstrumentPool();
@@ -753,7 +754,7 @@ async function pushToCloud() {
 
     if (userError || !user) {
         alert("未找到有效的用户信息，请重新登录！(请确保在线上环境运行)");
-        return;
+        return false;
     }
 
     const { error } = await upsertCloudRow(supabaseClient, { user_id:user.id, wp_data:appState });
@@ -765,8 +766,18 @@ async function pushToCloud() {
     if (error) {
         alert("同步至云端失败：" + error.message);
     } else {
-        alert("☁️ 矩阵数据已成功同步至云端！");
+        return true;
     }
+    return false;
+}
+
+async function pushToCloud(trigger) {
+    const button = trigger || document.getElementById('btn-push');
+    const mobileAction = !!button?.closest('#waveMobileActionsBackdrop');
+    return runCloudPushFeedback(button,async () => (await performWaveCloudPush()) === true,{
+        onSuccessSettled:() => { if (mobileAction) closeWaveMobileActions(); },
+        onUnexpectedError:error => alert('Cloud Sync Failed: ' + (error?.message || error))
+    });
 }
 
 // ========================================================

@@ -7,6 +7,7 @@ This document records current behavior; it is not investment advice. Changes req
 - Retracements: 23.6%, 38.2%, 50%, 61.8%, 78.6%, 88.6% from the entered High–Low range.
 - Extensions: 1.272, 1.618 and 2.618.
 - Display percentage baseline may be Current, Entry or Previous Close; it does not move the price levels.
+- Previous Close defaults to the latest official Supabase close for the instrument's explicit Market/Code and can be overridden in Manual mode. Source selection does not change daily-move, VR or Composite Signal formulas.
 - Structural stop uses the nearest support below Entry minus 0.5%; if risk is below 3%, the next support is used. Above 7% is marked too wide.
 - Fixed reference stops remain Entry −5% and Entry −7%.
 
@@ -16,7 +17,7 @@ This document records current behavior; it is not investment advice. Changes req
 
 - F: Breakout 0, Pullback 0, Correction +1, Golden Dip +4, Danger Zone +3, Harmonic +2, Structure Broken −5.
 - T: Uptrend +2, Sideways 0, Downtrend −3.
-- RSI: ≤30 +2, 30–45 +1, ≥70 −2. MACD: Divergence +2, Bullish +1, Neutral 0, Bearish −1. Combined M is capped at +3.
+- RSI: ≤30 +2, 30–45 +1, ≥70 −2. MACD: Bullish Divergence +2, Bullish +1, Neutral 0, Bearish −1. The stored compatibility value for Bullish Divergence remains `divergence`. Combined M is capped at +3.
 - VR uses the existing five-day thresholds: ≤0.8 contraction, 1.2–1.5 mild expansion, ≥1.5 clear expansion, ≥2.5 abnormal-volume classification.
 - Good Setup requires valid Entry/Stop/targets, T1 ≥1R and T2 ≥2R. Sniper Buy additionally requires total ≥6, non-downtrend, structural stop alignment and no tight first barrier.
 - Missing Entry cannot be promoted by a preview R:R.
@@ -37,7 +38,9 @@ This document records current behavior; it is not investment advice. Changes req
 - First official close crossing a critical MA is Watch; two official closes on the same side are Confirmed.
 - Manual Current appends a provisional close for preview only. Primary conclusions remain based on official closes.
 - Long background uses MA240 price side and slope. Current structure uses ordered MA5/10/20 plus short slopes.
-- MACD uses 12/26/9 EMA, DIF/DEA, histogram strength, crosses and zero axis. It confirms MA structure and has no weighted score or automatic divergence in v1.
+- MACD uses 12/26/9 EMA, DIF/DEA, histogram strength, crosses and zero axis. Tracker itself has no weighted score or automatic divergence.
+- Then Leap may request a non-persistent suggestion from the same close series: Golden Cross, or DIF above DEA at/above zero, suggests Bullish; Death Cross, or DIF below DEA below zero, suggests Bearish; mixed/insufficient states suggest Wait/Flat. Current may be appended as an explicitly labelled Preview. Nothing changes until the user applies the suggestion.
+- Close/DIF divergence scanning examines the latest 60 official sessions using confirmed five-point close pivots (two sessions on each side). A lower close low with a higher DIF low is a potential bullish candidate; a higher close high with a lower DIF high is a potential bearish candidate. Current Preview is excluded, candidates never change the dropdown, and only manually confirmed bullish divergence may use Terminal's +2 `divergence` value.
 - Flat scenarios repeat Current/last close. Trend scenarios use bounded log-return drift. Custom targets use log-linear interpolation.
 - Volatility bounds use 20-session log-return sigma and `±σ√d`; they are scenario ranges, not probability claims.
-- Tracker rules never feed Terminal Composite Signal.
+- Tracker calculations never feed Terminal Composite Signal automatically; only an explicit Apply action writes Bullish/Bearish/Neutral, while divergence always remains manual.

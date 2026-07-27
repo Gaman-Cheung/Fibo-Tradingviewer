@@ -3,8 +3,9 @@ import { STORAGE_KEYS } from './config.js';
 import { readArray } from './storage.js';
 import { loadInstrumentPool, migrateTerminalIdentity, saveInstrumentPool } from './instrument-identity.js';
 import { migrateLegacyMarket, normalizeSecurityCode } from './market-code.js';
+import { reconcileLegacyTrackerInputs } from './shared-live-inputs.js';
 
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 4;
 
 export function runMigrations(storage = globalThis.localStorage) {
   const current = Number(storage.getItem(STORAGE_KEYS.migrationVersion) || 0);
@@ -27,6 +28,18 @@ export function runMigrations(storage = globalThis.localStorage) {
     }));
     saveInstrumentPool(pool, storage);
   }
+  if (current < 3) {
+    const pool = loadInstrumentPool(storage);
+    const instruments = new Map(pool.items.map(item => [String(item.id || ''), item]));
+    const rows = readArray(storage, STORAGE_KEYS.lookFirst).map(row => {
+      const instrument = instruments.get(String(row?.id || ''));
+      const eligible = ['SH','SZ'].includes(String(instrument?.market || '').toUpperCase()) && /^\d{6}$/.test(String(instrument?.code || ''));
+      const mode = ['auto','manual'].includes(row?.pm) ? row.pm : (eligible ? 'auto' : 'manual');
+      return { ...row, pm:mode, pd:mode === 'auto' && /^\d{4}-\d{2}-\d{2}$/.test(String(row?.pd || '')) ? row.pd : '' };
+    });
+    storage.setItem(STORAGE_KEYS.lookFirst, JSON.stringify(rows));
+  }
+  if (current < 4) reconcileLegacyTrackerInputs(storage,loadInstrumentPool(storage));
   storage.setItem(STORAGE_KEYS.migrationVersion, String(CURRENT_SCHEMA_VERSION));
   return CURRENT_SCHEMA_VERSION;
 }

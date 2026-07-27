@@ -49,7 +49,7 @@
             <button class="btn-util btn-switch-system" data-fibo-click="window.location.href='https://gaman-cheung.github.io/Fibo-Tradingviewer/WaveAnalysis.html'"><span class="material-icons" style="font-size:16px;">functions</span> 波浪推演矩阵</button>
             <button class="btn-util btn-switch-system" data-fibo-click="window.location.href='TrendTracker.html'"><span class="material-icons" style="font-size:16px;">timeline</span> Trend Tracker</button>
             <button class="btn-util btn-cloud-down fibo-button fibo-button--cloud-down" data-fibo-click="loadFromCloud()" id="btn-pull"><span class="material-icons" style="font-size:16px;">cloud_download</span> Pull from Cloud</button>
-            <button class="btn-util btn-cloud-up fibo-button fibo-button--cloud-up" data-fibo-click="saveToCloud()" id="btn-push"><span class="material-icons" style="font-size:16px;">cloud_upload</span> Push to Cloud</button>
+            <button class="btn-util btn-cloud-up fibo-button fibo-button--cloud-up" data-fibo-click="saveToCloud(this)" id="btn-push"><span class="material-icons" style="font-size:16px;">cloud_upload</span> Push to Cloud</button>
             
             <button class="btn-util" data-fibo-click="exportData()"><span class="material-icons" style="font-size:16px;">save_alt</span> Local Backup</button>
             <button class="btn-util" data-fibo-click="document.getElementById('importFile').click()"><span class="material-icons" style="font-size:16px;">folder_open</span></button>
@@ -167,6 +167,20 @@
         </div>
     </div>
 
+    <div class="fibo-modal-backdrop" id="macdSuggestionBackdrop" data-fibo-click="handleMacdSuggestionBackdrop(event)" aria-hidden="true">
+        <div class="fibo-modal macd-suggestion-modal" role="dialog" aria-modal="true" aria-labelledby="macdSuggestionTitle">
+            <header class="fibo-modal__header">
+                <h2 id="macdSuggestionTitle">MACD Suggestion</h2>
+                <button type="button" class="fibo-modal__close" data-fibo-click="closeMacdSuggestion()" title="Close"><span class="material-icons">close</span></button>
+            </header>
+            <div class="fibo-modal__body" id="macdSuggestionContent"></div>
+            <footer class="fibo-modal__footer">
+                <button type="button" class="fibo-button" data-fibo-click="closeMacdSuggestion()">Cancel</button>
+                <button type="button" class="fibo-button macd-apply-button" id="applyMacdSuggestionButton" data-fibo-click="applyMacdSuggestion()" disabled><span class="material-icons">check</span> Apply Suggestion</button>
+            </footer>
+        </div>
+    </div>
+
     <div class="note-modal-backdrop" id="instrumentModalBackdrop" data-fibo-click="handleInstrumentBackdrop(event)" aria-hidden="true">
         <div class="note-modal" role="dialog" aria-modal="true" aria-labelledby="instrumentModalTitle" style="width:min(560px,94vw);">
             <div class="note-modal-header">
@@ -194,7 +208,7 @@
             <div class="note-modal-header"><h2 id="mobileActionsTitle">Actions</h2><button type="button" class="note-modal-close" data-fibo-click="closeMobileActions()"><span class="material-icons">close</span></button></div>
             <div class="note-modal-body"><div class="mobile-action-list">
                 <button class="btn-util btn-cloud-down fibo-button fibo-button--cloud-down" data-fibo-click="closeMobileActions();loadFromCloud()"><span class="material-icons">cloud_download</span> Pull from Cloud</button>
-                <button class="btn-util btn-cloud-up fibo-button fibo-button--cloud-up" data-fibo-click="closeMobileActions();saveToCloud()"><span class="material-icons">cloud_upload</span> Push to Cloud</button>
+                <button class="btn-util btn-cloud-up fibo-button fibo-button--cloud-up" data-fibo-click="saveToCloud(this)"><span class="material-icons">cloud_upload</span> Push to Cloud</button>
                 <button class="btn-util" data-fibo-click="closeMobileActions();exportData()"><span class="material-icons">save_alt</span> Local Backup</button>
                 <button class="btn-util" data-fibo-click="closeMobileActions();document.getElementById('importFile').click()"><span class="material-icons">folder_open</span> Import Backup</button>
                 <button class="btn-util" data-fibo-click="closeMobileActions();openNoteEditor('marquee')"><span class="material-icons">campaign</span> Edit Reminder</button>

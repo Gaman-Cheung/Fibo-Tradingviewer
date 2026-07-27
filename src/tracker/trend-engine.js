@@ -61,23 +61,30 @@ function emaSeries(values, period) {
   return output;
 }
 
-export function macd(values) {
+export function macdSeries(values) {
   const closes = cleanCloses(values);
-  if (!closes.length) return { dif:null, dea:null, histogram:null, direction:'insufficient', cross:'none', zeroAxis:'unknown' };
+  if (!closes.length) return [];
   const fast = emaSeries(closes, 12);
   const slow = emaSeries(closes, 26);
   const dif = fast.map((value, index) => value - slow[index]);
   const dea = emaSeries(dif, 9);
   const hist = dif.map((value, index) => (value - dea[index]) * 2);
-  const last = hist.at(-1), previous = hist.at(-2);
-  const previousDif = dif.at(-2), previousDea = dea.at(-2);
+  return closes.map((close,index) => ({ close, dif:dif[index], dea:dea[index], histogram:hist[index] }));
+}
+
+export function macd(values) {
+  const series = macdSeries(values);
+  if (!series.length) return { dif:null, dea:null, histogram:null, direction:'insufficient', cross:'none', zeroAxis:'unknown' };
+  const latest = series.at(-1), previousPoint = series.at(-2);
+  const last = latest.histogram, previous = previousPoint?.histogram;
+  const previousDif = previousPoint?.dif, previousDea = previousPoint?.dea;
   let cross = 'none';
-  if (finite(previousDif) && previousDif <= previousDea && dif.at(-1) > dea.at(-1)) cross = 'golden';
-  if (finite(previousDif) && previousDif >= previousDea && dif.at(-1) < dea.at(-1)) cross = 'death';
+  if (finite(previousDif) && previousDif <= previousDea && latest.dif > latest.dea) cross = 'golden';
+  if (finite(previousDif) && previousDif >= previousDea && latest.dif < latest.dea) cross = 'death';
   return {
-    dif:dif.at(-1), dea:dea.at(-1), histogram:last,
+    dif:latest.dif, dea:latest.dea, histogram:last,
     direction:!finite(previous) ? 'insufficient' : Math.abs(last) > Math.abs(previous) ? 'strengthening' : 'weakening',
-    cross, zeroAxis:dif.at(-1) >= 0 ? 'above' : 'below'
+    cross, zeroAxis:latest.dif >= 0 ? 'above' : 'below'
   };
 }
 

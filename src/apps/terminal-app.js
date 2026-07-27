@@ -12,13 +12,18 @@ import { getAutoPlan as calculateAutoPlan, movePct as calculateMovePct, getStopC
 import { calculateTechnicalScore, classifyCompositeSignal } from '../terminal/composite-signal.js';
 import { normalizeTicker, createPermanentId, loadInstrumentPool as loadPoolCore, saveInstrumentPool as savePoolCore, mergeInstrumentPools as mergePoolsCore, migrateTerminalIdentity } from '../core/instrument-identity.js';
 import { MARKET_OPTIONS, normalizeSecurityCode } from '../core/market-code.js';
-import { syncMarketBindings } from '../core/market-repository.js';
+import { loadDailyCloses, loadLatestOfficialClose, syncMarketBindings } from '../core/market-repository.js';
 import { readJson } from '../core/storage.js';
+import { readSharedLiveInputs, reconcileLegacyTrackerInputs } from '../core/shared-live-inputs.js';
+import { runCloudPushFeedback } from './cloud-action-feedback.js';
+import { appendProvisionalCurrent } from '../tracker/trend-engine.js';
+import { buildTerminalMacdSuggestion, detectCloseMacdDivergence } from '../tracker/macd-suggestion.js';
 
 // ================= Supabase 配置区域 =================
             // ⚠️ 请在这里填入你的真实数据
             const supabaseClient = getSupabaseClient('terminal');
             runMigrations(localStorage);
+            reconcileLegacyTrackerInputs(localStorage);
 
             // ================= 🆕 新增：路由守卫 (禁止单独访问) =================
             async function checkAuth() {
@@ -43,7 +48,7 @@ import { readJson } from '../core/storage.js';
             function hideLoader() { document.getElementById('loader').style.display = 'none'; }
 
             // ================= 全新多用户云端同步逻辑 =================
-            async function saveToCloud() {
+            async function performTerminalCloudPush() {
                 showLoader('Pushing to Cloud...');
                 const v6Data = JSON.parse(localStorage.getItem('tv_lookfirst_data_v3') || '[]');
                 const v7Data = JSON.parse(localStorage.getItem('tv_thenleap_data_v3') || '[]');
@@ -89,11 +94,18 @@ import { readJson } from '../core/storage.js';
                 } else {
                     const bindingResult = await syncMarketBindings(supabaseClient, user.id, instrumentPool).catch(bindingError => ({ error:bindingError }));
                     if (bindingResult?.error) console.warn('Tracker bindings were not synced. Apply the Trend Tracker Supabase migration.', bindingResult.error);
-                    const btn = document.getElementById('btn-push');
-                    const orig = btn.innerHTML;
-                    btn.innerHTML = '<span class="material-icons" style="font-size:16px;">check</span> Saved to Cloud';
-                    setTimeout(() => btn.innerHTML = orig, 2000);
+                    return true;
                 }
+                return !error;
+            }
+
+            async function saveToCloud(trigger) {
+                const button = trigger || document.getElementById('btn-push');
+                const mobileAction = !!button?.closest('#mobileActionsBackdrop');
+                return runCloudPushFeedback(button,async () => (await performTerminalCloudPush()) === true,{
+                    onSuccessSettled:() => { if (mobileAction) closeMobileActions(); },
+                    onUnexpectedError:error => { hideLoader(); alert('Cloud Sync Failed: ' + (error?.message || error)); }
+                });
             }
 
             async function loadFromCloud() {
@@ -148,6 +160,7 @@ import { readJson } from '../core/storage.js';
                         const waveState = { ...data.wp_data, instrumentPool:loadInstrumentPool(), uiNotes:data.wp_data.uiNotes || {} };
                         localStorage.setItem('wave_matrix_tabs_v3', JSON.stringify(waveState));
                     }
+                    reconcileLegacyTrackerInputs(localStorage,loadInstrumentPool());
                 
                     const btn = document.getElementById('btn-pull');
                     const orig = btn.innerHTML;
@@ -385,11 +398,14 @@ import { readJson } from '../core/storage.js';
                 affectedId = newId;
                 const activeCount = pool.items.filter(item => item.status !== 'archived').length;
                 pool.items.push({ id:newId, ticker, code, market, order:activeCount, status:'active', createdAt:now, updatedAt:now, deletedAt:null });
-                const rows = readStoredRows('tv_lookfirst_data_v3'); rows.push({ id:newId, n:ticker, h:'', l:'', c:'' }); localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify(rows));
+                const previousMode = ['SH','SZ'].includes(market) && /^\d{6}$/.test(code) ? 'auto' : 'manual';
+                const rows = readStoredRows('tv_lookfirst_data_v3'); rows.push({ id:newId, n:ticker, h:'', l:'', c:'', p:'', pm:previousMode, pd:'' }); localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify(rows));
                 localStorage.setItem(ACTIVE_INSTRUMENT_KEY, newId);
-                addV6Row(ticker, '', '', '', newId);
+                addV6Row(ticker, '', '', '', newId, '', '', 'current', previousMode, '');
             }
             saveInstrumentPool(pool); refreshInstrumentMetaButtons(affectedId); closeInstrumentDialog(); renderInstrumentPool();
+            const affectedRow = document.querySelector(`#tableBodyV6 tr[data-instrument-id="${affectedId}"]`);
+            if (affectedRow?.dataset.previousMode === 'auto') refreshPreviousCloseRow(affectedRow,{ force:true });
         }
 
         function openInstrument(id) {
@@ -599,6 +615,115 @@ import { readJson } from '../core/storage.js';
 
         // ================= Look first Core =================
         const tBodyV6 = document.getElementById('tableBodyV6');
+        const previousCloseRequestCache = new Map();
+        const macdHistoryRequestCache = new Map();
+
+        function previousCloseModeFor(instrumentId, requestedMode) {
+            if (['auto','manual'].includes(requestedMode)) return requestedMode;
+            const instrument = getInstrumentById(instrumentId);
+            return ['SH','SZ'].includes(String(instrument?.market || '')) && /^\d{6}$/.test(String(instrument?.code || '')) ? 'auto' : 'manual';
+        }
+
+        function renderPreviousCloseControl(row, state = 'idle', detail = '') {
+            const input = row.querySelector('.previous');
+            const button = row.querySelector('.previous-mode-button');
+            if (!input || !button) return;
+            const mode = row.dataset.previousMode === 'auto' ? 'auto' : 'manual';
+            const date = row.dataset.previousDate || '';
+            const cached = Number.isFinite(parseFloat(input.value)) && parseFloat(input.value) > 0;
+            input.readOnly = mode === 'auto';
+            button.className = `previous-mode-button is-${mode} state-${state}`;
+            let icon = mode === 'manual' ? 'edit' : 'cloud_sync';
+            let summary = mode === 'manual' ? 'Manual Prev Close · click to switch to Auto' : `Auto Prev Close${date ? ` · ${date}` : ''}`;
+            if (mode === 'auto' && state === 'loading') { icon = 'sync'; summary = `Loading latest official close${cached ? ' · cached value retained' : ''}`; }
+            if (mode === 'auto' && state === 'success') { icon = 'cloud_done'; summary = `Auto · latest official close${date ? ` · ${date}` : ''}`; }
+            if (mode === 'auto' && state === 'cached') { icon = 'cloud_off'; summary = `Auto unavailable · cached value${date ? ` · ${date}` : ''}`; }
+            if (mode === 'auto' && state === 'error') { icon = 'error_outline'; summary = detail || 'Auto unavailable · switch to Manual to enter a value'; }
+            button.innerHTML = `<span class="material-icons">${icon}</span>`;
+            button.title = `${summary}. ${mode === 'auto' ? 'Click for Manual override.' : 'Click to restore Auto.'}`;
+            button.setAttribute('aria-label',button.title);
+            button.dataset.state = state;
+            input.title = mode === 'auto' ? summary : 'Manual Prev Close';
+        }
+
+        function recalculateThenLeapForInstrument(instrumentId, persist = true) {
+            const row = document.querySelector(`#tableBodyV7 tr[data-instrument-id="${instrumentId}"]`);
+            const control = row?.querySelector('input,select');
+            if (control) calcV7(control,persist);
+        }
+
+        function latestCloseRequest(instrument, force = false) {
+            const key = `${String(instrument?.market || '').toUpperCase()}:${String(instrument?.code || '').trim()}`;
+            if (force) previousCloseRequestCache.delete(key);
+            if (!previousCloseRequestCache.has(key)) previousCloseRequestCache.set(key,loadLatestOfficialClose(supabaseClient,instrument));
+            return { key, promise:previousCloseRequestCache.get(key) };
+        }
+
+        async function refreshPreviousCloseRow(row, { force=false } = {}) {
+            if (!row?.isConnected || row.dataset.previousMode !== 'auto') return;
+            const instrumentId = row.dataset.instrumentId || '';
+            const instrument = getInstrumentById(instrumentId);
+            const input = row.querySelector('.previous');
+            if (!instrument || !['SH','SZ'].includes(String(instrument.market || '')) || !/^\d{6}$/.test(String(instrument.code || ''))) {
+                renderPreviousCloseControl(row,Number.isFinite(parseFloat(input?.value)) ? 'cached' : 'error','Auto requires a six-digit SH/SZ Code');
+                return;
+            }
+            renderPreviousCloseControl(row,'loading');
+            const request = latestCloseRequest(instrument,force);
+            row.dataset.previousRequestKey = request.key;
+            let result;
+            try { result = await request.promise; }
+            catch (error) { result = { data:null,error }; }
+            if (!row.isConnected || row.dataset.previousMode !== 'auto' || row.dataset.previousRequestKey !== request.key) return;
+            if (result?.data && Number(result.data.close) > 0) {
+                input.value = String(Number(result.data.close));
+                row.dataset.previousDate = String(result.data.trade_date || '');
+                renderPreviousCloseControl(row,'success');
+                calcV6(input);
+                recalculateThenLeapForInstrument(instrumentId);
+                return;
+            }
+            const hasCached = Number.isFinite(parseFloat(input.value)) && parseFloat(input.value) > 0;
+            renderPreviousCloseControl(row,hasCached ? 'cached' : 'error',result?.error?.message || 'No official close is available');
+            saveLocalV6();
+        }
+
+        function refreshAllAutoPreviousCloses() {
+            const rows = [...document.querySelectorAll('#tableBodyV6 tr')].filter(row => row.dataset.previousMode === 'auto');
+            return Promise.allSettled(rows.map(row => refreshPreviousCloseRow(row)));
+        }
+
+        async function togglePreviousCloseMode(button) {
+            const row = button.closest('tr');
+            if (!row) return;
+            const input = row.querySelector('.previous');
+            if (row.dataset.previousMode === 'auto') {
+                row.dataset.previousMode = 'manual';
+                row.dataset.previousDate = '';
+                renderPreviousCloseControl(row,'idle');
+                calcV6(input);
+                recalculateThenLeapForInstrument(row.dataset.instrumentId || '');
+                input.focus(); input.select();
+                return;
+            }
+            row.dataset.previousMode = 'auto';
+            row.dataset.previousDate = '';
+            renderPreviousCloseControl(row,'loading');
+            saveLocalV6();
+            await refreshPreviousCloseRow(row,{ force:true });
+        }
+
+        function handlePreviousCloseInput(input) {
+            const row = input.closest('tr');
+            calcV6(input);
+            if (row) recalculateThenLeapForInstrument(row.dataset.instrumentId || '');
+        }
+
+        function handleCurrentInput(input) {
+            const row = input.closest('tr');
+            calcV6(input);
+            if (row) recalculateThenLeapForInstrument(row.dataset.instrumentId || '');
+        }
 
         function updateV6Medals() {
             const pctColumns = ['pct-1272', 'pct-1618', 'pct-2618'];
@@ -624,7 +749,7 @@ import { readJson } from '../core/storage.js';
             });
         }
 
-        function calcV6(el) {
+        function calcV6(el, persist = true) {
             const row = el.closest('tr');
             const h = parseFloat(row.querySelector('.high').value);
             const l = parseFloat(row.querySelector('.low').value);
@@ -637,7 +762,7 @@ import { readJson } from '../core/storage.js';
                 row.querySelectorAll('.calc-result').forEach(td => td.innerText = '-');
                 row.querySelectorAll('.profit-pct').forEach(td => { td.innerText = '-'; td.removeAttribute('data-val'); });
                 row.querySelector('.status-cell').innerHTML = '-';
-                updateV6Medals(); saveLocalV6(); return;
+                updateV6Medals(); if (persist) saveLocalV6(); return;
             }
 
             const diff = h - l;
@@ -673,19 +798,21 @@ import { readJson } from '../core/storage.js';
             } else {
                 row.querySelectorAll('.profit-pct').forEach(td => td.removeAttribute('data-val'));
             }
-            updateV6Medals(); saveLocalV6();
+            updateV6Medals(); if (persist) saveLocalV6();
         }
 
-        function addV6Row(n='', h='', l='', c='', instrumentId='', entry='', previous='', baseline='current') {
+        function addV6Row(n='', h='', l='', c='', instrumentId='', entry='', previous='', baseline='current', previousMode='', previousDate='') {
             const tr = document.createElement('tr');
             tr.dataset.instrumentId = instrumentId;
+            tr.dataset.previousMode = previousCloseModeFor(instrumentId,previousMode);
+            tr.dataset.previousDate = tr.dataset.previousMode === 'auto' ? String(previousDate || '') : '';
             tr.innerHTML = `
                 <td><div class="ticker-input-shell"><input type="text" class="input-name name" value="${escapePoolHtml(n)}" placeholder="TICKER" data-fibo-input="handleDesktopTickerInput(this)">${instrumentMetaButtonHtml(instrumentId)}</div></td>
                 <td><input type="number" class="high" value="${h}" data-fibo-input="calcV6(this)"></td>
                 <td><input type="number" class="low" value="${l}" data-fibo-input="calcV6(this)"></td>
-                <td><input type="number" class="current" value="${c}" data-fibo-input="calcV6(this)"></td>
+                <td><input type="number" class="current" value="${c}" data-fibo-input="handleCurrentInput(this)"></td>
                 <td><input type="number" class="entry" value="${entry}" placeholder="Entry" data-fibo-input="calcV6(this)"></td>
-                <td><input type="number" class="previous" value="${previous}" placeholder="Prev" data-fibo-input="calcV6(this)"></td>
+                <td><div class="previous-shell"><input type="number" class="previous" value="${previous}" placeholder="Prev" data-fibo-input="handlePreviousCloseInput(this)"><button type="button" class="previous-mode-button" data-fibo-click="togglePreviousCloseMode(this)"><span class="material-icons">cloud_sync</span></button></div></td>
                 <td><select class="baseline" data-fibo-change="calcV6(this)"><option value="current" ${baseline==='current'?'selected':''}>Current</option><option value="entry" ${baseline==='entry'?'selected':''}>Entry</option><option value="previous" ${baseline==='previous'?'selected':''}>Prev Close</option></select></td>
                 <td class="calc-result res-236">-</td><td class="calc-result res-382">-</td><td class="calc-result res-500">-</td>
                 <td class="calc-result res-618">-</td><td class="calc-result res-786">-</td><td class="calc-result res-886">-</td>
@@ -699,7 +826,9 @@ import { readJson } from '../core/storage.js';
                     <span class="material-icons btn-icon drag-handle">drag_indicator</span>
                 </td>
             `;
-            tBodyV6.appendChild(tr); makeRowDraggable(tr, saveLocalV6); if(h && l) calcV6(tr.querySelector('.high'));
+            tBodyV6.appendChild(tr); makeRowDraggable(tr, saveLocalV6);
+            renderPreviousCloseControl(tr,tr.dataset.previousMode === 'auto' && previous ? 'cached' : 'idle');
+            if(h && l) calcV6(tr.querySelector('.high'));
         }
 
         // ================= Then leap Core =================
@@ -713,7 +842,7 @@ import { readJson } from '../core/storage.js';
                 const id = String(item?.id || '').trim();
                 if (id && !isInstrumentActive(id)) return;
                 const key = id ? `id:${id}` : `ticker:${ticker}`;
-                if (!map.has(key)) map.set(key, { id, n:ticker, h:'', l:'', c:'', e:'', p:'', b:'current' });
+                if (!map.has(key)) map.set(key, { id, n:ticker, h:'', l:'', c:'', e:'', p:'', pm:'manual', pd:'', b:'current' });
                 const record = map.get(key);
                 const h = parseFloat(item?.h), l = parseFloat(item?.l), c = parseFloat(item?.c);
                 if (Number.isFinite(h) && Number.isFinite(l) && h > l) {
@@ -724,6 +853,9 @@ import { readJson } from '../core/storage.js';
                 const entry = parseFloat(item?.e), previous = parseFloat(item?.p);
                 if (Number.isFinite(entry)) record.e = item.e;
                 if (Number.isFinite(previous)) record.p = item.p;
+                if (['auto','manual'].includes(item?.pm)) record.pm = item.pm;
+                if (record.pm === 'auto' && /^\d{4}-\d{2}-\d{2}$/.test(String(item?.pd || ''))) record.pd = item.pd;
+                if (record.pm === 'manual') record.pd = '';
                 if (['current','entry','previous'].includes(item?.b)) record.b = item.b;
             });
             return [...map.values()].filter(item => {
@@ -741,6 +873,8 @@ import { readJson } from '../core/storage.js';
                 c:row.querySelector('.current')?.value || '',
                 e:row.querySelector('.entry')?.value || '',
                 p:row.querySelector('.previous')?.value || '',
+                pm:row.dataset.previousMode === 'auto' ? 'auto' : 'manual',
+                pd:row.dataset.previousMode === 'auto' ? (row.dataset.previousDate || '') : '',
                 b:row.querySelector('.baseline')?.value || 'current'
             }));
             let savedItems = [];
@@ -834,7 +968,7 @@ import { readJson } from '../core/storage.js';
             calcV7(input);
         }
 
-        function calcV7(el) {
+        function calcV7(el, persist = true) {
             const row = el?.closest?.('tr');
             if (!row) return;
             const requiredCells = ['.market-cell','.market-summary','.support-cell','.pressure-cell','.t1-cell','.t2-cell','.rr-cell','.ai-cell'];
@@ -991,7 +1125,7 @@ import { readJson } from '../core/storage.js';
             aiCell.dataset.explanation = JSON.stringify({ signalName, totalScore, fiboScore, trendScore, momentumScore, volumeScore, strengthBonus, entry:hasEntry?entry:null, stop:Number.isFinite(stop)?stop:null, stopRiskPct, rr1, rr2, structureAligned, firstBarrierTight, volumeText });
             aiCell.innerHTML = aiHtml;
             syncMobileCompositeSignal(row);
-            saveLocalV7();
+            if (persist) saveLocalV7();
         }
 
         function addV7Row(n='', t='sideways', r='', m='neutral', s='', g='', v='', g1='', instrumentId='') {
@@ -1013,7 +1147,7 @@ import { readJson } from '../core/storage.js';
                 <td class="detail-col"><input type="number" class="input-risk target" value="${g}" placeholder="自动"></td>
                 <td class="detail-col"><select class="trend" data-fibo-change="calcV7(this)"><option value="uptrend" ${t==='uptrend'?'selected':''}>📈 Uptrend</option><option value="sideways" ${t==='sideways'?'selected':''}>➖ Sideways</option><option value="downtrend" ${t==='downtrend'?'selected':''}>📉 Downtrend</option></select></td>
                 <td class="detail-col"><input type="number" class="input-rsi rsi" value="${r}" placeholder="RSI" data-fibo-input="calcV7(this)"></td>
-                <td class="detail-col"><select class="macd" data-fibo-change="calcV7(this)"><option value="neutral" ${m==='neutral'?'selected':''}>Wait/Flat</option><option value="bullish" ${m==='bullish'?'selected':''}>📈 Bullish</option><option value="bearish" ${m==='bearish'?'selected':''}>📉 Bearish</option><option value="divergence" ${m==='divergence'?'selected':''}>⭐ Divergence</option></select></td>
+                <td class="detail-col"><div class="macd-input-shell"><select class="macd" data-fibo-change="calcV7(this)"><option value="neutral" ${m==='neutral'?'selected':''}>Wait/Flat</option><option value="bullish" ${m==='bullish'?'selected':''}>📈 Bullish</option><option value="bearish" ${m==='bearish'?'selected':''}>📉 Bearish</option><option value="divergence" ${m==='divergence'?'selected':''}>⭐ Bullish Divergence</option></select><button type="button" class="macd-suggest-button" data-fibo-click="openMacdSuggestion(this)" title="Suggest from Tracker close history" aria-label="Suggest MACD from Tracker close history"><span class="material-icons">auto_graph</span></button></div></td>
                 <td class="ai-cell" style="background:#fff3e0;">-</td>
             `;
             tBodyV7.appendChild(tr);
@@ -1023,6 +1157,112 @@ import { readJson } from '../core/storage.js';
                 input.addEventListener('change', recalcTarget);
             });
             calcV7(tr.querySelector('.name'));
+        }
+
+        let pendingMacdSuggestion = null;
+        let macdSuggestionRequest = 0;
+
+        function formatMacdValue(value) { return Number.isFinite(Number(value)) ? Number(value).toFixed(4) : '--'; }
+
+        function macdHistoryRequest(instrument) {
+            const key = `${String(instrument?.market || '').toUpperCase()}:${String(instrument?.code || '').trim()}`;
+            if (!macdHistoryRequestCache.has(key)) macdHistoryRequestCache.set(key,loadDailyCloses(supabaseClient,instrument));
+            return macdHistoryRequestCache.get(key);
+        }
+
+        function openMacdSuggestionModal(title = 'MACD Suggestion') {
+            const modal = document.getElementById('macdSuggestionBackdrop');
+            document.getElementById('macdSuggestionTitle').textContent = title;
+            modal.classList.add('open');
+            modal.setAttribute('aria-hidden','false');
+        }
+
+        function closeMacdSuggestion() {
+            macdSuggestionRequest += 1;
+            pendingMacdSuggestion = null;
+            const modal = document.getElementById('macdSuggestionBackdrop');
+            modal.classList.remove('open');
+            modal.setAttribute('aria-hidden','true');
+        }
+
+        function handleMacdSuggestionBackdrop(event) {
+            if (event.target.id === 'macdSuggestionBackdrop') closeMacdSuggestion();
+        }
+
+        function divergenceCandidateHtml(candidate,label,className) {
+            if (!candidate) return '';
+            const first = candidate.first, second = candidate.second;
+            return `<div class="macd-divergence-candidate ${className}"><strong>${label}</strong><span>${escapePoolHtml(first.date || 'Earlier pivot')} · Close ${first.close.toFixed(3)} · DIF ${formatMacdValue(first.dif)}</span><span>${escapePoolHtml(second.date || 'Later pivot')} · Close ${second.close.toFixed(3)} · DIF ${formatMacdValue(second.dif)}</span></div>`;
+        }
+
+        async function openMacdSuggestion(button) {
+            const row = button?.closest('tr');
+            const instrumentId = row?.dataset.instrumentId || '';
+            const instrument = getInstrumentById(instrumentId);
+            const ticker = row?.querySelector('.name')?.value || instrument?.ticker || 'Instrument';
+            const applyButton = document.getElementById('applyMacdSuggestionButton');
+            const content = document.getElementById('macdSuggestionContent');
+            pendingMacdSuggestion = null;
+            applyButton.disabled = true;
+            content.innerHTML = '<div class="macd-suggestion-loading"><span class="material-icons">sync</span> Loading official close history…</div>';
+            openMacdSuggestionModal(`${ticker} · MACD Suggestion`);
+            const requestId = ++macdSuggestionRequest;
+            if (!instrument || !['SH','SZ'].includes(String(instrument.market || '')) || !/^\d{6}$/.test(String(instrument.code || ''))) {
+                content.innerHTML = '<div class="macd-suggestion-error">A six-digit SH/SZ Code is required in Instrument Pool.</div>';
+                return;
+            }
+
+            button.disabled = true;
+            button.classList.add('is-loading');
+            try {
+                const response = await macdHistoryRequest(instrument);
+                if (requestId !== macdSuggestionRequest) return;
+                if (response?.error) {
+                    content.innerHTML = `<div class="macd-suggestion-error">History unavailable: ${escapePoolHtml(response.error.message || 'unknown error')}</div>`;
+                    return;
+                }
+                const rows = (response?.data || []).filter(item => Number.isFinite(Number(item?.close)));
+                const officialCloses = rows.map(item => Number(item.close));
+                const dates = rows.map(item => String(item.trade_date || ''));
+                const live = readSharedLiveInputs(localStorage,instrumentId);
+                const hasPreview = Number.isFinite(Number(live.current)) && Number(live.current) > 0;
+                const analysisValues = appendProvisionalCurrent(officialCloses,hasPreview ? live.current : '');
+                const result = buildTerminalMacdSuggestion(analysisValues);
+                const divergence = detectCloseMacdDivergence(officialCloses,dates,{lookback:60,pivotRadius:2});
+                pendingMacdSuggestion = { instrumentId, value:result.suggestion.value };
+                applyButton.disabled = false;
+                const candidateHtml = divergenceCandidateHtml(divergence.bullish,'Potential Bullish Close/DIF Divergence','is-bullish')
+                    + divergenceCandidateHtml(divergence.bearish,'Potential Bearish Close/DIF Divergence','is-bearish');
+                content.innerHTML = `
+                    <div class="macd-suggestion-summary">
+                        <small>${hasPreview ? 'CURRENT PREVIEW' : `OFFICIAL CLOSE · ${escapePoolHtml(dates.at(-1) || '--')}`}</small>
+                        <strong>${result.suggestion.label}</strong>
+                        <p>${result.suggestion.reason}</p>
+                    </div>
+                    <div class="macd-suggestion-metrics">
+                        <span><small>DIF</small><strong>${formatMacdValue(result.snapshot.dif)}</strong></span>
+                        <span><small>DEA</small><strong>${formatMacdValue(result.snapshot.dea)}</strong></span>
+                        <span><small>Histogram</small><strong>${formatMacdValue(result.snapshot.histogram)}</strong></span>
+                        <span><small>State</small><strong>${escapePoolHtml(result.snapshot.cross)} cross · ${escapePoolHtml(result.snapshot.zeroAxis)} zero</strong></span>
+                    </div>
+                    <div class="macd-divergence-section"><h3>Close/DIF divergence candidates</h3>${candidateHtml || '<p>No confirmed five-point candidate in the latest 60 official sessions.</p>'}<small>Candidate only. Current Preview is excluded. Verify the full K-line before manually choosing Bullish Divergence (+2).</small></div>`;
+            } catch (error) {
+                if (requestId === macdSuggestionRequest) content.innerHTML = `<div class="macd-suggestion-error">History unavailable: ${escapePoolHtml(error?.message || error)}</div>`;
+            } finally {
+                button.disabled = false;
+                button.classList.remove('is-loading');
+            }
+        }
+
+        function applyMacdSuggestion() {
+            const pending = pendingMacdSuggestion;
+            if (!pending || !['neutral','bullish','bearish'].includes(pending.value)) return;
+            const row = document.querySelector(`#tableBodyV7 tr[data-instrument-id="${pending.instrumentId}"]`);
+            const select = row?.querySelector('.macd');
+            if (!select) return;
+            select.value = pending.value;
+            calcV7(select);
+            closeMacdSuggestion();
         }
 
         // ================= Drag & Drop / Data Save =================
@@ -1053,7 +1293,10 @@ import { readJson } from '../core/storage.js';
                 data.push({
                     id:tr.dataset.instrumentId || '', n:tr.querySelector('.name').value,
                     h:tr.querySelector('.high').value, l:tr.querySelector('.low').value, c:tr.querySelector('.current').value,
-                    e:tr.querySelector('.entry').value, p:tr.querySelector('.previous').value, b:tr.querySelector('.baseline').value
+                    e:tr.querySelector('.entry').value, p:tr.querySelector('.previous').value,
+                    pm:tr.dataset.previousMode === 'auto' ? 'auto' : 'manual',
+                    pd:tr.dataset.previousMode === 'auto' ? (tr.dataset.previousDate || '') : '',
+                    b:tr.querySelector('.baseline').value
                 });
             });
             const merged = mergeRowsWithHiddenInstruments('tv_lookfirst_data_v3', data);
@@ -1082,9 +1325,35 @@ import { readJson } from '../core/storage.js';
             localStorage.setItem('tv_thenleap_data_v3', JSON.stringify(mergeRowsWithHiddenInstruments('tv_thenleap_data_v3', data)));
         }
 
+        function applySharedLiveStorageChange(storageKey) {
+            if (storageKey === 'tv_lookfirst_data_v3') {
+                const byId = new Map(readStoredRows(storageKey).map(row => [String(row?.id || ''),row]));
+                document.querySelectorAll('#tableBodyV6 tr[data-instrument-id]').forEach(row => {
+                    const id = row.dataset.instrumentId || '';
+                    const input = row.querySelector('.current');
+                    const stored = byId.get(id);
+                    if (!input || !stored || input.value === String(stored.c ?? '')) return;
+                    input.value = String(stored.c ?? '');
+                    calcV6(input,false);
+                    recalculateThenLeapForInstrument(id,false);
+                });
+            }
+            if (storageKey === 'tv_thenleap_data_v3') {
+                const byId = new Map(readStoredRows(storageKey).map(row => [String(row?.id || ''),row]));
+                document.querySelectorAll('#tableBodyV7 tr[data-instrument-id]').forEach(row => {
+                    const id = row.dataset.instrumentId || '';
+                    const input = row.querySelector('.volume-ratio');
+                    const stored = byId.get(id);
+                    if (!input || !stored || input.value === String(stored.v ?? '')) return;
+                    input.value = String(stored.v ?? '');
+                    calcV7(input,false);
+                });
+            }
+        }
+
         const HELP_TOPICS = {
             entry: { title:'Entry · 实际/计划买入价', html:`<h3>这是什么</h3><p>Entry 是实际持仓平均成本，或尚未成交时的计划买入价。它是执行层的唯一成本基准。</p><h3>如何计算</h3><div class="formula"><code>R:R = (Target − Entry) ÷ (Entry − Stop)</code><br><code>当前盈亏 = (Current − Entry) ÷ Entry</code></div><h3>对信号的影响</h3><p>Entry 为空时，系统可用 Current 做 R:R 预览，但预览不能把 Composite Signal 升级为 Good Setup 或 Sniper Buy。</p><h3>常见误区</h3><p>Current 是市场现价，不等于你的成本；Stop 也不是买入价。</p>` },
-            previous: { title:'Prev Close · 前收盘价', html:`<h3>用途</h3><p>填写上一交易日正式收盘价，用于计算当日涨跌幅，并结合 VR (5D) 判断放量上涨、放量下跌或价格走平。</p><h3>注意</h3><p>它不参与 R:R。复权口径应与 Current、High、Low 保持一致。</p>` },
+            previous: { title:'Prev Close · 前收盘价', html:`<h3>用途</h3><p>Prev Close用于计算Current的涨跌幅，并结合VR (5D)判断放量上涨、放量下跌或价格走平；选择Prev Close作为% Baseline时，也用于目标位涨跌幅展示。</p><h3>Auto模式</h3><p>默认根据该永久ID在Pool中的Market + Code读取Supabase行情库里<strong>最新一条正式收盘价</strong>。蓝色云按钮表示Auto；悬停可查看行情日期。相同Code可以共用一次行情请求，但每行的模式、缓存与计算仍严格按永久ID保存。</p><h3>Manual模式</h3><p>点击模式按钮可切换Manual，输入框随即解锁并保留当前数值。再次点击会恢复Auto，并用最新正式收盘覆盖。Code/Market无效、行情缺失或除权参考价需要人工校正时可使用Manual。</p><h3>缓存与日期口径</h3><p>Auto失败不会清空已有值，黄色状态表示正在使用缓存。系统始终取数据库最新正式收盘，不自动判断当天是否应改取倒数第二日；晚间复盘若Current也是当日收盘，请切换Manual核对。</p><h3>边界</h3><p>Prev Close不参与R:R。自动或手动值都会进入原有日涨跌幅和VR量价算法，但不会改变任何评分权重或阈值。</p>` },
             baseline: { title:'% Baseline · 展示基准', html:`<h3>用途</h3><p>决定支撑、压力和目标价下方涨跌幅相对于哪个价格显示：Current、Entry 或 Prev Close。</p><h3>边界</h3><p>Baseline 只改变百分比展示，不改变斐波那契价位、技术评分或 R:R；R:R 始终使用 Entry。</p>` },
             fibonacci: { title:'Fibonacci · 回撤区域', html:`<h3>计算</h3><p>以 Look First 的 High 与 Low 为区间：<code>回撤价 = High − (High − Low) × 比例</code>。23.6%、38.2%、50%、61.8%、78.6%、88.6% 用于描述价格所处区域，而不是保证支撑有效。</p><h3>F 分值</h3><p>Breakout 0；Pullback 0；Correction +1；Golden Dip +4；Danger Zone +3；Harmonic +2；Structure Broken −5。分数反映系统的左侧赔率偏好，不等于趋势已经反转。</p>` },
             targets: { title:'Targets · 目标位', html:`<h3>Look First</h3><p>Previous High 是第一档历史压力；1.272、1.618、2.618 是基于 High/Low 区间计算的延伸目标。每格同时显示目标价及相对 Baseline 的涨跌幅。</p><h3>Then Leap</h3><p>T1/T2 会根据 Current 所处阶段自动选择：修复阶段先看最近压力与前高，接近前高时看突破与第一延伸，突破后再顺延。Override 只在明确要改变自动计划时填写。</p>` },
@@ -1093,7 +1362,7 @@ import { readJson } from '../core/storage.js';
             volume: { title:'VR (5D) · 五日量比', html:`<h3>定义</h3><p>直接填写券商软件基于过去五个交易日的量比。≤0.8 为缩量，0.8–1.2 正常，1.2–1.5 温和放量，≥1.5 明显放量，≥2.5 触发异常放量提示。</p><h3>评分</h3><p>系统结合 Current 相对 Prev Close 的方向判断量价关系。异常巨量不会无限加分，仍受原有 V 分值与总分门控约束。</p>` },
             trend: { title:'Trend (13d) · 趋势', html:`<h3>填写方式</h3><p>依据约 13 个交易日的价格结构手动选择 Uptrend、Sideways 或 Downtrend，而不是系统自动读取盘口。</p><h3>T 分值</h3><p>Uptrend +2，Sideways 0，Downtrend −3。Sniper Buy 禁止出现在 Downtrend，但低位技术分仍可能显示 Watch，代表观察而非确认买入。</p>` },
             rsi: { title:'RSI (14) · 相对强弱', html:`<h3>M 分值的一部分</h3><p>RSI ≤30 得 +2；30–45 得 +1；45–70 得 0；≥70 得 −2。RSI 与 MACD 合并为 Momentum，合计上限为 +3。</p><h3>误区</h3><p>超卖不代表立刻反转，超买也不代表立刻下跌；必须结合趋势、结构和风险计划。</p>` },
-            macd: { title:'MACD Trend · 动量状态', html:`<h3>M 分值的一部分</h3><p>Divergence +2，Bullish +1，Neutral 0，Bearish −1；再与 RSI 分值合并，Momentum 最高 +3。</p><h3>填写口径</h3><p>Divergence 只用于你已经确认的有效背离，不应把普通金叉或短暂柱体收窄直接当作背离。</p>` },
+            macd: { title:'MACD Trend · 动量状态', html:`<h3>M 分值的一部分</h3><p>Bullish Divergence +2，Bullish +1，Neutral 0，Bearish −1；再与 RSI 分值合并，Momentum 最高 +3。</p><h3>按需建议</h3><p>行内图表按钮会读取 Tracker 的正式收盘历史，并以 12/26/9 MACD 建议 Bullish、Bearish 或 Wait/Flat。建议只在点击 Apply 后写入；Current 存在时结果会标记为 Preview。</p><h3>背离口径</h3><p>系统只提示最近60个正式交易日的收盘价/DIF背离候选，Current Preview不参与。候选不会自动选择 Bullish Divergence；必须查看完整K线并人工确认。看空背离不得使用加2分的 Bullish Divergence。</p>` },
             composite: { title:'Composite Signal · 综合信号', html:`<h3>技术分</h3><div class="formula"><code>Total = F + T + M + V + S</code></div><p>F 为斐波那契区域，T 为趋势，M 为 RSI/MACD 动量，V 为五日量价，S 为趋势强度奖励。原有权重未因 Entry/R:R 改造而改变。</p><h3>执行层</h3><p>技术分 1–2 始终只是 Watch，不能仅凭漂亮的 R:R 升级。技术分 ≥3 后，仍需 Entry、有效 Stop、T1 ≥1R、T2 ≥2R 才能成为 Good Setup。Sniper Buy 还要求总分 ≥6、非 Downtrend、止损与结构支撑对齐且第一压力不过近。</p><h3>标签</h3><p>Entry 缺失显示 Wait Better Entry；有 Entry 但无 Stop 显示 Risk Plan Pending；止损无效显示 Invalid Stop；结构跌破则优先显示 Structure Invalid/Avoid。</p>` }
         };
 
@@ -1176,6 +1445,7 @@ import { readJson } from '../core/storage.js';
         document.addEventListener('keydown', event => {
             if (event.key === 'Escape' && document.getElementById('noteModalBackdrop')?.classList.contains('open')) closeNoteEditor();
             if (event.key === 'Escape' && document.getElementById('helpModalBackdrop')?.classList.contains('open')) closeHelp();
+            if (event.key === 'Escape' && document.getElementById('macdSuggestionBackdrop')?.classList.contains('open')) closeMacdSuggestion();
         });
 
         function exportData() {
@@ -1205,6 +1475,7 @@ import { readJson } from '../core/storage.js';
                     if (data.headerNotes && Object.prototype.hasOwnProperty.call(data.headerNotes, 'tips')) localStorage.setItem(HEADER_NOTE_KEYS.tips, data.headerNotes.tips || '');
                     if (data.instrumentPool?.items && Array.isArray(data.instrumentPool.items)) saveInstrumentPool(data.instrumentPool);
                     if (data.trendTracker && typeof data.trendTracker === 'object') localStorage.setItem('tv_trend_tracker_state_v1', JSON.stringify(data.trendTracker));
+                    reconcileLegacyTrackerInputs(localStorage,loadInstrumentPool());
                     location.reload();
                 } catch (err) { alert("❌ Invalid backup file."); }
             };
@@ -1213,6 +1484,7 @@ import { readJson } from '../core/storage.js';
 
         function migrateExecutionFields(v6Data, v7Data) {
             const byId = new Map(), tickerGroups = new Map();
+            const instruments = new Map(loadInstrumentPool().items.map(item => [String(item.id || ''),item]));
             (v7Data || []).forEach(row => {
                 if (row?.id) byId.set(String(row.id), row);
                 const ticker = String(row?.n || '').trim().toUpperCase();
@@ -1224,14 +1496,23 @@ import { readJson } from '../core/storage.js';
             return (v6Data || []).map(row => {
                 const tickerMatches = tickerGroups.get(String(row?.n || '').trim().toUpperCase()) || [];
                 const legacy = (row?.id ? byId.get(String(row.id)) : null) || (tickerMatches.length === 1 ? tickerMatches[0] : null) || {};
+                const instrument = instruments.get(String(row?.id || ''));
+                const autoEligible = ['SH','SZ'].includes(String(instrument?.market || '')) && /^\d{6}$/.test(String(instrument?.code || ''));
+                const previousMode = ['auto','manual'].includes(row?.pm) ? row.pm : (autoEligible ? 'auto' : 'manual');
                 return {
                     ...row,
                     e: row?.e ?? '',
                     p: row?.p ?? legacy.p ?? '',
+                    pm: previousMode,
+                    pd: previousMode === 'auto' && /^\d{4}-\d{2}-\d{2}$/.test(String(row?.pd || '')) ? row.pd : '',
                     b: ['current','entry','previous'].includes(row?.b) ? row.b : (legacy.b === 'previous' ? 'previous' : 'current')
                 };
             });
         }
+
+        window.addEventListener('storage',event => {
+            if (['tv_lookfirst_data_v3','tv_thenleap_data_v3'].includes(event.key)) applySharedLiveStorageChange(event.key);
+        });
 
         window.onload = () => {
             renderHeaderMarquee();
@@ -1241,12 +1522,17 @@ import { readJson } from '../core/storage.js';
             savedV6Data = migrateExecutionFields(migrated.v6Data, migrated.v7Data);
             savedV7Data = migrated.v7Data;
             const existingV6Ids = new Set(savedV6Data.map(row => row.id));
-            migrated.pool.items.filter(item => item.status !== 'archived' && !existingV6Ids.has(item.id)).forEach(item => savedV6Data.push({ id:item.id, n:item.ticker, h:'', l:'', c:'', e:'', p:'', b:'current' }));
+            migrated.pool.items.filter(item => item.status !== 'archived' && !existingV6Ids.has(item.id)).forEach(item => savedV6Data.push({
+                id:item.id, n:item.ticker, h:'', l:'', c:'', e:'', p:'',
+                pm:['SH','SZ'].includes(String(item.market || '')) && /^\d{6}$/.test(String(item.code || '')) ? 'auto' : 'manual',
+                pd:'', b:'current'
+            }));
             localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify(savedV6Data));
             const orderMap = new Map(migrated.pool.items.map(item => [item.id, Number(item.order)]));
-            savedV6Data.filter(d => isInstrumentActive(d.id)).sort((a,b) => (orderMap.get(a.id) ?? 1e9) - (orderMap.get(b.id) ?? 1e9)).forEach(d => addV6Row(d.n, d.h, d.l, d.c, d.id, d.e, d.p, d.b));
+            savedV6Data.filter(d => isInstrumentActive(d.id)).sort((a,b) => (orderMap.get(a.id) ?? 1e9) - (orderMap.get(b.id) ?? 1e9)).forEach(d => addV6Row(d.n, d.h, d.l, d.c, d.id, d.e, d.p, d.b, d.pm, d.pd));
             // 直接用 Look first 价格与 V7 附加字段合并建表，避免先生成空价格行。
             syncV7withV6(true, savedV7Data);
+            refreshAllAutoPreviousCloses();
             initV7TableUX();
             renderInstrumentPool();
             const savedTab = localStorage.getItem('tv_active_tab');
@@ -1279,4 +1565,4 @@ import { readJson } from '../core/storage.js';
     
 
 // Central event registry; handlers stay module-scoped and are not globals.
-bindDeclarativeEvents({ checkAuth, showLoader, hideLoader, saveToCloud, loadFromCloud, normalizeInstrumentName, createInstrumentId, loadInstrumentPool, mergeInstrumentPools, saveInstrumentPool, getInstrumentById, isInstrumentActive, migrateInstrumentIdentity, escapePoolHtml, readStoredRows, mergeRowsWithHiddenInstruments, renderInstrumentPool, initPoolDrag, savePoolDomOrder, reorderStoredRowsByPool, createDesktopInstrumentRow, handleDesktopTickerInput, openInstrumentDialog, closeInstrumentDialog, handleInstrumentBackdrop, saveInstrumentDialog, openInstrument, openInstrumentWave, archiveInstrument, removeInstrumentFromCurrentLayout, restoreInstrument, permanentlyDeleteInstrument, switchTab, switchMobileTerminal, updateMobileNavigation, ensureMobileCardControls, syncMobileCompositeSignal, applyMobileActiveInstrument, openMobileActions, closeMobileActions, handleMobileActionsBackdrop, syncV7ScrollWidth, initV7TableUX, applyAutoHighlight, updateV6Medals, calcV6, addV6Row, mergeLookFirstRecords, collectLookFirstRecords, updateLookFirstCurrent, syncV7withV6, getAutoPlan, movePct, levelHtml, getStopCandidates, useStopCandidate, calcV7, addV7Row, makeRowDraggable, getDragAfterElement, saveLocalV6, saveLocalV7, openHelp, closeHelp, handleHelpBackdrop, openSignalExplanation, renderHeaderMarquee, openNoteEditor, closeNoteEditor, saveNoteEditor, handleNoteBackdrop, exportData, importData, migrateExecutionFields });
+bindDeclarativeEvents({ checkAuth, showLoader, hideLoader, saveToCloud, loadFromCloud, normalizeInstrumentName, createInstrumentId, loadInstrumentPool, mergeInstrumentPools, saveInstrumentPool, getInstrumentById, isInstrumentActive, migrateInstrumentIdentity, escapePoolHtml, readStoredRows, mergeRowsWithHiddenInstruments, renderInstrumentPool, initPoolDrag, savePoolDomOrder, reorderStoredRowsByPool, createDesktopInstrumentRow, handleDesktopTickerInput, openInstrumentDialog, closeInstrumentDialog, handleInstrumentBackdrop, saveInstrumentDialog, openInstrument, openInstrumentWave, archiveInstrument, removeInstrumentFromCurrentLayout, restoreInstrument, permanentlyDeleteInstrument, switchTab, switchMobileTerminal, updateMobileNavigation, ensureMobileCardControls, syncMobileCompositeSignal, applyMobileActiveInstrument, openMobileActions, closeMobileActions, handleMobileActionsBackdrop, syncV7ScrollWidth, initV7TableUX, applyAutoHighlight, updateV6Medals, calcV6, addV6Row, refreshPreviousCloseRow, refreshAllAutoPreviousCloses, togglePreviousCloseMode, handlePreviousCloseInput, handleCurrentInput, mergeLookFirstRecords, collectLookFirstRecords, updateLookFirstCurrent, syncV7withV6, getAutoPlan, movePct, levelHtml, getStopCandidates, useStopCandidate, calcV7, addV7Row, openMacdSuggestion, closeMacdSuggestion, handleMacdSuggestionBackdrop, applyMacdSuggestion, makeRowDraggable, getDragAfterElement, saveLocalV6, saveLocalV7, openHelp, closeHelp, handleHelpBackdrop, openSignalExplanation, renderHeaderMarquee, openNoteEditor, closeNoteEditor, saveNoteEditor, handleNoteBackdrop, exportData, importData, migrateExecutionFields });

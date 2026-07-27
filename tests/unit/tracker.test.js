@@ -6,6 +6,7 @@ import { runMigrations, CURRENT_SCHEMA_VERSION } from '../../src/core/migrations
 import { analyzeTrend, appendProvisionalCurrent, maSnapshot, macd, projectScenario, turnState } from '../../src/tracker/trend-engine.js';
 import { buildTrackerChartModel, TRACKER_CHART_WINDOW } from '../../src/tracker/chart-model.js';
 import { formatTurnLabel } from '../../src/tracker/status-presenter.js';
+import { loadLatestOfficialClose } from '../../src/core/market-repository.js';
 
 class MemoryStorage {
   constructor(entries={}) { this.values=new Map(Object.entries(entries)); }
@@ -30,6 +31,63 @@ test('market migration is idempotent and preserves permanent IDs', () => {
   const pool=JSON.parse(storage.getItem('tv_instrument_pool_v1'));
   assert.equal(Number(storage.getItem('fibo_schema_migration_version')),CURRENT_SCHEMA_VERSION);
   assert.deepEqual(pool.items.map(item=>[item.id,item.market]),[['a','SH'],['b','SZ'],['c','INDEX']]);
+});
+
+test('Prev Close migration defaults eligible instruments to Auto and preserves cached values', () => {
+  const storage=new MemoryStorage({
+    fibo_schema_migration_version:'2',
+    tv_instrument_pool_v1:JSON.stringify({version:1,items:[
+      {id:'a',ticker:'A',code:'600000',market:'SH'},
+      {id:'b',ticker:'B',code:'',market:'OTHER'},
+      {id:'c',ticker:'C',code:'000001',market:'SZ'}
+    ],tombstones:[]}),
+    tv_lookfirst_data_v3:JSON.stringify([
+      {id:'a',n:'A',p:'10.25'},
+      {id:'b',n:'B',p:'20'},
+      {id:'c',n:'C',p:'30',pm:'manual',pd:'2026-01-01'}
+    ])
+  });
+  runMigrations(storage); runMigrations(storage);
+  const rows=JSON.parse(storage.getItem('tv_lookfirst_data_v3'));
+  assert.deepEqual(rows.map(row=>[row.id,row.p,row.pm,row.pd]),[
+    ['a','10.25','auto',''],
+    ['b','20','manual',''],
+    ['c','30','manual','']
+  ]);
+});
+
+function marketClient(rowsByTable={}, errorsByTable={}, calls=[]) {
+  return { from(table) { return {
+    select(){return this;}, eq(column,value){calls.push([table,column,value]);return this;}, limit(){return this;},
+    order(){return Promise.resolve({data:rowsByTable[table] || [],error:errorsByTable[table] || null});}
+  }; } };
+}
+
+test('latest official close prefers full-market data and falls back to the legacy table', async () => {
+  const calls=[];
+  const full=await loadLatestOfficialClose(marketClient({market_daily_bar:[{trade_date:'2026-07-24',close:'12.34',trade_status:true}]},{},calls),{market:'SH',code:'600000'});
+  assert.equal(full.source,'full-market');
+  assert.deepEqual({date:full.data.trade_date,close:full.data.close},{date:'2026-07-24',close:12.34});
+  assert.ok(calls.some(call=>call[0]==='market_daily_bar'&&call[1]==='trade_status'&&call[2]===true));
+
+  const fallback=await loadLatestOfficialClose(marketClient({market_daily_close:[{trade_date:'2026-07-23',close:'9.87'}]}),{market:'SZ',code:'000001'});
+  assert.equal(fallback.source,'legacy');
+  assert.equal(fallback.data.close,9.87);
+
+  const invalid=await loadLatestOfficialClose(marketClient(),{market:'OTHER',code:'000001'});
+  assert.equal(invalid.data,null);
+  assert.match(invalid.error.message,/supports/i);
+
+  const empty=await loadLatestOfficialClose(marketClient(),{market:'SH',code:'600001'});
+  assert.equal(empty.data,null);
+  assert.equal(empty.error,null);
+
+  const failed=await loadLatestOfficialClose(marketClient({}, {
+    market_daily_bar:{message:'full market offline'},
+    market_daily_close:{message:'legacy offline'}
+  }),{market:'SH',code:'600002'});
+  assert.equal(failed.data,null);
+  assert.equal(failed.error.message,'legacy offline');
 });
 
 test('MA recurrence, MACD and scenario outputs are deterministic', () => {

@@ -34,6 +34,34 @@ export async function loadDailyCloses(client, instrument) {
   return { ...legacyResponse, symbol:symbol.value, source:'legacy', marketError:marketResponse?.error || null };
 }
 
+export async function loadLatestOfficialClose(client, instrument) {
+  const symbol = toBaoStockCode(instrument?.market, instrument?.code);
+  if (!symbol.ok) return { data:null, error:{ message:symbol.error }, symbol:null, source:null };
+  const marketResponse = await client.from('market_daily_bar')
+    .select('trade_date,close,trade_status,synced_at')
+    .eq('provider','baostock').eq('market',symbol.market).eq('code',symbol.code).eq('trade_status',true)
+    .limit(1).order('trade_date',{ ascending:false });
+  const marketRow = marketResponse?.data?.find(row => Number(row?.close)>0) || null;
+  if (!marketResponse?.error && marketRow) {
+    return { data:{ ...marketRow, close:Number(marketRow.close) }, error:null, symbol:symbol.value, source:'full-market' };
+  }
+  const legacyResponse = await client.from('market_daily_close')
+    .select('trade_date,close,synced_at')
+    .eq('provider','baostock').eq('market',symbol.market).eq('code',symbol.code)
+    .limit(1).order('trade_date',{ ascending:false });
+  const legacyRow = legacyResponse?.data?.find(row => Number(row?.close)>0) || null;
+  if (!legacyResponse?.error && legacyRow) {
+    return { data:{ ...legacyRow, close:Number(legacyRow.close) }, error:null, symbol:symbol.value, source:'legacy', marketError:marketResponse?.error || null };
+  }
+  return {
+    data:null,
+    error:legacyResponse?.error || marketResponse?.error || null,
+    symbol:symbol.value,
+    source:null,
+    marketError:marketResponse?.error || null
+  };
+}
+
 export async function loadMarketSyncState(client, instrument) {
   const symbol = toBaoStockCode(instrument?.market, instrument?.code);
   if (!symbol.ok) return { data:null, error:{ message:symbol.error } };

@@ -41,6 +41,7 @@ The following families are shared primitives. Their reusable geometry, typograph
 | Inputs/selects/textarea | shared form-control primitive | Field grouping and column layout |
 | Mobile bottom navigation | shared mobile-nav primitive | Active destination only |
 | Marquee and Pro Tips | shared header/content services | Text and behavior supplied by the app controller |
+| Cloud Push feedback | `fibo-button--cloud-up` plus shared `is-cloud-saving/is-cloud-saved` states | Which page-specific save operation runs |
 
 If a reusable primitive is not yet present, extract it before building the new page. Do not implement a page-prefixed approximation first and normalize it later.
 
@@ -81,6 +82,14 @@ The legacy aliases (`--g-blue`, `--primary`, `--bg`, `--text`, and similar names
 - System-neutral editors use the shared `fibo-modal` geometry; page modules retain ownership of modal content and behavior.
 
 The page stylesheet must not contain selectors beginning with `.fibo-header` or `.fibo-modal` for geometry overrides. A required variant must be named and implemented centrally in `components.css` before use.
+
+## Cloud action feedback
+
+- Terminal, Wave and Trend Tracker Push actions use the same inline state sequence: `Push to Cloud` → `Saving to Cloud…` → `Saved to Cloud` → original label.
+- Success is shown for two seconds on the exact button that initiated the operation. Successful Push must not open a browser alert or a second success dialog.
+- The active button is disabled and exposes `aria-busy` while saving; its changing label uses a polite live region. Failures restore the button immediately and retain the page's explicit error alert.
+- A mobile action sheet stays open until the Saved state has been visible, then closes. On failure it remains open so the user can retry.
+- Saved and Saving presentation belongs to `components.css` and uses the existing semantic success, spacing and motion tokens. Do not add page-local colors or duplicate timing tokens for this state.
 
 ## Responsive contract
 

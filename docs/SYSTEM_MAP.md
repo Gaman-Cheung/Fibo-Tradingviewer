@@ -24,17 +24,21 @@ Manual Windows launcher -----/              |
 
 - Shared permanent identity and Pool reconciliation: `src/core/instrument-identity.js`.
 - Versioned local migrations: `src/core/migrations.js`.
+- Canonical cross-page Current/VR storage: `src/core/shared-live-inputs.js`; Terminal and Tracker must not create a second owner.
 - Supabase payload compatibility: `src/core/cloud-payload.js`.
 - Terminal calculations: `src/terminal/`.
 - Wave calculations: `src/wave/`.
 - Trend calculations: `src/tracker/`.
-- BaoStock code normalization and Tracker queries: `src/core/market-code.js` and `src/core/market-repository.js`.
+- BaoStock code normalization plus Tracker history and Terminal latest-close queries: `src/core/market-code.js` and `src/core/market-repository.js`.
 - Full-market synchronization: GitHub Action and `SyncBaoStock.cmd` both call `scripts/sync_baostock.py`; neither implementation may duplicate sync rules.
 - BaoStock connectivity/local CSV diagnostics: `scripts/test_baostock_local.py`; it never writes Supabase.
 - DOM, navigation, drag/drop, modal and responsive behavior: `src/apps/`.
+- Shared Push button state and confirmation behavior: `src/apps/cloud-action-feedback.js` plus the shared component states in `assets/css/components.css`.
 - The declarative event controller replaces executable HTML event attributes and keeps handlers module-scoped.
 
 The HTML entrypoints contain structure only. Page CSS consumes shared tokens and may not redefine shared tokens or business behavior.
+
+Terminal MACD suggestions load history through the shared market repository, calculate through pure `src/tracker` helpers, and are applied only by the Terminal controller after explicit user confirmation. They never write a score directly.
 
 ## Presentation layers
 

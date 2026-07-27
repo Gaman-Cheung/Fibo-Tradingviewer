@@ -15,9 +15,12 @@ import { loadDailyCloses, loadMarketSyncState, loadTrackerState, saveTrackerStat
 import { MA_PERIODS, DEFAULT_VISIBLE_MAS, analyzeTrend, appendProvisionalCurrent, projectScenario, sma } from '../tracker/trend-engine.js';
 import { buildTrackerChartModel } from '../tracker/chart-model.js';
 import { formatTurnLabel } from '../tracker/status-presenter.js';
+import { runCloudPushFeedback } from './cloud-action-feedback.js';
+import { readSharedLiveInputs, reconcileLegacyTrackerInputs, updateSharedLiveInput } from '../core/shared-live-inputs.js';
 
 const client = getSupabaseClient('tracker');
 runMigrations(localStorage);
+reconcileLegacyTrackerInputs(localStorage);
 const COLORS = ['#4285f4','#ea4335','#fbbc05','#34a853','#ab47bc','#ff6d00','#00acc1','#795548','#5f6368'];
 const TRACKER_HELP_TOPICS = {
   'ma-status': {
@@ -47,7 +50,7 @@ function persistState() {
 }
 
 function currentInstrument() { return pool.items.find(item => item.id === trackerState.activeInstrumentId && item.status !== 'archived') || null; }
-function instrumentState() { return trackerState.instruments[trackerState.activeInstrumentId] ||= { current:'', vr:'', scenarioMode:'flat', horizon:20, target:'', targetDate:'' }; }
+function instrumentState() { return trackerState.instruments[trackerState.activeInstrumentId] ||= { scenarioMode:'flat', horizon:20, target:'', targetDate:'' }; }
 function escapeHtml(value) { const div=document.createElement('div'); div.textContent=String(value ?? ''); return div.innerHTML; }
 
 function renderMarquee() {
@@ -114,8 +117,12 @@ function vrText(value) {
   return '异常放量：上涨关注加速/强分歧；下跌关注恐慌/出货风险。';
 }
 
-function updateTrackerInputs() {
-  const state=instrumentState(); state.current=document.getElementById('trackerCurrent').value; state.vr=document.getElementById('trackerVr').value; persistState(); renderTracker();
+function updateTrackerInput(input) {
+  const instrument=currentInstrument();
+  const field=input?.id==='trackerCurrent'?'current':input?.id==='trackerVr'?'vr':'';
+  if(!instrument||!field)return;
+  updateSharedLiveInput(localStorage,{instrumentId:instrument.id,instrument,field,value:input.value});
+  renderTracker();
 }
 
 function renderMaToggles() {
@@ -126,29 +133,30 @@ function toggleMa(input) {
   const period=Number(input.value); trackerState.visibleMas=input.checked ? [...new Set([...trackerState.visibleMas,period])] : trackerState.visibleMas.filter(value=>value!==period); persistState(); renderTracker();
 }
 
-function renderTracker() {
+function renderTracker(forceLiveInputs=false) {
   if (document.getElementById('trackerContent').hidden) return;
   const state=instrumentState();
+  const live=readSharedLiveInputs(localStorage,trackerState.activeInstrumentId);
   const currentInput=document.getElementById('trackerCurrent'), vrInput=document.getElementById('trackerVr');
-  if (document.activeElement !== currentInput) currentInput.value=state.current ?? '';
-  if (document.activeElement !== vrInput) vrInput.value=state.vr ?? '';
+  if (forceLiveInputs || document.activeElement !== currentInput) currentInput.value=live.current;
+  if (forceLiveInputs || document.activeElement !== vrInput) vrInput.value=live.vr;
   const official=analyzeTrend(history);
-  const previewValues=appendProvisionalCurrent(history,state.current);
+  const previewValues=appendProvisionalCurrent(history,live.current);
   const preview=analyzeTrend(previewValues);
   document.getElementById('backgroundValue').textContent=official.background;
   document.getElementById('structureValue').textContent=official.structure;
   document.getElementById('eventValue').textContent=official.event;
   document.getElementById('profileValue').textContent=`Focus MA ${preview.profile.focus.join(' / ')}`;
-  document.getElementById('vrInterpretation').textContent=vrText(state.vr);
+  document.getElementById('vrInterpretation').textContent=vrText(live.vr);
   const freshness=document.getElementById('trackerFreshness');
   if (syncState?.last_status === 'error') {
     freshness.className='freshness error';
     freshness.textContent=`数据截至 ${historyDates.at(-1) || '--'}；最近同步失败：${syncState.last_error || 'unknown error'}`;
-  } else if (!freshness.classList.contains('error')) freshness.textContent=history.length ? `Official close: ${historyDates.at(-1)} · ${history.length} sessions · Sync: ${syncState?.last_status || 'unknown'}${state.current ? ' · Current preview active':''}` : '暂无行情历史；请运行 BaoStock Sync。';
+  } else if (!freshness.classList.contains('error')) freshness.textContent=history.length ? `Official close: ${historyDates.at(-1)} · ${history.length} sessions · Sync: ${syncState?.last_status || 'unknown'}${live.current ? ' · Current preview active':''}` : '暂无行情历史；请运行 BaoStock Sync。';
   renderMaToggles();
   document.getElementById('maTableBody').innerHTML=MA_PERIODS.map(period=>{
     const item=preview.ma[period], turn=preview.turns[`ma${period}`];
-    const turnText=formatTurnLabel(turn,item.direction,state.current !== '');
+    const turnText=formatTurnLabel(turn,item.direction,live.current !== '');
     return `<tr><td>MA${period}</td><td>${Number.isFinite(item.value)?item.value.toFixed(3):'--'}</td><td>${Number.isFinite(item.delta)?item.delta.toFixed(4):'--'}</td><td class="status-${item.direction}">${item.direction}</td><td>${turnText}</td></tr>`;
   }).join('');
   document.getElementById('macdSummary').innerHTML=`<strong>MACD 12/26/9</strong><br>DIF ${format(preview.macd.dif)} · DEA ${format(preview.macd.dea)} · Histogram ${format(preview.macd.histogram)}<br>${preview.macd.cross} cross · ${preview.macd.zeroAxis} zero axis · ${preview.macd.direction}`;
@@ -159,7 +167,7 @@ function renderTracker() {
   const projection=projectScenario(previewValues,{mode,horizon,target});
   const end=projection.path.at(-1), lower=projection.lower.at(-1), upper=projection.upper.at(-1), endAnalysis=projection.analyses.at(-1);
   document.getElementById('scenarioResult').innerHTML=end ? `<strong>${targetDate || `Day ${projection.path.length}`}: ${end.toFixed(3)}</strong><br>Volatility range ${lower.toFixed(3)} – ${upper.toFixed(3)}<br>${endAnalysis.background} · ${endAnalysis.structure} · ${endAnalysis.event}` : '历史数据不足。';
-  drawChart(previewValues,historyDates,state.current !== '',projection);
+  drawChart(previewValues,historyDates,live.current !== '',projection);
 }
 
 function format(value) { return Number.isFinite(value) ? value.toFixed(4) : '--'; }
@@ -249,24 +257,45 @@ function openActions(){document.getElementById('trackerActionsBackdrop').classLi
 function closeActions(){document.getElementById('trackerActionsBackdrop').classList.remove('open');}
 function handleActionsBackdrop(event){if(event.target.id==='trackerActionsBackdrop')closeActions();}
 
-async function pushTrackerCloud(){
-  setLoading(true); const {user}=await getAuthenticatedUser(client); if(!user){setLoading(false);return;}
-  const existing=(await loadCloudRow(client,user.id,'wp_data')).data?.wp_data||{};
-  const notes={marquee:localStorage.getItem(STORAGE_KEYS.marquee)||'',tips:localStorage.getItem(STORAGE_KEYS.tips)||''};
-  const payload=buildCloudPayload({userId:user.id,lookFirst:readArray(localStorage,STORAGE_KEYS.lookFirst),thenLeap:readArray(localStorage,STORAGE_KEYS.thenLeap),waveState:readJson(localStorage,STORAGE_KEYS.waveState,null),instrumentPool:pool,uiNotes:notes,existingWaveData:existing});
-  const results=await Promise.all([upsertCloudRow(client,payload),syncMarketBindings(client,user.id,pool),saveTrackerState(client,user.id,trackerState)]); setLoading(false);
-  const error=results.find(result=>result?.error)?.error; alert(error?`Push failed: ${error.message}`:'Tracker data pushed to Cloud.');
+async function pushTrackerCloud(trigger){
+  const button=trigger||document.querySelector('.fibo-header__actions .fibo-button--cloud-up');
+  const mobileAction=!!button?.closest('#trackerActionsBackdrop');
+  return runCloudPushFeedback(button,async()=>{
+    setLoading(true); const {user}=await getAuthenticatedUser(client); if(!user){setLoading(false);return false;}
+    const existing=(await loadCloudRow(client,user.id,'wp_data')).data?.wp_data||{};
+    const notes={marquee:localStorage.getItem(STORAGE_KEYS.marquee)||'',tips:localStorage.getItem(STORAGE_KEYS.tips)||''};
+    const payload=buildCloudPayload({userId:user.id,lookFirst:readArray(localStorage,STORAGE_KEYS.lookFirst),thenLeap:readArray(localStorage,STORAGE_KEYS.thenLeap),waveState:readJson(localStorage,STORAGE_KEYS.waveState,null),instrumentPool:pool,uiNotes:notes,existingWaveData:existing});
+    const results=await Promise.all([upsertCloudRow(client,payload),syncMarketBindings(client,user.id,pool),saveTrackerState(client,user.id,trackerState)]); setLoading(false);
+    const error=results.find(result=>result?.error)?.error;
+    if(error){alert(`Push failed: ${error.message}`);return false;}
+    return true;
+  },{
+    onSuccessSettled:()=>{if(mobileAction)closeActions();},
+    onUnexpectedError:error=>{setLoading(false);alert(`Push failed: ${error?.message||error}`);}
+  });
 }
 
 async function pullTrackerCloud(){
   setLoading(true); const {user}=await getAuthenticatedUser(client); if(!user){setLoading(false);return;}
   const [cloud,tracker]=await Promise.all([loadCloudRow(client,user.id),loadTrackerState(client,user.id)]);
-  if(cloud.data){const unpacked=unpackCloudPayload(cloud.data); if(unpacked.instrumentPool?.items){pool=unpacked.instrumentPool;saveInstrumentPool(pool);} if(unpacked.uiNotes){localStorage.setItem(STORAGE_KEYS.marquee,unpacked.uiNotes.marquee||'');localStorage.setItem(STORAGE_KEYS.tips,unpacked.uiNotes.tips||'');}}
-  if(tracker.data?.state)trackerState=normalizeTrackerState(tracker.data.state); persistState();renderMarquee();renderInstrumentPicker();await loadInstrumentHistory();setLoading(false);
+  if(cloud.data){
+    const unpacked=unpackCloudPayload(cloud.data);
+    if(Array.isArray(cloud.data.v6_data))writeJson(localStorage,STORAGE_KEYS.lookFirst,unpacked.lookFirst);
+    if(Array.isArray(cloud.data.v7_data))writeJson(localStorage,STORAGE_KEYS.thenLeap,unpacked.thenLeap);
+    if(unpacked.instrumentPool?.items){pool=unpacked.instrumentPool;saveInstrumentPool(pool);}
+    if(unpacked.uiNotes){localStorage.setItem(STORAGE_KEYS.marquee,unpacked.uiNotes.marquee||'');localStorage.setItem(STORAGE_KEYS.tips,unpacked.uiNotes.tips||'');}
+  }
+  if(tracker.data?.state)writeJson(localStorage,STORAGE_KEYS.trackerState,normalizeTrackerState(tracker.data.state));
+  reconcileLegacyTrackerInputs(localStorage,pool);
+  trackerState=normalizeTrackerState(readJson(localStorage,STORAGE_KEYS.trackerState,{}));
+  persistState();renderMarquee();renderInstrumentPicker();await loadInstrumentHistory();setLoading(false);
 }
 
 async function logout(){await client.auth.signOut();window.location.href=ROUTES.auth;}
 
 window.addEventListener('resize',()=>requestAnimationFrame(renderTracker));
+window.addEventListener('storage',event=>{
+  if([STORAGE_KEYS.lookFirst,STORAGE_KEYS.thenLeap].includes(event.key))renderTracker(true);
+});
 document.addEventListener('DOMContentLoaded',async()=>{const {data}=await client.auth.getSession();if(!data?.session){window.location.href=ROUTES.auth;return;}renderMarquee();renderInstrumentPicker();await loadInstrumentHistory();});
-bindDeclarativeEvents({selectInstrument,updateTrackerInputs,toggleMa,renderTracker,openNote,closeNote,saveNote,handleNoteBackdrop,openTrackerHelp,closeTrackerHelp,handleTrackerHelpBackdrop,openActions,closeActions,handleActionsBackdrop,pushTrackerCloud,pullTrackerCloud,logout});
+bindDeclarativeEvents({selectInstrument,updateTrackerInput,toggleMa,renderTracker,openNote,closeNote,saveNote,handleNoteBackdrop,openTrackerHelp,closeTrackerHelp,handleTrackerHelpBackdrop,openActions,closeActions,handleActionsBackdrop,pushTrackerCloud,pullTrackerCloud,logout});

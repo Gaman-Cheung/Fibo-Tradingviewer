@@ -9,9 +9,10 @@ window.supabase={createClient(){
    return {trade_date:date.toISOString().slice(0,10),close,pct_chg:index?(close/previous-1)*100:0,trade_status:1,synced_at:'2026-07-27T11:00:00Z'};
  }).reverse();
  function builder(table){
+   const filters={};
    return {
-     select(){return this},eq(){return this},limit(){return this},
-     order(){return Promise.resolve({data:table==='market_daily_bar'?marketRows:[],error:null})},
+     select(){return this},eq(column,value){filters[column]=value;return this},limit(){return this},
+     order(){if(table==='market_daily_bar')window.__marketDailyBarOrders=(window.__marketDailyBarOrders||0)+1;return Promise.resolve({data:table==='market_daily_bar'&&filters.code==='300657'?marketRows:[],error:null})},
      single(){return Promise.resolve({data:null,error:{code:'PGRST116'}})},
      maybeSingle(){return Promise.resolve({data:table==='market_sync_checkpoint'?{last_status:'success'}:null,error:null})},
      upsert(){return Promise.resolve({data:null,error:null})}
@@ -23,17 +24,20 @@ window.supabase={createClient(){
 test.beforeEach(async ({ page }) => {
   await page.route('https://cdn.jsdelivr.net/**', route => route.fulfill({ status:200, contentType:'application/javascript', body:supabaseMock }));
   await page.addInitScript(() => {
-    localStorage.setItem('tv_instrument_pool_v1', JSON.stringify({ version:1, items:[
+    if (!localStorage.getItem('tv_instrument_pool_v1')) localStorage.setItem('tv_instrument_pool_v1', JSON.stringify({ version:1, items:[
       { id:'e2e-a', ticker:'E2E', code:'300657', market:'SZ', order:0, status:'active' },
-      { id:'e2e-b', ticker:'E2E', code:'', market:'OTHER', order:1, status:'active' }
+      { id:'e2e-b', ticker:'E2E', code:'', market:'OTHER', order:1, status:'active' },
+      { id:'e2e-c', ticker:'E2E COPY', code:'300657', market:'SZ', order:2, status:'active' }
     ], tombstones:[] }));
-    localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify([
+    if (!localStorage.getItem('tv_lookfirst_data_v3')) localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify([
       { id:'e2e-a', n:'E2E', h:'100', l:'50', c:'70', e:'65', p:'68', b:'current' },
-      { id:'e2e-b', n:'E2E', h:'80', l:'40', c:'60', e:'', p:'59', b:'current' }
+      { id:'e2e-b', n:'E2E', h:'80', l:'40', c:'60', e:'', p:'59', b:'current' },
+      { id:'e2e-c', n:'E2E COPY', h:'90', l:'45', c:'69', e:'', p:'67', b:'current' }
     ]));
-    localStorage.setItem('tv_thenleap_data_v3', JSON.stringify([
+    if (!localStorage.getItem('tv_thenleap_data_v3')) localStorage.setItem('tv_thenleap_data_v3', JSON.stringify([
       { id:'e2e-a', n:'E2E', t:'sideways', r:'50', m:'neutral', s:'60', g:'100', g1:'75', v:'1' },
-      { id:'e2e-b', n:'E2E', t:'sideways', r:'', m:'neutral', s:'', g:'', g1:'', v:'' }
+      { id:'e2e-b', n:'E2E', t:'sideways', r:'', m:'neutral', s:'', g:'', g1:'', v:'' },
+      { id:'e2e-c', n:'E2E COPY', t:'sideways', r:'', m:'neutral', s:'', g:'', g1:'', v:'' }
     ]));
   });
 });
@@ -133,6 +137,66 @@ test('terminal controller switches tabs and persists shared Pro Tips', async ({ 
   await expect.poll(() => page.evaluate(() => localStorage.getItem('tv_header_tips_v1'))).toBe('E2E discipline');
 });
 
+test('terminal Auto Prev Close is deduplicated by symbol and remains overridable per permanent ID', async ({ page }) => {
+  await page.goto('/Terminal.html?tab=v6');
+  const rowA=page.locator('#tableBodyV6 tr[data-instrument-id="e2e-a"]');
+  const rowB=page.locator('#tableBodyV6 tr[data-instrument-id="e2e-b"]');
+  const rowC=page.locator('#tableBodyV6 tr[data-instrument-id="e2e-c"]');
+  const previousA=rowA.locator('.previous');
+  await expect(previousA).toHaveValue('125.8');
+  await expect(rowC.locator('.previous')).toHaveValue('125.8');
+  await expect(previousA).toHaveJSProperty('readOnly',true);
+  await expect(rowA.locator('.previous-mode-button')).toHaveClass(/state-success/);
+  await expect(rowA.locator('.previous-mode-button')).toHaveAttribute('title',/2026-05-11/);
+  await expect(rowB.locator('.previous')).toHaveJSProperty('readOnly',false);
+  expect(await page.evaluate(()=>window.__marketDailyBarOrders)).toBe(1);
+  await expect(page.locator('#tableBodyV7 tr[data-instrument-id="e2e-a"] .market-summary')).toContainText('vs Prev -44.36%');
+
+  await rowA.locator('.previous-mode-button').click();
+  await expect(previousA).toHaveJSProperty('readOnly',false);
+  await previousA.fill('88');
+  await expect(page.locator('#tableBodyV7 tr[data-instrument-id="e2e-a"] .market-summary')).toContainText('vs Prev -20.45%');
+  await expect.poll(()=>page.evaluate(()=>{
+    const row=JSON.parse(localStorage.getItem('tv_lookfirst_data_v3')).find(item=>item.id==='e2e-a');
+    return [row.p,row.pm,row.pd];
+  })).toEqual(['88','manual','']);
+
+  await page.reload();
+  const reloaded=page.locator('#tableBodyV6 tr[data-instrument-id="e2e-a"]');
+  await expect(reloaded.locator('.previous')).toHaveValue('88');
+  await expect(reloaded.locator('.previous')).toHaveJSProperty('readOnly',false);
+  await reloaded.locator('.previous-mode-button').click();
+  await expect(reloaded.locator('.previous')).toHaveValue('125.8');
+  await expect(reloaded.locator('.previous')).toHaveJSProperty('readOnly',true);
+  await expect.poll(()=>page.evaluate(()=>{
+    const row=JSON.parse(localStorage.getItem('tv_lookfirst_data_v3')).find(item=>item.id==='e2e-a');
+    return [row.p,row.pm,row.pd];
+  })).toEqual(['125.8','auto','2026-05-11']);
+  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test('terminal Auto Prev Close preserves a cached value when no market row is available', async ({ page }) => {
+  await page.goto('/Terminal.html?tab=v6');
+  await page.evaluate(()=>{
+    const pool=JSON.parse(localStorage.getItem('tv_instrument_pool_v1'));
+    Object.assign(pool.items.find(item=>item.id==='e2e-b'),{code:'600001',market:'SH'});
+    localStorage.setItem('tv_instrument_pool_v1',JSON.stringify(pool));
+    const rows=JSON.parse(localStorage.getItem('tv_lookfirst_data_v3'));
+    Object.assign(rows.find(item=>item.id==='e2e-b'),{pm:'auto',pd:''});
+    localStorage.setItem('tv_lookfirst_data_v3',JSON.stringify(rows));
+    localStorage.setItem('tv_active_instrument_id','e2e-b');
+  });
+  await page.reload();
+  const row=page.locator('#tableBodyV6 tr[data-instrument-id="e2e-b"]');
+  await expect(row.locator('.previous')).toHaveValue('59');
+  await expect(row.locator('.previous')).toHaveJSProperty('readOnly',true);
+  await expect(row.locator('.previous-mode-button')).toHaveClass(/state-cached/);
+  await expect(row.locator('.previous-mode-button')).toHaveAttribute('title',/cached value/i);
+  await row.locator('.previous-mode-button').click();
+  await expect(row.locator('.previous')).toHaveJSProperty('readOnly',false);
+});
+
 test('all systems share the established header geometry', async ({ page }, testInfo) => {
   const results=[];
   for (const name of ['Terminal.html?tab=v6','WaveAnalysis.html','TrendTracker.html']) {
@@ -205,17 +269,79 @@ test('tracker uses Pool code and mobile Pro Tips without a cloud shortcut', asyn
 test('tracker chart exposes official markers, dates and separate Current preview', async ({ page }) => {
   await page.goto('/TrendTracker.html');
   const canvas=page.locator('#trackerChart');
-  await expect(canvas).toHaveAttribute('aria-label',/Trend chart range 2026-01-12 to 2026-05-11\./);
+  await expect(canvas).toHaveAttribute('aria-label',/Trend chart range 2026-01-13 to 2026-05-11\./);
   await expect(canvas).toHaveAttribute('aria-label',/High close 160\.000 on 2026-03-13\./);
   await expect(canvas).toHaveAttribute('aria-label',/Low close 80\.000 on 2026-01-22\./);
   await expect(canvas).toHaveAttribute('aria-label',/Latest close 125\.800 on 2026-05-11\./);
-  await expect(canvas).not.toHaveAttribute('aria-label',/Current preview/);
+  await expect(canvas).toHaveAttribute('aria-label',/Current preview 70\.000\./);
 
   await page.locator('#trackerCurrent').fill('220');
   await expect(canvas).toHaveAttribute('aria-label',/Current preview 220\.000\./);
   await expect(canvas).toHaveAttribute('aria-label',/High close 160\.000/);
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test('Terminal and Tracker share Current and VR by permanent ID across tabs', async ({ page,context }) => {
+  await page.goto('/Terminal.html?tab=v6');
+  const tracker=await context.newPage();
+  await tracker.route('https://cdn.jsdelivr.net/**',route=>route.fulfill({status:200,contentType:'application/javascript',body:supabaseMock}));
+  await tracker.goto('/TrendTracker.html');
+  const terminalA=page.locator('#tableBodyV6 tr[data-instrument-id="e2e-a"]');
+  await terminalA.locator('.current').fill('77.5');
+  await expect(tracker.locator('#trackerCurrent')).toHaveValue('77.5');
+
+  await tracker.locator('#trackerVr').fill('1.8');
+  await expect(page.locator('#tableBodyV7 tr[data-instrument-id="e2e-a"] .volume-ratio')).toHaveValue('1.8');
+  const distinct=await page.evaluate(()=>({
+    current:JSON.parse(localStorage.getItem('tv_lookfirst_data_v3')).find(row=>row.id==='e2e-b')?.c,
+    vr:JSON.parse(localStorage.getItem('tv_thenleap_data_v3')).find(row=>row.id==='e2e-b')?.v
+  }));
+  expect(distinct).toEqual({current:'60',vr:''});
+  await tracker.close();
+});
+
+test('Then Leap MACD suggestion is on-demand and divergence remains manual', async ({ page },testInfo) => {
+  await page.goto('/Terminal.html?tab=v7');
+  const row=page.locator('#tableBodyV7 tr[data-instrument-id="e2e-a"]');
+  if(testInfo.project.name==='iphone')await row.locator('.mobile-detail-toggle').click();
+  const select=row.locator('.macd');
+  await expect(select).toHaveValue('neutral');
+  await row.locator('.macd-suggest-button').click();
+  await expect(page.locator('#macdSuggestionBackdrop')).toHaveClass(/open/);
+  await expect(page.locator('#macdSuggestionContent')).toContainText('Close/DIF divergence candidates');
+  await expect(page.locator('#macdSuggestionContent')).toContainText('CURRENT PREVIEW');
+  await expect(select).toHaveValue('neutral');
+  await expect(page.locator('#applyMacdSuggestionButton')).toBeEnabled();
+  const suggested=await page.locator('.macd-suggestion-summary > strong').textContent();
+  await page.locator('#applyMacdSuggestionButton').click();
+  const expected=suggested.includes('Bullish')?'bullish':suggested.includes('Bearish')?'bearish':'neutral';
+  await expect(select).toHaveValue(expected);
+  await expect(select.locator('option[value="divergence"]')).toHaveText(/Bullish Divergence/);
+  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test('all Push actions use inline Saved to Cloud feedback', async ({ page },testInfo) => {
+  const systems=[
+    {url:'Terminal.html?tab=v6',open:'openMobileActions()',sheet:'#mobileActionsBackdrop'},
+    {url:'WaveAnalysis.html',open:'openWaveMobileActions()',sheet:'#waveMobileActionsBackdrop'},
+    {url:'TrendTracker.html',open:'openActions()',sheet:'#trackerActionsBackdrop'}
+  ];
+  for(const system of systems){
+    await page.goto(`/${system.url}`);
+    let push;
+    if(testInfo.project.name==='iphone'){
+      await page.locator(`[data-fibo-click="${system.open}"]`).click();
+      push=page.locator(`${system.sheet} .fibo-button--cloud-up`);
+    }else push=page.locator('.fibo-header__actions .fibo-button--cloud-up');
+    await push.click();
+    await expect(push).toContainText('Saved to Cloud');
+    if(testInfo.project.name==='iphone'){
+      await expect(page.locator(system.sheet)).toHaveClass(/open/);
+      await expect(page.locator(system.sheet)).not.toHaveClass(/open/,{timeout:3500});
+    }else await expect(push).toContainText('Push to Cloud',{timeout:3500});
+  }
 });
 
 test('tracker MA Status and Scenario Lab share the read-only help modal', async ({ page }) => {

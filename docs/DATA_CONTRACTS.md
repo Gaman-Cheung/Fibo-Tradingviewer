@@ -21,9 +21,11 @@
 | `tv_active_instrument_id` | Active permanent ID |
 | `tv_header_marquee_v1` | Shared marquee text |
 | `tv_header_tips_v1` | Shared Pro Tips text |
-| `tv_trend_tracker_state_v1` | Tracker preferences and per-instrument inputs keyed by permanent ID |
+| `tv_trend_tracker_state_v1` | Tracker MA visibility, Scenario preferences and other Tracker-only state keyed by permanent ID; legacy `current/vr` fields are migration input only |
 
 Migrations are ordered, versioned and idempotent in `src/core/migrations.js`.
+
+Look First keeps Prev Close in `p`, its source mode in `pm` (`auto` or `manual`) and the Auto source trading date in `pd` (`YYYY-MM-DD` or empty). These fields travel unchanged through backups and `v6_data`; mode remains per permanent ID even when multiple instruments share the same Market/Code.
 
 ## Supabase
 
@@ -46,5 +48,9 @@ Existing columns and metadata carriers must remain readable. A new schema must b
 - `market_sync_checkpoint` has one `(provider,scope)` row for idempotent backfill progress and global freshness. A cursor advances only after every batch for that date succeeds.
 - Full-market data retains the latest 400 official trading sessions. Incomplete or abnormally small snapshots never advance the checkpoint or trigger retention deletion.
 - `market_daily_close` and `market_sync_state` remain readable compatibility fallbacks and are not dropped or repurposed.
-- Current and five-day VR remain manual per permanent ID.
+- Current and five-day VR remain manual per permanent ID, but have exactly one canonical storage location: Look First `c` for Current and Then Leap `v` for VR. Tracker inputs are proxies into those rows and must never own a second live copy.
+- Shared Current/VR reads and writes use exact `instrument.id` only. A missing row may be created only for an ID present in Pool; duplicate Tickers or Market/Code values never share the manual value.
+- Legacy Tracker `current/vr` values fill only blank canonical fields. Non-empty Terminal fields always win. Successfully reconciled legacy copies are removed; unknown IDs are retained for a later Pool restore. The reconciliation is versioned, idempotent and also runs after imports or cloud Pulls.
+- Same-device tabs synchronize these two canonical storage keys through browser storage events. Cross-device synchronization remains explicit Push/Pull through existing `v6_data/v7_data`; Supabase Realtime is not part of this contract.
+- Terminal Auto Prev Close reads the latest traded row for the Pool instrument's explicit Market/Code. It may reuse one market request for duplicate symbols, but writes `p/pm/pd` only to each exact permanent ID. Manual mode never changes another instrument.
 - Service-role credentials may exist only in protected server-side secrets or the ignored local `.env.local` used by the manual synchronization launcher. They must never enter browser code, tracked files, backups or cloud payloads.

@@ -10,13 +10,14 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
 test('cloud payload keeps legacy columns and metadata carriers round-trippable', () => {
   const payload = buildCloudPayload({
-    userId:'u1', lookFirst:[{ id:'i1', n:'X', h:'10', l:'5', c:'8' }], thenLeap:[{ id:'i1', n:'X' }],
+    userId:'u1', lookFirst:[{ id:'i1', n:'X', h:'10', l:'5', c:'8', p:'7.8', pm:'auto', pd:'2026-07-24' }], thenLeap:[{ id:'i1', n:'X' }],
     waveState:{ tabs:[] }, instrumentPool:{ version:1, items:[{ id:'i1', ticker:'X' }], tombstones:[] },
     uiNotes:{ marquee:'m', tips:'t' }
   });
   assert.deepEqual(Object.keys(payload), ['user_id','v6_data','v7_data','wp_data']);
   const restored = unpackCloudPayload(payload);
   assert.equal(restored.lookFirst[0].id, 'i1');
+  assert.deepEqual({p:restored.lookFirst[0].p,pm:restored.lookFirst[0].pm,pd:restored.lookFirst[0].pd},{p:'7.8',pm:'auto',pd:'2026-07-24'});
   assert.equal(restored.instrumentPool.items[0].id, 'i1');
   assert.equal(restored.uiNotes.tips, 't');
 });
@@ -109,6 +110,24 @@ test('all cloud actions use the shared blue pull and green push variants', () =>
     assert.ok(pushButtons.length >= 1, `${name}: Push action missing`);
     for(const button of pullButtons) assert.match(button,/fibo-button--cloud-down/,`${name}: Pull must use shared blue variant`);
     for(const button of pushButtons) assert.match(button,/fibo-button--cloud-up/,`${name}: Push must use shared green variant`);
+  }
+});
+
+test('all systems use the shared inline cloud Push feedback contract', () => {
+  const feedback=fs.readFileSync(path.join(root,'src/apps/cloud-action-feedback.js'),'utf8');
+  const components=fs.readFileSync(path.join(root,'assets/css/components.css'),'utf8');
+  for(const state of ['saving','saved'])assert.match(feedback,new RegExp(`['"]${state}['"]`));
+  assert.match(feedback,/aria-busy/);
+  assert.match(feedback,/aria-live/);
+  assert.match(components,/\.fibo-button\.is-cloud-saving/);
+  assert.match(components,/\.fibo-button\.is-cloud-saved/);
+  for(const name of ['terminal-app.js','wave-app.js','tracker-app.js']){
+    const source=fs.readFileSync(path.join(root,'src/apps',name),'utf8');
+    assert.match(source,/runCloudPushFeedback/,name);
+  }
+  for(const name of ['Terminal.html','WaveAnalysis.html','TrendTracker.html']){
+    const source=fs.readFileSync(path.join(root,name),'utf8');
+    for(const button of source.match(/<button\b[^>]*fibo-button--cloud-up[^>]*>/gi)||[])assert.match(button,/\(this\)/,`${name}: Push must identify the clicked button`);
   }
 });
 
