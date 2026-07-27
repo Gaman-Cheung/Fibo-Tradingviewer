@@ -25,6 +25,8 @@
 
 Migrations are ordered, versioned and idempotent in `src/core/migrations.js`.
 
+Tracker Scenario state keeps `horizon`, `target` and `targetDate` per permanent ID. Historical `scenarioMode` values are accepted on read, ignored and omitted from the next normalized write: Flat, Trend continuation and valid Custom target projections are now always calculated together. Reset changes only those three active-instrument Scenario fields and never touches Current, VR or MA visibility.
+
 Look First keeps Prev Close in `p`, its source mode in `pm` (`auto` or `manual`) and the Auto source trading date in `pd` (`YYYY-MM-DD` or empty). These fields travel unchanged through backups and `v6_data`; mode remains per permanent ID even when multiple instruments share the same Market/Code.
 
 ## Supabase

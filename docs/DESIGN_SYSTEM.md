@@ -45,6 +45,8 @@ The following families are shared primitives. Their reusable geometry, typograph
 
 If a reusable primitive is not yet present, extract it before building the new page. Do not implement a page-prefixed approximation first and normalize it later.
 
+Form-adjacent actions use the shared `fibo-button--control` modifier so they align with desktop controls and retain the minimum 44px mobile touch target. Page styles may place the button beside a field but must not redefine its height.
+
 ### Two-page rule
 
 The first page may own a genuinely unique pattern. Once a second system needs the same pattern, that change must promote the reusable portion to `components.css`. A third implementation is never allowed.

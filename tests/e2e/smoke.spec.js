@@ -282,6 +282,80 @@ test('tracker chart exposes official markers, dates and separate Current preview
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
+test('Tracker compares all Scenario paths and resets only the active Scenario inputs', async ({ page },testInfo) => {
+  await page.goto('/TrendTracker.html');
+  await expect(page.locator('#scenarioMode')).toHaveCount(0);
+  const rows=page.locator('#scenarioResult .scenario-result-row');
+  await expect(rows).toHaveCount(3);
+  await expect(page.locator('[data-scenario="flat"]')).toContainText('Flat');
+  await expect(page.locator('[data-scenario="trend"]')).toContainText('Trend continuation');
+  const custom=page.locator('[data-scenario="custom"]');
+  await expect(custom).toHaveClass(/is-disabled/);
+  await expect(custom).toContainText('Set Target');
+  await expect(page.locator('#trackerChart')).toHaveAttribute('aria-label',/Flat forecast ends at/);
+  await expect(page.locator('#trackerChart')).toHaveAttribute('aria-label',/Trend continuation forecast ends at/);
+  await expect(page.locator('#trackerChart')).toHaveAttribute('aria-label',/Custom target is not set/);
+
+  const legendColors=await page.evaluate(()=>Object.fromEntries(['flat','trend','custom'].map(key=>[
+    key,getComputedStyle(document.querySelector(`.scenario-line--${key}`)).borderTopColor
+  ])));
+  expect(legendColors).toEqual({flat:'rgb(66, 133, 244)',trend:'rgb(52, 168, 83)',custom:'rgb(234, 67, 53)'});
+
+  await page.locator('#scenarioHorizon').fill('13');
+  await page.locator('#scenarioTarget').fill('42.96');
+  await expect(custom).not.toHaveClass(/is-disabled/);
+  await expect(custom.locator('.scenario-result-row__numbers strong')).toContainText('Day 13: 42.960');
+  await expect(page.locator('#trackerChart')).toHaveAttribute('aria-label',/Forecast horizon 13 trading days/);
+  await expect(page.locator('#trackerChart')).toHaveAttribute('aria-label',/Custom target forecast ends at 42\.960/);
+
+  await page.locator('#scenarioTargetDate').fill('2026-06-01');
+  await page.locator('#scenarioTargetDate').blur();
+  await expect(custom.locator('.scenario-result-row__numbers strong')).toContainText('2026-06-01: 42.960');
+  await expect(page.locator('#trackerChart')).toHaveAttribute('aria-label',/Forecast target date 2026-06-01/);
+
+  const geometry=await page.evaluate(()=>{
+    const date=document.getElementById('scenarioTargetDate').getBoundingClientRect();
+    const reset=document.querySelector('.scenario-reset-button').getBoundingClientRect();
+    return {dateRight:date.right,dateBottom:date.bottom,resetLeft:reset.left,resetBottom:reset.bottom,resetHeight:reset.height};
+  });
+  expect(geometry.resetLeft).toBeGreaterThanOrEqual(geometry.dateRight-1);
+  expect(Math.abs(geometry.resetBottom-geometry.dateBottom)).toBeLessThanOrEqual(1);
+  expect(geometry.resetHeight).toBeGreaterThanOrEqual(testInfo.project.name==='iphone'?44:36);
+
+  await page.evaluate(()=>{
+    const state=JSON.parse(localStorage.getItem('tv_trend_tracker_state_v1'));
+    state.instruments['e2e-a'].scenarioMode='custom';
+    localStorage.setItem('tv_trend_tracker_state_v1',JSON.stringify(state));
+  });
+  await page.reload();
+  await expect(page.locator('#scenarioMode')).toHaveCount(0);
+  await expect(page.locator('[data-scenario="flat"]')).toBeVisible();
+  await expect(page.locator('[data-scenario="trend"]')).toBeVisible();
+  await expect(page.locator('[data-scenario="custom"]')).not.toHaveClass(/is-disabled/);
+  await page.locator('.scenario-reset-button').click();
+  await expect(page.locator('#scenarioHorizon')).toHaveValue('20');
+  await expect(page.locator('#scenarioTarget')).toHaveValue('');
+  await expect(page.locator('#scenarioTargetDate')).toHaveValue('');
+  await expect(custom).toHaveClass(/is-disabled/);
+  const saved=await page.evaluate(()=>({
+    tracker:JSON.parse(localStorage.getItem('tv_trend_tracker_state_v1')),
+    current:JSON.parse(localStorage.getItem('tv_lookfirst_data_v3')).find(row=>row.id==='e2e-a')?.c,
+    vr:JSON.parse(localStorage.getItem('tv_thenleap_data_v3')).find(row=>row.id==='e2e-a')?.v
+  }));
+  expect(saved.tracker.instruments['e2e-a']).toEqual({horizon:20,target:'',targetDate:''});
+  expect(saved.current).toBe('70');
+  expect(saved.vr).toBe('1');
+  expect(saved.tracker.visibleMas.length).toBeGreaterThan(0);
+
+  await page.reload();
+  await expect(page.locator('#scenarioHorizon')).toHaveValue('20');
+  await expect(page.locator('#scenarioTarget')).toHaveValue('');
+  await expect(page.locator('#scenarioTargetDate')).toHaveValue('');
+  await expect(page.locator('#scenarioResult .scenario-result-row')).toHaveCount(3);
+  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+});
+
 test('Terminal and Tracker share Current and VR by permanent ID across tabs', async ({ page,context }) => {
   await page.goto('/Terminal.html?tab=v6');
   const tracker=await context.newPage();

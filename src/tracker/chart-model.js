@@ -5,6 +5,21 @@
  */
 
 export const TRACKER_CHART_WINDOW = 120;
+export const TRACKER_FORECAST_RATIO = 0.3;
+
+export function buildTrackerChartXModel(pointCount, horizon, plot, forecastRatio=TRACKER_FORECAST_RATIO) {
+  const left=Number(plot?.left)||0;
+  const right=Number(plot?.right)||left;
+  const ratio=Math.max(0.1,Math.min(0.8,Number(forecastRatio)||TRACKER_FORECAST_RATIO));
+  const historyRight=left+(right-left)*(1-ratio);
+  const historyCount=Math.max(0,Math.floor(Number(pointCount)||0));
+  const forecastCount=Math.max(1,Math.floor(Number(horizon)||1));
+  const history=Array.from({length:historyCount},(_,index)=>historyCount===1
+    ? historyRight
+    : left+(historyRight-left)*index/(historyCount-1));
+  const forecast=Array.from({length:forecastCount},(_,index)=>historyRight+(right-historyRight)*(index+1)/forecastCount);
+  return { left, right, historyRight, history, forecast, forecastRatio:ratio };
+}
 
 function validPrice(value) {
   const number=Number(value);

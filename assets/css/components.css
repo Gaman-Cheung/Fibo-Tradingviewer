@@ -33,6 +33,7 @@
 }
 .fibo-button:hover,.fibo-header__actions > button:hover,.fibo-header__actions > a:hover { background:var(--color-surface-hover); color:var(--color-text); }
 .fibo-button .material-icons,.fibo-header__actions .material-icons { font-size:16px; }
+.fibo-button.fibo-button--control { min-height:var(--control-height-sm); }
 .help-icon {
   box-sizing:border-box; width:18px; height:18px; min-height:18px; padding:0; margin-left:3px; vertical-align:middle;
   border:1px solid var(--color-border); border-radius:50%; background:var(--color-surface); color:var(--color-text-secondary);
@@ -90,6 +91,7 @@
   .fibo-header__marquee-edit { flex-basis:30px; }
   .fibo-modal-backdrop { padding:14px; }
   .fibo-help-button { width:44px; height:44px; min-height:44px; flex-basis:44px; }
+  .fibo-button.fibo-button--control { min-height:var(--touch-target-min); }
 }
 
 @media (prefers-reduced-motion:reduce) {

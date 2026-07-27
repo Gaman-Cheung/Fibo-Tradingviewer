@@ -4,7 +4,8 @@ import { inferMainlandMarket, migrateLegacyMarket, toBaoStockCode } from '../../
 import { buildFrontAdjustedSeries } from '../../src/core/front-adjusted-series.js';
 import { runMigrations, CURRENT_SCHEMA_VERSION } from '../../src/core/migrations.js';
 import { analyzeTrend, appendProvisionalCurrent, maSnapshot, macd, projectScenario, turnState } from '../../src/tracker/trend-engine.js';
-import { buildTrackerChartModel, TRACKER_CHART_WINDOW } from '../../src/tracker/chart-model.js';
+import { buildTrackerChartModel, buildTrackerChartXModel, TRACKER_CHART_WINDOW, TRACKER_FORECAST_RATIO } from '../../src/tracker/chart-model.js';
+import { buildScenarioComparison } from '../../src/tracker/scenario-comparison.js';
 import { formatTurnLabel } from '../../src/tracker/status-presenter.js';
 import { loadLatestOfficialClose } from '../../src/core/market-repository.js';
 
@@ -109,6 +110,34 @@ test('MA recurrence, MACD and scenario outputs are deterministic', () => {
   assert.equal(scenario.probabilityClaim,false);
 });
 
+test('Scenario comparison preserves all three formulas and ignores the legacy selected mode', () => {
+  const closes=Array.from({length:300},(_,index)=>80+index*.15+Math.sin(index/11));
+  const options={horizon:13,target:'142.5',scenarioMode:'flat'};
+  const comparison=buildScenarioComparison(closes,options);
+  assert.deepEqual(comparison.map(item=>item.key),['flat','trend','custom']);
+  for(const item of comparison){
+    assert.equal(item.enabled,true);
+    assert.deepEqual(item.projection,projectScenario(closes,{mode:item.key,horizon:13,...(item.key==='custom'?{target:142.5}:{})}));
+    assert.equal(item.projection.path.length,13);
+  }
+  assert.ok(Math.abs(comparison.at(-1).projection.path.at(-1)-142.5)<1e-9);
+});
+
+test('Scenario comparison keeps Flat and Trend when Custom target is unavailable', () => {
+  const closes=Array.from({length:80},(_,index)=>50+index*.1);
+  for(const target of ['',0,-1,'invalid']){
+    const comparison=buildScenarioComparison(closes,{horizon:20,target});
+    assert.equal(comparison[0].projection.path.length,20);
+    assert.equal(comparison[1].projection.path.length,20);
+    assert.equal(comparison[2].enabled,false);
+    assert.equal(comparison[2].projection,null);
+  }
+  const equalTarget=closes.at(-1);
+  const enabled=buildScenarioComparison(closes,{horizon:20,target:equalTarget}).at(-1);
+  assert.equal(enabled.enabled,true);
+  assert.ok(enabled.projection.path.every(value=>Math.abs(value-equalTarget)<1e-9));
+});
+
 test('Current is appended as a provisional value without mutating official closes', () => {
   const official=[10,11,12];
   const preview=appendProvisionalCurrent(official,13);
@@ -164,4 +193,17 @@ test('chart model aligns dates and combines coincident high low latest markers',
   assert.equal(model.markers[0].label,'High / Low / Latest Close');
   assert.equal(model.markers[0].date,'2026-01-06');
   assert.match(model.ariaLabel,/2026-01-02 to 2026-01-06/);
+});
+
+test('chart x model reserves 30 percent for the complete forecast without overflow', () => {
+  const plot={left:32,right:968};
+  const model=buildTrackerChartXModel(120,240,plot);
+  assert.equal(model.forecastRatio,TRACKER_FORECAST_RATIO);
+  assert.equal(model.history[0],plot.left);
+  assert.equal(model.history.at(-1),model.historyRight);
+  assert.equal(model.historyRight,plot.left+(plot.right-plot.left)*.7);
+  assert.ok(model.forecast[0]>model.historyRight);
+  assert.equal(model.forecast.length,240);
+  assert.equal(model.forecast.at(-1),plot.right);
+  assert.ok(model.forecast.every(value=>value>model.historyRight&&value<=plot.right));
 });

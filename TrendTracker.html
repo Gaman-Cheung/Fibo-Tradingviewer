@@ -61,7 +61,13 @@
         <section class="tracker-card chart-card">
           <div class="section-heading"><div><span class="eyebrow">CLOSE + MA</span><h2>Trend structure</h2></div><span id="profileValue" class="profile-badge"></span></div>
           <canvas id="trackerChart" height="360" role="img" aria-label="Trend chart has no official close data."></canvas>
-          <div class="chart-legend"><span><i class="close-line"></i>Close</span><span>虚线末点 = Current preview</span></div>
+          <div class="chart-legend" aria-label="Chart legend">
+            <span><i class="close-line"></i>Close</span>
+            <span><i class="preview-line"></i>Current preview</span>
+            <span><i class="scenario-line scenario-line--flat"></i>Flat</span>
+            <span><i class="scenario-line scenario-line--trend"></i>Trend</span>
+            <span id="scenarioLegendCustom"><i class="scenario-line scenario-line--custom"></i>Custom</span>
+          </div>
         </section>
       </div>
 
@@ -75,12 +81,14 @@
         <section class="tracker-card scenario-card">
           <div class="section-heading"><div><span class="eyebrow">SCENARIO LAB</span><h2>Path projection</h2></div><button type="button" class="fibo-help-button" data-fibo-click="openTrackerHelp('scenario')" aria-label="Scenario Lab 详细说明" title="Scenario Lab 详细说明">?</button></div>
           <div class="scenario-controls">
-            <label>Mode<select id="scenarioMode" data-fibo-change="renderTracker()"><option value="flat">Flat</option><option value="trend">Trend continuation</option><option value="custom">Custom target</option></select></label>
             <label>Trading days<input id="scenarioHorizon" type="number" min="1" max="240" value="20" data-fibo-input="renderTracker()"></label>
             <label>Target<input id="scenarioTarget" type="number" step="0.001" placeholder="Custom only" data-fibo-input="renderTracker()"></label>
-            <label>Target date<input id="scenarioTargetDate" type="date" data-fibo-change="renderTracker()"></label>
+            <div class="scenario-date-actions">
+              <label>Target date<input id="scenarioTargetDate" type="date" data-fibo-change="renderTracker()"></label>
+              <button type="button" class="fibo-button fibo-button--control scenario-reset-button" data-fibo-click="resetScenario()" title="Reset Scenario inputs" aria-label="Reset Scenario inputs"><span class="material-icons">restart_alt</span><span>Reset</span></button>
+            </div>
           </div>
-          <div id="scenarioResult" class="scenario-result"></div>
+          <div id="scenarioResult" class="scenario-result" aria-live="polite"></div>
           <p class="scenario-disclaimer">波动上下界使用近 20 日对数收益率 ±σ√d，仅为情景范围，不代表概率或价格承诺。</p>
         </section>
       </div>

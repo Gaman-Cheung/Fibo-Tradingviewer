@@ -12,8 +12,9 @@ import { readArray, readJson, writeJson } from '../core/storage.js';
 import { getAuthenticatedUser, loadCloudRow, upsertCloudRow } from '../core/cloud-repository.js';
 import { buildCloudPayload, unpackCloudPayload } from '../core/cloud-payload.js';
 import { loadDailyCloses, loadMarketSyncState, loadTrackerState, saveTrackerState, syncMarketBindings } from '../core/market-repository.js';
-import { MA_PERIODS, DEFAULT_VISIBLE_MAS, analyzeTrend, appendProvisionalCurrent, projectScenario, sma } from '../tracker/trend-engine.js';
-import { buildTrackerChartModel } from '../tracker/chart-model.js';
+import { MA_PERIODS, DEFAULT_VISIBLE_MAS, analyzeTrend, appendProvisionalCurrent, sma } from '../tracker/trend-engine.js';
+import { buildTrackerChartModel, buildTrackerChartXModel } from '../tracker/chart-model.js';
+import { buildScenarioComparison } from '../tracker/scenario-comparison.js';
 import { formatTurnLabel } from '../tracker/status-presenter.js';
 import { runCloudPushFeedback } from './cloud-action-feedback.js';
 import { readSharedLiveInputs, reconcileLegacyTrackerInputs, updateSharedLiveInput } from '../core/shared-live-inputs.js';
@@ -22,6 +23,11 @@ const client = getSupabaseClient('tracker');
 runMigrations(localStorage);
 reconcileLegacyTrackerInputs(localStorage);
 const COLORS = ['#4285f4','#ea4335','#fbbc05','#34a853','#ab47bc','#ff6d00','#00acc1','#795548','#5f6368'];
+const SCENARIO_CANVAS_STYLES = Object.freeze({
+  flat:Object.freeze({ token:'--brand-blue', fallback:'#4285f4' }),
+  trend:Object.freeze({ token:'--brand-green', fallback:'#34a853' }),
+  custom:Object.freeze({ token:'--brand-red', fallback:'#ea4335' })
+});
 const TRACKER_HELP_TOPICS = {
   'ma-status': {
     title:'MA Status · 均线状态与确认',
@@ -29,7 +35,7 @@ const TRACKER_HELP_TOPICS = {
   },
   scenario: {
     title:'Scenario Lab · 情景路径说明',
-    html:`<h3>三种模式</h3><p><strong>Flat</strong>：未来价格保持在起点。<br><strong>Trend continuation</strong>：延续近期对数收益率方向，并用近期波动率限制斜率，避免无限外推。<br><strong>Custom target</strong>：从起点以对数线性路径推演到手动 Target。</p><h3>起点与输入优先级</h3><p>填写 Current 时，情景以 <strong>Current Preview</strong> 为起点；未填写时以 BaoStock 最新正式收盘价为起点。<strong>Trading days</strong> 设置 1–240 个交易日；填写 <strong>Target date</strong> 后，系统按起止日期估算工作日并优先使用该结果。Target 仅在 Custom target 模式有效。</p><h3>如何读复合结果</h3><p>最后一行是把整条假设路径加入历史后，在<strong>情景最后一天</strong>重新计算出的“长期背景 · 当前结构 · 事件结论”。它不是页面左侧的当前正式状态。</p><h3>长期背景</h3><ul><li><strong>Long Bull</strong>：终点价格不低于 MA240，且 MA240 方向为 up。</li><li><strong>Long Bear</strong>：终点价格低于 MA240，且 MA240 方向为 down。</li><li><strong>Transition</strong>：不满足上述两组完整条件，包括 MA240 数据不足、价格侧与斜率方向不一致等过渡状态。</li></ul><h3>当前结构</h3><ul><li><strong>Uptrend</strong>：MA5 &gt; MA10 &gt; MA20，同时 MA5、MA10 均为 up。</li><li><strong>Downtrend</strong>：MA5 &lt; MA10 &lt; MA20，同时 MA5、MA10 均为 down。</li><li><strong>Range</strong>：不满足完整 Uptrend 或 Downtrend 条件；它表示均线结构未形成单边排列，不是波动区间数值。</li></ul><h3>事件结论</h3><ul><li><strong>反转确认</strong>：Long Bear + Uptrend，并且 MA20 方向连续确认、最近两个计算收盘位于 MA60 上方。</li><li><strong>下跌反抽</strong>：Long Bear + Uptrend，但尚未同时满足上述 MA20 与 MA60 确认条件。</li><li><strong>调整探底</strong>：Long Bull + Downtrend。</li><li><strong>反转观察</strong>：Transition，且出现 MA20 Turn Alert 或价格首次切换到 MA60 另一侧。</li><li><strong>震荡等待</strong>：前述优先条件均未触发，且结构为 Range。</li><li><strong>趋势延续</strong>：前述特殊组合均未触发，系统保留默认结论；它是分类结果，不等于趋势强度评分。</li></ul><h3>波动范围</h3><div class="formula"><code>情景上下界 = 路径价格 × exp(±σ√d)</code></div><p>σ 来自近 20 个交易日的对数收益率。它只是波动情景范围，不是置信区间、概率预测或止盈目标。</p><h3>边界</h3><p>Scenario终点状态是条件推演，不是发生概率、目标价承诺或交易信号。Scenario Lab不改变MA、MACD、Terminal Composite Signal或任何交易评分。</p>`
+    html:`<h3>三种情景同时对照</h3><p><strong>Flat</strong>：未来价格保持在起点。<br><strong>Trend continuation</strong>：延续近期对数收益率方向，并用近期波动率限制斜率，避免无限外推。<br><strong>Custom target</strong>：从起点以对数线性路径推演到手动 Target。三种情景共用同一个期限并同时展示，不再通过 Mode 单选。</p><h3>起点与输入优先级</h3><p>填写 Current 时，三种情景均以 <strong>Current Preview</strong> 为起点；未填写时以 BaoStock 最新正式收盘价为起点。<strong>Trading days</strong> 设置 1–240 个交易日；填写 <strong>Target date</strong> 后，系统按起止日期估算工作日并优先使用该结果。Target 只影响 Custom target；Target 为空、非法或不大于零时，Custom 显示 <strong>Set Target</strong> 且不绘制路径，Flat 与 Trend 仍正常运行。</p><h3>Reset</h3><p>Reset 只把当前标的的 Trading days 恢复为 20，并清空 Target 与 Target date。它不会清除 Current、VR、MA 显示开关或其他标的数据。</p><h3>如何读三行结果</h3><p>蓝色 Flat、绿色 Trend 和红色 Custom 每一行，都是把对应假设路径加入历史后，在<strong>情景最后一天</strong>重新计算出的“长期背景 · 当前结构 · 事件结论”。它们不是页面左侧的当前正式状态。</p><h3>长期背景</h3><ul><li><strong>Long Bull</strong>：终点价格不低于 MA240，且 MA240 方向为 up。</li><li><strong>Long Bear</strong>：终点价格低于 MA240，且 MA240 方向为 down。</li><li><strong>Transition</strong>：不满足上述两组完整条件，包括 MA240 数据不足、价格侧与斜率方向不一致等过渡状态。</li></ul><h3>当前结构</h3><ul><li><strong>Uptrend</strong>：MA5 &gt; MA10 &gt; MA20，同时 MA5、MA10 均为 up。</li><li><strong>Downtrend</strong>：MA5 &lt; MA10 &lt; MA20，同时 MA5、MA10 均为 down。</li><li><strong>Range</strong>：不满足完整 Uptrend 或 Downtrend 条件；它表示均线结构未形成单边排列，不是波动区间数值。</li></ul><h3>事件结论</h3><ul><li><strong>反转确认</strong>：Long Bear + Uptrend，并且 MA20 方向连续确认、最近两个计算收盘位于 MA60 上方。</li><li><strong>下跌反抽</strong>：Long Bear + Uptrend，但尚未同时满足上述 MA20 与 MA60 确认条件。</li><li><strong>调整探底</strong>：Long Bull + Downtrend。</li><li><strong>反转观察</strong>：Transition，且出现 MA20 Turn Alert 或价格首次切换到 MA60 另一侧。</li><li><strong>震荡等待</strong>：前述优先条件均未触发，且结构为 Range。</li><li><strong>趋势延续</strong>：前述特殊组合均未触发，系统保留默认结论；它是分类结果，不等于趋势强度评分。</li></ul><h3>波动范围</h3><div class="formula"><code>情景上下界 = 路径价格 × exp(±σ√d)</code></div><p>σ 来自近 20 个交易日的对数收益率。上下界保留在结果行中，不额外画成六条线。它只是波动情景范围，不是置信区间、概率预测或止盈目标。</p><h3>边界</h3><p>Scenario终点状态是条件推演，不是发生概率、目标价承诺或交易信号。Scenario Lab不改变MA、MACD、Terminal Composite Signal或任何交易评分。</p>`
   }
 };
 let pool = loadInstrumentPool();
@@ -41,7 +47,14 @@ let trackerState = normalizeTrackerState(readJson(localStorage, STORAGE_KEYS.tra
 
 function normalizeTrackerState(value) {
   const state = value && typeof value === 'object' ? value : {};
-  return { version:1, activeInstrumentId:String(state.activeInstrumentId || localStorage.getItem(STORAGE_KEYS.activeInstrument) || ''), visibleMas:Array.isArray(state.visibleMas) ? state.visibleMas.map(Number).filter(period => MA_PERIODS.includes(period)) : [...DEFAULT_VISIBLE_MAS], instruments:state.instruments && typeof state.instruments === 'object' ? state.instruments : {} };
+  const instruments=state.instruments && typeof state.instruments === 'object'
+    ? Object.fromEntries(Object.entries(state.instruments).map(([id,value])=>{
+      const source=value && typeof value==='object' ? value : {};
+      const { scenarioMode:_legacyScenarioMode, ...current }=source;
+      return [id,current];
+    }))
+    : {};
+  return { version:1, activeInstrumentId:String(state.activeInstrumentId || localStorage.getItem(STORAGE_KEYS.activeInstrument) || ''), visibleMas:Array.isArray(state.visibleMas) ? state.visibleMas.map(Number).filter(period => MA_PERIODS.includes(period)) : [...DEFAULT_VISIBLE_MAS], instruments };
 }
 
 function persistState() {
@@ -50,7 +63,7 @@ function persistState() {
 }
 
 function currentInstrument() { return pool.items.find(item => item.id === trackerState.activeInstrumentId && item.status !== 'archived') || null; }
-function instrumentState() { return trackerState.instruments[trackerState.activeInstrumentId] ||= { scenarioMode:'flat', horizon:20, target:'', targetDate:'' }; }
+function instrumentState() { return trackerState.instruments[trackerState.activeInstrumentId] ||= { horizon:20, target:'', targetDate:'' }; }
 function escapeHtml(value) { const div=document.createElement('div'); div.textContent=String(value ?? ''); return div.innerHTML; }
 
 function renderMarquee() {
@@ -89,7 +102,6 @@ async function loadInstrumentHistory() {
   }
   setup.hidden=true; content.hidden=false; setLoading(true);
   const saved=instrumentState();
-  document.getElementById('scenarioMode').value=saved.scenarioMode || 'flat';
   document.getElementById('scenarioHorizon').value=saved.horizon || 20;
   document.getElementById('scenarioTarget').value=saved.target || '';
   document.getElementById('scenarioTargetDate').value=saved.targetDate || '';
@@ -133,6 +145,16 @@ function toggleMa(input) {
   const period=Number(input.value); trackerState.visibleMas=input.checked ? [...new Set([...trackerState.visibleMas,period])] : trackerState.visibleMas.filter(value=>value!==period); persistState(); renderTracker();
 }
 
+function resetScenario() {
+  const state=instrumentState();
+  document.getElementById('scenarioHorizon').value='20';
+  document.getElementById('scenarioTarget').value='';
+  document.getElementById('scenarioTargetDate').value='';
+  Object.assign(state,{ horizon:20, target:'', targetDate:'' });
+  persistState();
+  renderTracker();
+}
+
 function renderTracker(forceLiveInputs=false) {
   if (document.getElementById('trackerContent').hidden) return;
   const state=instrumentState();
@@ -160,14 +182,27 @@ function renderTracker(forceLiveInputs=false) {
     return `<tr><td>MA${period}</td><td>${Number.isFinite(item.value)?item.value.toFixed(3):'--'}</td><td>${Number.isFinite(item.delta)?item.delta.toFixed(4):'--'}</td><td class="status-${item.direction}">${item.direction}</td><td>${turnText}</td></tr>`;
   }).join('');
   document.getElementById('macdSummary').innerHTML=`<strong>MACD 12/26/9</strong><br>DIF ${format(preview.macd.dif)} · DEA ${format(preview.macd.dea)} · Histogram ${format(preview.macd.histogram)}<br>${preview.macd.cross} cross · ${preview.macd.zeroAxis} zero axis · ${preview.macd.direction}`;
-  const mode=document.getElementById('scenarioMode').value, target=document.getElementById('scenarioTarget').value, targetDate=document.getElementById('scenarioTargetDate').value;
+  const target=document.getElementById('scenarioTarget').value, targetDate=document.getElementById('scenarioTargetDate').value;
   const manualHorizon=Number(document.getElementById('scenarioHorizon').value)||20;
   const horizon=targetDate ? businessDaysUntil(historyDates.at(-1),targetDate) : manualHorizon;
-  Object.assign(state,{scenarioMode:mode,horizon:manualHorizon,target,targetDate}); persistState();
-  const projection=projectScenario(previewValues,{mode,horizon,target});
-  const end=projection.path.at(-1), lower=projection.lower.at(-1), upper=projection.upper.at(-1), endAnalysis=projection.analyses.at(-1);
-  document.getElementById('scenarioResult').innerHTML=end ? `<strong>${targetDate || `Day ${projection.path.length}`}: ${end.toFixed(3)}</strong><br>Volatility range ${lower.toFixed(3)} – ${upper.toFixed(3)}<br>${endAnalysis.background} · ${endAnalysis.structure} · ${endAnalysis.event}` : '历史数据不足。';
-  drawChart(previewValues,historyDates,live.current !== '',projection);
+  Object.assign(state,{horizon:manualHorizon,target,targetDate}); persistState();
+  const scenarios=buildScenarioComparison(previewValues,{horizon,target});
+  renderScenarioResults(scenarios,targetDate);
+  drawChart(previewValues,historyDates,live.current !== '',scenarios,{horizon,targetDate});
+}
+
+function renderScenarioResults(scenarios,targetDate) {
+  document.getElementById('scenarioLegendCustom').classList.toggle('is-disabled',!scenarios.find(item=>item.key==='custom')?.enabled);
+  document.getElementById('scenarioResult').innerHTML=scenarios.map(scenario=>{
+    const baseClass=`scenario-result-row scenario-result-row--${scenario.key}`;
+    const identity=`<div class="scenario-result-row__identity"><span class="scenario-result-row__swatch"></span><strong>${escapeHtml(scenario.label)}</strong></div>`;
+    if(!scenario.enabled) return `<article class="${baseClass} is-disabled" data-scenario="${scenario.key}">${identity}<span class="scenario-result-row__empty">Set Target</span></article>`;
+    const projection=scenario.projection;
+    const end=projection?.path?.at(-1), lower=projection?.lower?.at(-1), upper=projection?.upper?.at(-1), endAnalysis=projection?.analyses?.at(-1);
+    if(!Number.isFinite(end)||!Number.isFinite(lower)||!Number.isFinite(upper)||!endAnalysis) return `<article class="${baseClass}" data-scenario="${scenario.key}">${identity}<span class="scenario-result-row__empty">Insufficient history</span></article>`;
+    const endLabel=targetDate || `Day ${projection.path.length}`;
+    return `<article class="${baseClass}" data-scenario="${scenario.key}">${identity}<div class="scenario-result-row__numbers"><strong>${escapeHtml(endLabel)}: ${end.toFixed(3)}</strong><span>Volatility range ${lower.toFixed(3)} – ${upper.toFixed(3)}</span></div><div class="scenario-result-row__status">${escapeHtml(endAnalysis.background)} · ${escapeHtml(endAnalysis.structure)} · ${escapeHtml(endAnalysis.event)}</div></article>`;
+  }).join('');
 }
 
 function format(value) { return Number.isFinite(value) ? value.toFixed(4) : '--'; }
@@ -180,12 +215,33 @@ function businessDaysUntil(startValue,targetValue) {
   return Math.max(1,days);
 }
 
-function drawChart(values,dates,hasPreview,projection) {
+function cssTokenColor(token,fallback) {
+  return getComputedStyle(document.documentElement).getPropertyValue(token).trim() || fallback;
+}
+
+function scenarioCanvasColor(key) {
+  const style=SCENARIO_CANVAS_STYLES[key] || SCENARIO_CANVAS_STYLES.flat;
+  return cssTokenColor(style.token,style.fallback);
+}
+
+function scenarioChartAriaLabel(chart,scenarios,meta) {
+  const active=scenarios.find(item=>item.enabled&&item.projection?.path?.length);
+  const horizon=active?.projection.path.length || Math.max(1,Math.min(240,Number(meta?.horizon)||20));
+  const horizonText=meta?.targetDate ? `Forecast target date ${meta.targetDate}.` : `Forecast horizon ${horizon} trading days.`;
+  const summaries=scenarios.map(scenario=>{
+    if(!scenario.enabled) return 'Custom target is not set.';
+    const end=scenario.projection?.path?.at(-1);
+    return Number.isFinite(end) ? `${scenario.label} forecast ends at ${end.toFixed(3)}.` : `${scenario.label} forecast is unavailable.`;
+  });
+  return `${chart.ariaLabel} ${horizonText} ${summaries.join(' ')}`;
+}
+
+function drawChart(values,dates,hasPreview,scenarios,meta={}) {
   const canvas=document.getElementById('trackerChart'), rect=canvas.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
   canvas.width=Math.max(1,Math.round(rect.width*dpr)); canvas.height=Math.max(1,Math.round(rect.height*dpr));
   const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr); const width=rect.width,height=rect.height;
   const chart=buildTrackerChartModel(values,dates,{hasPreview});
-  canvas.setAttribute('aria-label',chart.ariaLabel);
+  canvas.setAttribute('aria-label',scenarioChartAriaLabel(chart,scenarios,meta));
   if (!chart.points.length) return;
   const plot={left:32,right:width-32,top:34,bottom:height-44};
   const closeValues=chart.points.map(point=>point.value);
@@ -193,30 +249,42 @@ function drawChart(values,dates,hasPreview,projection) {
     values:chart.points.map(point=>sma(values.slice(0,point.sourceIndex+1),period)),
     color:COLORS[MA_PERIODS.indexOf(period)], width:1.25
   }));
-  const numbers=[...closeValues,...maSeries.flatMap(item=>item.values)].filter(Number.isFinite); if(!numbers.length)return;
+  const activeScenarios=scenarios.filter(item=>item.enabled&&item.projection?.path?.length);
+  const projectionValues=activeScenarios.flatMap(item=>item.projection.path);
+  const numbers=[...closeValues,...maSeries.flatMap(item=>item.values),...projectionValues].filter(Number.isFinite); if(!numbers.length)return;
   let min=Math.min(...numbers),max=Math.max(...numbers); const margin=(max-min||max*.02||1)*.08; min-=margin;max+=margin;
-  const x=index=>plot.left+(plot.right-plot.left)*index/Math.max(1,chart.points.length-1);
+  const horizon=activeScenarios[0]?.projection.path.length || Math.max(1,Math.min(240,Number(meta.horizon)||20));
+  const xModel=buildTrackerChartXModel(chart.points.length,horizon,plot);
+  const x=index=>xModel.history[index] ?? xModel.historyRight;
   const y=value=>plot.top+(max-value)/(max-min)*(plot.bottom-plot.top);
 
-  ctx.strokeStyle='#e8eaed';ctx.lineWidth=1;
+  ctx.strokeStyle=cssTokenColor('--color-border-subtle','#e8eaed');ctx.lineWidth=1;
   for(let i=0;i<5;i++){const gridY=plot.top+(plot.bottom-plot.top)*i/4;ctx.beginPath();ctx.moveTo(plot.left,gridY);ctx.lineTo(plot.right,gridY);ctx.stroke();}
+  ctx.save();ctx.strokeStyle=cssTokenColor('--color-border','#dadce0');ctx.setLineDash([3,4]);ctx.beginPath();ctx.moveTo(xModel.historyRight,plot.top);ctx.lineTo(xModel.historyRight,plot.bottom);ctx.stroke();ctx.restore();
+  ctx.fillStyle=cssTokenColor('--color-text-secondary','#5f6368');ctx.font='700 9px Arial, sans-serif';ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.fillText('FORECAST',(xModel.historyRight+plot.right)/2,plot.top-10);
 
   const officialPoints=chart.points.filter(point=>!point.isPreview);
-  ctx.strokeStyle='#202124';ctx.lineWidth=2;ctx.beginPath();
+  ctx.strokeStyle=cssTokenColor('--color-text','#202124');ctx.lineWidth=2;ctx.beginPath();
   officialPoints.forEach((point,index)=>{const px=x(point.index),py=y(point.value);if(index===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);});ctx.stroke();
-  if(chart.preview&&officialPoints.length){const latest=officialPoints.at(-1);ctx.save();ctx.strokeStyle='#5f6368';ctx.lineWidth=2;ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(x(latest.index),y(latest.value));ctx.lineTo(x(chart.preview.index),y(chart.preview.value));ctx.stroke();ctx.restore();}
+  if(chart.preview&&officialPoints.length){const latest=officialPoints.at(-1);ctx.save();ctx.strokeStyle=cssTokenColor('--color-text-secondary','#5f6368');ctx.lineWidth=2;ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(x(latest.index),y(latest.value));ctx.lineTo(x(chart.preview.index),y(chart.preview.value));ctx.stroke();ctx.restore();}
 
   maSeries.forEach(item=>{ctx.strokeStyle=item.color;ctx.lineWidth=item.width;ctx.beginPath();let started=false;item.values.forEach((value,index)=>{if(!Number.isFinite(value))return;const px=x(index),py=y(value);if(!started){ctx.moveTo(px,py);started=true}else ctx.lineTo(px,py);});ctx.stroke();});
 
-  if(projection?.path?.length){const start=closeValues.at(-1),step=(plot.right-plot.left)/Math.max(1,chart.points.length-1);ctx.strokeStyle='#9aa0a6';ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(plot.right,y(start));projection.path.slice(0,20).forEach((value,index)=>ctx.lineTo(plot.right+step*(index+1)/4,y(value)));ctx.stroke();ctx.setLineDash([]);}
+  const start=closeValues.at(-1);
+  activeScenarios.forEach(scenario=>{
+    const color=scenarioCanvasColor(scenario.key), path=scenario.projection.path;
+    ctx.save();ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.beginPath();ctx.moveTo(xModel.historyRight,y(start));path.forEach((value,index)=>ctx.lineTo(xModel.forecast[index],y(value)));ctx.stroke();ctx.setLineDash([]);ctx.beginPath();ctx.arc(xModel.forecast[path.length-1],y(path.at(-1)),3,0,Math.PI*2);ctx.fill();ctx.restore();
+  });
 
   const placed=[];
-  chart.markers.forEach(marker=>drawChartCallout(ctx,{...marker,x:x(marker.index),y:y(marker.value)},plot,placed));
-  if(chart.preview)drawChartCallout(ctx,{...chart.preview,label:'Preview',kinds:['preview'],x:x(chart.preview.index),y:y(chart.preview.value)},plot,placed);
+  const historyPlot={...plot,right:xModel.historyRight};
+  chart.markers.forEach(marker=>drawChartCallout(ctx,{...marker,x:x(marker.index),y:y(marker.value)},historyPlot,placed));
+  if(chart.preview)drawChartCallout(ctx,{...chart.preview,label:'Preview',kinds:['preview'],x:x(chart.preview.index),y:y(chart.preview.value)},historyPlot,placed);
 
-  ctx.fillStyle='#5f6368';ctx.font='10px Arial, sans-serif';ctx.textBaseline='bottom';
+  ctx.fillStyle=cssTokenColor('--color-text-secondary','#5f6368');ctx.font='10px Arial, sans-serif';ctx.textBaseline='bottom';
   ctx.textAlign='left';ctx.fillText(chart.startDate||'--',plot.left,height-8);
-  ctx.textAlign='right';ctx.fillText(chart.endDate||'--',plot.right,height-8);
+  ctx.textAlign='right';ctx.fillText(chart.endDate||'--',xModel.historyRight-4,height-8);
+  ctx.fillText(meta.targetDate || `Day ${horizon}`,plot.right,height-8);
 }
 
 function drawChartCallout(ctx,marker,plot,placed) {
@@ -298,4 +366,4 @@ window.addEventListener('storage',event=>{
   if([STORAGE_KEYS.lookFirst,STORAGE_KEYS.thenLeap].includes(event.key))renderTracker(true);
 });
 document.addEventListener('DOMContentLoaded',async()=>{const {data}=await client.auth.getSession();if(!data?.session){window.location.href=ROUTES.auth;return;}renderMarquee();renderInstrumentPicker();await loadInstrumentHistory();});
-bindDeclarativeEvents({selectInstrument,updateTrackerInput,toggleMa,renderTracker,openNote,closeNote,saveNote,handleNoteBackdrop,openTrackerHelp,closeTrackerHelp,handleTrackerHelpBackdrop,openActions,closeActions,handleActionsBackdrop,pushTrackerCloud,pullTrackerCloud,logout});
+bindDeclarativeEvents({selectInstrument,updateTrackerInput,toggleMa,resetScenario,renderTracker,openNote,closeNote,saveNote,handleNoteBackdrop,openTrackerHelp,closeTrackerHelp,handleTrackerHelpBackdrop,openActions,closeActions,handleActionsBackdrop,pushTrackerCloud,pullTrackerCloud,logout});

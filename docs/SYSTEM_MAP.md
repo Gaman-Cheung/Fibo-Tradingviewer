@@ -28,7 +28,7 @@ Manual Windows launcher -----/              |
 - Supabase payload compatibility: `src/core/cloud-payload.js`.
 - Terminal calculations: `src/terminal/`.
 - Wave calculations: `src/wave/`.
-- Trend calculations: `src/tracker/`.
+- Trend calculations: `src/tracker/`; `trend-engine.js` owns the unchanged formulas, `scenario-comparison.js` coordinates simultaneous Flat/Trend/Custom results, and `chart-model.js` owns display-only history/forecast geometry.
 - BaoStock code normalization plus Tracker history and Terminal latest-close queries: `src/core/market-code.js` and `src/core/market-repository.js`.
 - Full-market synchronization: GitHub Action and `SyncBaoStock.cmd` both call `scripts/sync_baostock.py`; neither implementation may duplicate sync rules.
 - BaoStock connectivity/local CSV diagnostics: `scripts/test_baostock_local.py`; it never writes Supabase.
