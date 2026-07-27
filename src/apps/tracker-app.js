@@ -12,9 +12,11 @@ import { readArray, readJson, writeJson } from '../core/storage.js';
 import { getAuthenticatedUser, loadCloudRow, upsertCloudRow } from '../core/cloud-repository.js';
 import { buildCloudPayload, unpackCloudPayload } from '../core/cloud-payload.js';
 import { loadDailyCloses, loadMarketSyncState, loadTrackerState, saveTrackerState, syncMarketBindings } from '../core/market-repository.js';
+import { DEFAULT_TRACKER_MA_PROJECTION_SCENARIO, normalizeTrackerMaProjectionScenario } from '../core/tracker-state.js';
 import { MA_PERIODS, DEFAULT_VISIBLE_MAS, analyzeTrend, appendProvisionalCurrent, sma } from '../tracker/trend-engine.js';
 import { buildTrackerChartModel, buildTrackerChartXModel, buildTrackerChartYModel, trackerChartEdge } from '../tracker/chart-model.js';
 import { buildScenarioComparison } from '../tracker/scenario-comparison.js';
+import { projectMovingAverageSeries } from '../tracker/ma-projection.js';
 import { formatTurnLabel } from '../tracker/status-presenter.js';
 import { runCloudPushFeedback } from './cloud-action-feedback.js';
 import { readSharedLiveInputs, reconcileLegacyTrackerInputs, updateSharedLiveInput } from '../core/shared-live-inputs.js';
@@ -38,6 +40,7 @@ const TRACKER_HELP_TOPICS = {
     html:`<h3>三种情景同时对照</h3><p><strong>Flat</strong>：未来价格保持在起点。<br><strong>Trend continuation</strong>：延续近期对数收益率方向，并用近期波动率限制斜率，避免无限外推。<br><strong>Custom target</strong>：从起点以对数线性路径推演到手动 Target。三种情景共用同一个期限并同时展示，不再通过 Mode 单选。</p><h3>起点与输入优先级</h3><p>填写 Current 时，三种情景均以 <strong>Current Preview</strong> 为起点；未填写时以 BaoStock 最新正式收盘价为起点。<strong>Trading days</strong> 设置 1–240 个交易日；填写 <strong>Target date</strong> 后，系统按起止日期估算工作日并优先使用该结果。Target 只影响 Custom target；Target 为空、非法或不大于零时，Custom 显示 <strong>Set Target</strong> 且不绘制路径，Flat 与 Trend 仍正常运行。</p><h3>主图显示</h3><p>右侧预测尾部按未来天数动态占用约 4%–25% 的宽度，短期情景不会压缩历史走势。纵轴以可见 Close 与 MA 为主，Scenario 最多向历史价格范围外扩展 15%；更远的路径会在边缘截断并显示同色方向箭头，精确终点仍以下方结果行为准。</p><h3>Reset</h3><p>Reset 只把当前标的的 Trading days 恢复为 20，并清空 Target 与 Target date。它不会清除 Current、VR、MA 显示开关或其他标的数据。</p><h3>如何读三行结果</h3><p>蓝色 Flat、绿色 Trend 和红色 Custom 每一行，都是把对应假设路径加入历史后，在<strong>情景最后一天</strong>重新计算出的“长期背景 · 当前结构 · 事件结论”。它们不是页面左侧的当前正式状态。</p><h3>长期背景</h3><ul><li><strong>Long Bull</strong>：终点价格不低于 MA240，且 MA240 方向为 up。</li><li><strong>Long Bear</strong>：终点价格低于 MA240，且 MA240 方向为 down。</li><li><strong>Transition</strong>：不满足上述两组完整条件，包括 MA240 数据不足、价格侧与斜率方向不一致等过渡状态。</li></ul><h3>当前结构</h3><ul><li><strong>Uptrend</strong>：MA5 &gt; MA10 &gt; MA20，同时 MA5、MA10 均为 up。</li><li><strong>Downtrend</strong>：MA5 &lt; MA10 &lt; MA20，同时 MA5、MA10 均为 down。</li><li><strong>Range</strong>：不满足完整 Uptrend 或 Downtrend 条件；它表示均线结构未形成单边排列，不是波动区间数值。</li></ul><h3>事件结论</h3><ul><li><strong>反转确认</strong>：Long Bear + Uptrend，并且 MA20 方向连续确认、最近两个计算收盘位于 MA60 上方。</li><li><strong>下跌反抽</strong>：Long Bear + Uptrend，但尚未同时满足上述 MA20 与 MA60 确认条件。</li><li><strong>调整探底</strong>：Long Bull + Downtrend。</li><li><strong>反转观察</strong>：Transition，且出现 MA20 Turn Alert 或价格首次切换到 MA60 另一侧。</li><li><strong>震荡等待</strong>：前述优先条件均未触发，且结构为 Range。</li><li><strong>趋势延续</strong>：前述特殊组合均未触发，系统保留默认结论；它是分类结果，不等于趋势强度评分。</li></ul><h3>波动范围</h3><div class="formula"><code>情景上下界 = 路径价格 × exp(±σ√d)</code></div><p>σ 来自近 20 个交易日的对数收益率。上下界保留在结果行中，不额外画成六条线。它只是波动情景范围，不是置信区间、概率预测或止盈目标。</p><h3>边界</h3><p>Scenario终点状态是条件推演，不是发生概率、目标价承诺或交易信号。Scenario Lab不改变MA、MACD、Terminal Composite Signal或任何交易评分。</p>`
   }
 };
+TRACKER_HELP_TOPICS.scenario.html += `<h3>Projected moving averages</h3><p>点击 Flat、Trend continuation 或 Custom target 结果行，会选择该情景用于未来均线预演；三条价格路径仍会同时保留。系统把所选情景的逐日收盘价依次追加到历史序列，并用现有 SMA 公式延长当前勾选的 MA。填写 Current 时，Current Preview 也会进入这组条件计算。</p><p>历史均线为实线，未来均线为同色短虚线。它们表示“如果该价格路径成立，均线可能如何演化”，不是独立价格预测、发生概率或交易信号。Custom Target 被清空或 Reset 时，均线预演会自动回到 Trend continuation。</p>`;
 let pool = loadInstrumentPool();
 let history = [];
 let historyDates = [];
@@ -51,7 +54,7 @@ function normalizeTrackerState(value) {
     ? Object.fromEntries(Object.entries(state.instruments).map(([id,value])=>{
       const source=value && typeof value==='object' ? value : {};
       const { scenarioMode:_legacyScenarioMode, ...current }=source;
-      return [id,current];
+      return [id,{...current,maProjectionScenario:normalizeTrackerMaProjectionScenario(current.maProjectionScenario)}];
     }))
     : {};
   return { version:1, activeInstrumentId:String(state.activeInstrumentId || localStorage.getItem(STORAGE_KEYS.activeInstrument) || ''), visibleMas:Array.isArray(state.visibleMas) ? state.visibleMas.map(Number).filter(period => MA_PERIODS.includes(period)) : [...DEFAULT_VISIBLE_MAS], instruments };
@@ -63,7 +66,7 @@ function persistState() {
 }
 
 function currentInstrument() { return pool.items.find(item => item.id === trackerState.activeInstrumentId && item.status !== 'archived') || null; }
-function instrumentState() { return trackerState.instruments[trackerState.activeInstrumentId] ||= { horizon:20, target:'', targetDate:'' }; }
+function instrumentState() { return trackerState.instruments[trackerState.activeInstrumentId] ||= { horizon:20, target:'', targetDate:'', maProjectionScenario:DEFAULT_TRACKER_MA_PROJECTION_SCENARIO }; }
 function escapeHtml(value) { const div=document.createElement('div'); div.textContent=String(value ?? ''); return div.innerHTML; }
 
 function renderMarquee() {
@@ -151,6 +154,16 @@ function resetScenario() {
   document.getElementById('scenarioTarget').value='';
   document.getElementById('scenarioTargetDate').value='';
   Object.assign(state,{ horizon:20, target:'', targetDate:'' });
+  if(state.maProjectionScenario==='custom')state.maProjectionScenario=DEFAULT_TRACKER_MA_PROJECTION_SCENARIO;
+  persistState();
+  renderTracker();
+}
+
+function selectMaProjectionScenario(key) {
+  const selected=normalizeTrackerMaProjectionScenario(key);
+  const target=Number(document.getElementById('scenarioTarget').value);
+  if(selected==='custom'&&!(Number.isFinite(target)&&target>0))return;
+  instrumentState().maProjectionScenario=selected;
   persistState();
   renderTracker();
 }
@@ -185,23 +198,36 @@ function renderTracker(forceLiveInputs=false) {
   const target=document.getElementById('scenarioTarget').value, targetDate=document.getElementById('scenarioTargetDate').value;
   const manualHorizon=Number(document.getElementById('scenarioHorizon').value)||20;
   const horizon=targetDate ? businessDaysUntil(historyDates.at(-1),targetDate) : manualHorizon;
-  Object.assign(state,{horizon:manualHorizon,target,targetDate}); persistState();
   const scenarios=buildScenarioComparison(previewValues,{horizon,target});
-  renderScenarioResults(scenarios,targetDate);
-  drawChart(previewValues,historyDates,live.current !== '',scenarios,{horizon,targetDate});
+  let selectedKey=normalizeTrackerMaProjectionScenario(state.maProjectionScenario);
+  if(!scenarios.find(item=>item.key===selectedKey&&item.enabled))selectedKey=DEFAULT_TRACKER_MA_PROJECTION_SCENARIO;
+  Object.assign(state,{horizon:manualHorizon,target,targetDate,maProjectionScenario:selectedKey});
+  persistState();
+  const selectedScenario=scenarios.find(item=>item.key===selectedKey&&item.enabled);
+  const maProjectionSeries=projectMovingAverageSeries(previewValues,selectedScenario?.projection?.path || [],trackerState.visibleMas);
+  renderScenarioResults(scenarios,targetDate,selectedKey);
+  drawChart(previewValues,historyDates,live.current !== '',scenarios,{
+    horizon,targetDate,maProjectionScenario:selectedKey,maProjectionLabel:selectedScenario?.label || 'Trend continuation',maProjectionSeries
+  });
 }
 
-function renderScenarioResults(scenarios,targetDate) {
+function renderScenarioResults(scenarios,targetDate,selectedKey) {
   document.getElementById('scenarioLegendCustom').classList.toggle('is-disabled',!scenarios.find(item=>item.key==='custom')?.enabled);
+  const selected=scenarios.find(item=>item.key===selectedKey);
+  const projectionLegend=document.getElementById('maProjectionLegend');
+  projectionLegend.dataset.maProjectionScenario=selectedKey;
+  document.getElementById('maProjectionLegendLabel').textContent=`Projected MA · ${selected?.label || 'Trend continuation'}`;
   document.getElementById('scenarioResult').innerHTML=scenarios.map(scenario=>{
-    const baseClass=`scenario-result-row scenario-result-row--${scenario.key}`;
-    const identity=`<div class="scenario-result-row__identity"><span class="scenario-result-row__swatch"></span><strong>${escapeHtml(scenario.label)}</strong></div>`;
-    if(!scenario.enabled) return `<article class="${baseClass} is-disabled" data-scenario="${scenario.key}">${identity}<span class="scenario-result-row__empty">Set Target</span></article>`;
+    const isSelected=scenario.enabled&&scenario.key===selectedKey;
+    const baseClass=`scenario-result-row scenario-result-row--${scenario.key}${isSelected?' is-selected':''}${scenario.enabled?'':' is-disabled'}`;
+    const identity=`<span class="scenario-result-row__identity"><span class="scenario-result-row__swatch"></span><strong>${escapeHtml(scenario.label)}</strong></span>`;
+    const attributes=`type="button" class="${baseClass}" data-scenario="${scenario.key}" data-fibo-click="selectMaProjectionScenario('${scenario.key}')" aria-pressed="${isSelected}" title="Use ${escapeHtml(scenario.label)} for projected moving averages"`;
+    if(!scenario.enabled) return `<button ${attributes} disabled aria-disabled="true">${identity}<span class="scenario-result-row__empty">Set Target</span></button>`;
     const projection=scenario.projection;
     const end=projection?.path?.at(-1), lower=projection?.lower?.at(-1), upper=projection?.upper?.at(-1), endAnalysis=projection?.analyses?.at(-1);
-    if(!Number.isFinite(end)||!Number.isFinite(lower)||!Number.isFinite(upper)||!endAnalysis) return `<article class="${baseClass}" data-scenario="${scenario.key}">${identity}<span class="scenario-result-row__empty">Insufficient history</span></article>`;
+    if(!Number.isFinite(end)||!Number.isFinite(lower)||!Number.isFinite(upper)||!endAnalysis) return `<button ${attributes}>${identity}<span class="scenario-result-row__empty">Insufficient history</span></button>`;
     const endLabel=targetDate || `Day ${projection.path.length}`;
-    return `<article class="${baseClass}" data-scenario="${scenario.key}">${identity}<div class="scenario-result-row__numbers"><strong>${escapeHtml(endLabel)}: ${end.toFixed(3)}</strong><span>Volatility range ${lower.toFixed(3)} – ${upper.toFixed(3)}</span></div><div class="scenario-result-row__status">${escapeHtml(endAnalysis.background)} · ${escapeHtml(endAnalysis.structure)} · ${escapeHtml(endAnalysis.event)}</div></article>`;
+    return `<button ${attributes}>${identity}<span class="scenario-result-row__numbers"><strong>${escapeHtml(endLabel)}: ${end.toFixed(3)}</strong><span>Volatility range ${lower.toFixed(3)} – ${upper.toFixed(3)}</span></span><span class="scenario-result-row__status">${escapeHtml(endAnalysis.background)} · ${escapeHtml(endAnalysis.structure)} · ${escapeHtml(endAnalysis.event)}</span></button>`;
   }).join('');
 }
 
@@ -235,7 +261,12 @@ function scenarioChartAriaLabel(chart,scenarios,meta,edges={}) {
     const edge=edges[scenario.key];
     return `${scenario.label} forecast ends at ${end.toFixed(3)}.${edge?` It continues beyond the ${edge==='high'?'upper':'lower'} chart edge.`:''}`;
   });
-  return `${chart.ariaLabel} ${horizonText} ${summaries.join(' ')}`;
+  const projectedMas=(meta?.maProjectionSeries || []).map(item=>{
+    const end=item.values?.at(-1);
+    return Number.isFinite(end)?`MA${item.period} ends at ${end.toFixed(3)}.`:`MA${item.period} remains unavailable.`;
+  });
+  const maProjectionText=`Projected moving averages use ${meta?.maProjectionLabel || 'Trend continuation'}.${projectedMas.length?` ${projectedMas.join(' ')}`:''}`;
+  return `${chart.ariaLabel} ${horizonText} ${summaries.join(' ')} ${maProjectionText}`;
 }
 
 function drawChart(values,dates,hasPreview,scenarios,meta={}) {
@@ -262,6 +293,8 @@ function drawChart(values,dates,hasPreview,scenarios,meta={}) {
   const y=value=>plot.top+(max-value)/(max-min)*(plot.bottom-plot.top);
   canvas.dataset.forecastRatio=xModel.forecastRatio.toFixed(4);
   canvas.dataset.forecastHorizon=String(horizon);
+  canvas.dataset.maProjectionScenario=meta.maProjectionScenario || DEFAULT_TRACKER_MA_PROJECTION_SCENARIO;
+  canvas.dataset.maProjectionPeriods=(meta.maProjectionSeries || []).filter(item=>Number.isFinite(item.values?.at(-1))).map(item=>item.period).join(',');
 
   ctx.strokeStyle=cssTokenColor('--color-border-subtle','#e8eaed');ctx.lineWidth=1;
   for(let i=0;i<5;i++){const gridY=plot.top+(plot.bottom-plot.top)*i/4;ctx.beginPath();ctx.moveTo(plot.left,gridY);ctx.lineTo(plot.right,gridY);ctx.stroke();}
@@ -281,6 +314,7 @@ function drawChart(values,dates,hasPreview,scenarios,meta={}) {
     if(edge)drawScenarioEdgeMarker(ctx,{x:xModel.forecast[path.length-1],edge,color,plot});
     else {ctx.save();ctx.fillStyle=color;ctx.beginPath();ctx.arc(xModel.forecast[path.length-1],y(path.at(-1)),3,0,Math.PI*2);ctx.fill();ctx.restore();}
   });
+  drawProjectedMaSeries(ctx,meta.maProjectionSeries || [],xModel,y,plot);
   canvas.dataset.forecastClipped=Object.entries(endpointEdges).filter(([,edge])=>edge).map(([key,edge])=>`${key}:${edge}`).join(',');
   canvas.setAttribute('aria-label',scenarioChartAriaLabel(chart,scenarios,meta,endpointEdges));
 
@@ -296,6 +330,24 @@ function drawChart(values,dates,hasPreview,scenarios,meta={}) {
   ctx.textAlign='left';ctx.fillText(startLabel,plot.left,height-8);
   ctx.textAlign='right';ctx.fillText(latestLabel,latestRight,latestBaseline);
   ctx.fillText(forecastLabel,plot.right,height-8);
+}
+
+function drawProjectedMaSeries(ctx,series,xModel,y,plot) {
+  ctx.save();
+  ctx.beginPath();ctx.rect(plot.left,plot.top,plot.right-plot.left,plot.bottom-plot.top);ctx.clip();
+  ctx.lineWidth=1.25;ctx.setLineDash([3,3]);ctx.globalAlpha=.72;
+  series.forEach(item=>{
+    const color=COLORS[MA_PERIODS.indexOf(item.period)] || cssTokenColor('--color-text-secondary','#5f6368');
+    const points=[];
+    if(Number.isFinite(item.start))points.push({x:xModel.historyRight,y:y(item.start)});
+    (item.values || []).forEach((value,index)=>{if(Number.isFinite(value)&&Number.isFinite(xModel.forecast[index]))points.push({x:xModel.forecast[index],y:y(value)});});
+    if(!points.length)return;
+    ctx.strokeStyle=color;ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(points[0].x,points[0].y);
+    points.slice(1).forEach(point=>ctx.lineTo(point.x,point.y));
+    if(points.length>1)ctx.stroke();
+    else {ctx.beginPath();ctx.arc(points[0].x,points[0].y,1.75,0,Math.PI*2);ctx.fill();}
+  });
+  ctx.restore();
 }
 
 function drawScenarioEdgeMarker(ctx,{x,edge,color,plot}) {
@@ -385,4 +437,4 @@ window.addEventListener('storage',event=>{
   if([STORAGE_KEYS.lookFirst,STORAGE_KEYS.thenLeap].includes(event.key))renderTracker(true);
 });
 document.addEventListener('DOMContentLoaded',async()=>{const {data}=await client.auth.getSession();if(!data?.session){window.location.href=ROUTES.auth;return;}renderMarquee();renderInstrumentPicker();await loadInstrumentHistory();});
-bindDeclarativeEvents({selectInstrument,updateTrackerInput,toggleMa,resetScenario,renderTracker,openNote,closeNote,saveNote,handleNoteBackdrop,openTrackerHelp,closeTrackerHelp,handleTrackerHelpBackdrop,openActions,closeActions,handleActionsBackdrop,pushTrackerCloud,pullTrackerCloud,logout});
+bindDeclarativeEvents({selectInstrument,updateTrackerInput,toggleMa,resetScenario,selectMaProjectionScenario,renderTracker,openNote,closeNote,saveNote,handleNoteBackdrop,openTrackerHelp,closeTrackerHelp,handleTrackerHelpBackdrop,openActions,closeActions,handleActionsBackdrop,pushTrackerCloud,pullTrackerCloud,logout});

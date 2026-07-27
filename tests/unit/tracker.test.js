@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import { inferMainlandMarket, migrateLegacyMarket, toBaoStockCode } from '../../src/core/market-code.js';
 import { buildFrontAdjustedSeries } from '../../src/core/front-adjusted-series.js';
 import { runMigrations, CURRENT_SCHEMA_VERSION } from '../../src/core/migrations.js';
-import { analyzeTrend, appendProvisionalCurrent, maSnapshot, macd, projectScenario, turnState } from '../../src/tracker/trend-engine.js';
+import { analyzeTrend, appendProvisionalCurrent, maSnapshot, macd, projectScenario, sma, turnState } from '../../src/tracker/trend-engine.js';
 import { buildTrackerChartModel, buildTrackerChartXModel, buildTrackerChartYModel, trackerChartEdge, trackerForecastRatio, TRACKER_CHART_WINDOW, TRACKER_FORECAST_MIN_RATIO, TRACKER_FORECAST_MAX_RATIO } from '../../src/tracker/chart-model.js';
 import { buildScenarioComparison } from '../../src/tracker/scenario-comparison.js';
+import { projectMovingAverageSeries } from '../../src/tracker/ma-projection.js';
 import { formatTurnLabel } from '../../src/tracker/status-presenter.js';
 import { loadLatestOfficialClose } from '../../src/core/market-repository.js';
+import { normalizeTrackerMaProjectionScenario } from '../../src/core/tracker-state.js';
 
 class MemoryStorage {
   constructor(entries={}) { this.values=new Map(Object.entries(entries)); }
@@ -55,6 +57,30 @@ test('Prev Close migration defaults eligible instruments to Auto and preserves c
     ['b','20','manual',''],
     ['c','30','manual','']
   ]);
+});
+
+test('Tracker MA projection selection migration is idempotent and stays keyed by permanent ID', () => {
+  const storage=new MemoryStorage({
+    fibo_schema_migration_version:'4',
+    tv_instrument_pool_v1:JSON.stringify({version:1,items:[
+      {id:'same-a',ticker:'SAME'},{id:'same-b',ticker:'SAME'},{id:'same-c',ticker:'SAME'}
+    ],tombstones:[]}),
+    tv_trend_tracker_state_v1:JSON.stringify({version:1,instruments:{
+      'same-a':{horizon:20},
+      'same-b':{horizon:30,maProjectionScenario:'custom'},
+      'same-c':{horizon:40,maProjectionScenario:'invalid'}
+    }})
+  });
+  runMigrations(storage);
+  const snapshot=storage.getItem('tv_trend_tracker_state_v1');
+  runMigrations(storage);
+  const state=JSON.parse(storage.getItem('tv_trend_tracker_state_v1'));
+  assert.equal(storage.getItem('tv_trend_tracker_state_v1'),snapshot);
+  assert.deepEqual(Object.fromEntries(Object.entries(state.instruments).map(([id,value])=>[id,value.maProjectionScenario])),{
+    'same-a':'trend','same-b':'custom','same-c':'trend'
+  });
+  assert.equal(normalizeTrackerMaProjectionScenario('FLAT'),'flat');
+  assert.equal(normalizeTrackerMaProjectionScenario('unknown'),'trend');
 });
 
 function marketClient(rowsByTable={}, errorsByTable={}, calls=[]) {
@@ -136,6 +162,36 @@ test('Scenario comparison keeps Flat and Trend when Custom target is unavailable
   const enabled=buildScenarioComparison(closes,{horizon:20,target:equalTarget}).at(-1);
   assert.equal(enabled.enabled,true);
   assert.ok(enabled.projection.path.every(value=>Math.abs(value-equalTarget)<1e-9));
+});
+
+test('conditional MA projections exactly reuse SMA for every Scenario path and horizon', () => {
+  const base=Array.from({length:260},(_,index)=>70+index*.08+Math.sin(index/9));
+  const original=[...base];
+  for(const horizon of [1,20,60,240]){
+    const scenarios=buildScenarioComparison(base,{horizon,target:135});
+    for(const scenario of scenarios){
+      const path=scenario.projection.path;
+      const projected=projectMovingAverageSeries(base,path,[5,20,60,240]);
+      for(const item of projected){
+        assert.equal(item.start,sma(base,item.period));
+        assert.deepEqual(item.values,path.map((_,index)=>sma([...base,...path.slice(0,index+1)],item.period)));
+      }
+    }
+  }
+  assert.deepEqual(base,original);
+});
+
+test('conditional MA projection includes Current Preview and waits for enough history', () => {
+  const official=[1,2,3,4,5,6,7,8,9,10];
+  const withPreview=appendProvisionalCurrent(official,20);
+  const previewProjection=projectMovingAverageSeries(withPreview,[21,22],[5]);
+  assert.equal(previewProjection[0].start,sma(withPreview,5));
+  assert.equal(previewProjection[0].values[0],sma([...withPreview,21],5));
+  assert.notEqual(previewProjection[0].start,sma(official,5));
+
+  const insufficient=projectMovingAverageSeries([1,2,3],[4,5,6],[5,10]);
+  assert.deepEqual(insufficient[0],{period:5,start:null,values:[null,3,4]});
+  assert.deepEqual(insufficient[1],{period:10,start:null,values:[null,null,null]});
 });
 
 test('Current is appended as a provisional value without mutating official closes', () => {

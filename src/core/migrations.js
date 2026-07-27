@@ -4,8 +4,9 @@ import { readArray } from './storage.js';
 import { loadInstrumentPool, migrateTerminalIdentity, saveInstrumentPool } from './instrument-identity.js';
 import { migrateLegacyMarket, normalizeSecurityCode } from './market-code.js';
 import { reconcileLegacyTrackerInputs } from './shared-live-inputs.js';
+import { migrateTrackerMaProjectionState } from './tracker-state.js';
 
-export const CURRENT_SCHEMA_VERSION = 4;
+export const CURRENT_SCHEMA_VERSION = 5;
 
 export function runMigrations(storage = globalThis.localStorage) {
   const current = Number(storage.getItem(STORAGE_KEYS.migrationVersion) || 0);
@@ -40,6 +41,12 @@ export function runMigrations(storage = globalThis.localStorage) {
     storage.setItem(STORAGE_KEYS.lookFirst, JSON.stringify(rows));
   }
   if (current < 4) reconcileLegacyTrackerInputs(storage,loadInstrumentPool(storage));
+  if (current < 5 && storage.getItem(STORAGE_KEYS.trackerState)!==null) {
+    let state={};
+    try { state=JSON.parse(storage.getItem(STORAGE_KEYS.trackerState)) || {}; } catch { state={}; }
+    const migrated=migrateTrackerMaProjectionState(state);
+    storage.setItem(STORAGE_KEYS.trackerState,JSON.stringify(migrated.state));
+  }
   storage.setItem(STORAGE_KEYS.migrationVersion, String(CURRENT_SCHEMA_VERSION));
   return CURRENT_SCHEMA_VERSION;
 }

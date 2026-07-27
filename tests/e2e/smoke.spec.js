@@ -282,20 +282,37 @@ test('tracker chart exposes official markers, dates and separate Current preview
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
-test('Tracker compares all Scenario paths and resets only the active Scenario inputs', async ({ page },testInfo) => {
+test('Tracker compares all Scenario paths and extends MAs for one persisted Scenario', async ({ page },testInfo) => {
   await page.goto('/TrendTracker.html');
   await expect(page.locator('#scenarioMode')).toHaveCount(0);
   const rows=page.locator('#scenarioResult .scenario-result-row');
   await expect(rows).toHaveCount(3);
-  await expect(page.locator('[data-scenario="flat"]')).toContainText('Flat');
-  await expect(page.locator('[data-scenario="trend"]')).toContainText('Trend continuation');
+  const flat=page.locator('[data-scenario="flat"]');
+  const trend=page.locator('[data-scenario="trend"]');
   const custom=page.locator('[data-scenario="custom"]');
   const canvas=page.locator('#trackerChart');
+  await expect(flat).toContainText('Flat');
+  await expect(trend).toContainText('Trend continuation');
+  await expect(trend).toHaveAttribute('aria-pressed','true');
+  await expect(flat).toHaveAttribute('aria-pressed','false');
   await expect(custom).toHaveClass(/is-disabled/);
+  await expect(custom).toBeDisabled();
   await expect(custom).toContainText('Set Target');
+  await expect(page.locator('#maProjectionLegendLabel')).toHaveText('Projected MA · Trend continuation');
+  await expect(canvas).toHaveAttribute('data-ma-projection-scenario','trend');
+  await expect(canvas).toHaveAttribute('aria-label',/Projected moving averages use Trend continuation\./);
+  await expect(canvas).toHaveAttribute('aria-label',/MA5 ends at/);
   await expect(canvas).toHaveAttribute('aria-label',/Flat forecast ends at/);
   await expect(canvas).toHaveAttribute('aria-label',/Trend continuation forecast ends at/);
   await expect(canvas).toHaveAttribute('aria-label',/Custom target is not set/);
+
+  await flat.focus();
+  await page.keyboard.press('Enter');
+  await expect(flat).toHaveAttribute('aria-pressed','true');
+  await expect(canvas).toHaveAttribute('data-ma-projection-scenario','flat');
+  await expect(page.locator('#maProjectionLegendLabel')).toHaveText('Projected MA · Flat');
+  const flatSaved=await page.evaluate(()=>JSON.parse(localStorage.getItem('tv_trend_tracker_state_v1')).instruments['e2e-a'].maProjectionScenario);
+  expect(flatSaved).toBe('flat');
 
   const legendColors=await page.evaluate(()=>Object.fromEntries(['flat','trend','custom'].map(key=>[
     key,getComputedStyle(document.querySelector(`.scenario-line--${key}`)).borderTopColor
@@ -312,11 +329,25 @@ test('Tracker compares all Scenario paths and resets only the active Scenario in
   await page.locator('#scenarioHorizon').fill('13');
   await page.locator('#scenarioTarget').fill('42.96');
   await expect(custom).not.toHaveClass(/is-disabled/);
+  await expect(custom).toBeEnabled();
   await expect(custom.locator('.scenario-result-row__numbers strong')).toContainText('Day 13: 42.960');
+  await custom.click();
+  await expect(custom).toHaveAttribute('aria-pressed','true');
+  await expect(canvas).toHaveAttribute('data-ma-projection-scenario','custom');
+  await expect(page.locator('#maProjectionLegendLabel')).toHaveText('Projected MA · Custom target');
+  await expect(canvas).toHaveAttribute('aria-label',/Projected moving averages use Custom target\./);
   await expect(canvas).toHaveAttribute('aria-label',/Forecast horizon 13 trading days/);
   await expect(canvas).toHaveAttribute('aria-label',/Custom target forecast ends at 42\.960/);
   await expect(canvas).toHaveAttribute('aria-label',/beyond the lower chart edge/);
   await expect(canvas).toHaveAttribute('data-forecast-clipped',/custom:low/);
+  await expect(canvas).toHaveAttribute('data-ma-projection-periods','5,10,20,30,60,120');
+
+  const ma10=page.locator('#maToggles input[value="10"]');
+  await ma10.uncheck();
+  await expect(canvas).toHaveAttribute('data-ma-projection-periods','5,20,30,60,120');
+  await ma10.check();
+  const restoredPeriods=(await canvas.getAttribute('data-ma-projection-periods')).split(',').map(Number).sort((a,b)=>a-b);
+  expect(restoredPeriods).toEqual([5,10,20,30,60,120]);
 
   await page.locator('#scenarioTargetDate').fill('2026-06-01');
   await page.locator('#scenarioTargetDate').blur();
@@ -334,7 +365,7 @@ test('Tracker compares all Scenario paths and resets only the active Scenario in
 
   await page.evaluate(()=>{
     const state=JSON.parse(localStorage.getItem('tv_trend_tracker_state_v1'));
-    state.instruments['e2e-a'].scenarioMode='custom';
+    state.instruments['e2e-a'].scenarioMode='flat';
     localStorage.setItem('tv_trend_tracker_state_v1',JSON.stringify(state));
   });
   await page.reload();
@@ -342,17 +373,22 @@ test('Tracker compares all Scenario paths and resets only the active Scenario in
   await expect(page.locator('[data-scenario="flat"]')).toBeVisible();
   await expect(page.locator('[data-scenario="trend"]')).toBeVisible();
   await expect(page.locator('[data-scenario="custom"]')).not.toHaveClass(/is-disabled/);
+  await expect(page.locator('[data-scenario="custom"]')).toHaveAttribute('aria-pressed','true');
+  await expect(canvas).toHaveAttribute('data-ma-projection-scenario','custom');
   await page.locator('.scenario-reset-button').click();
   await expect(page.locator('#scenarioHorizon')).toHaveValue('20');
   await expect(page.locator('#scenarioTarget')).toHaveValue('');
   await expect(page.locator('#scenarioTargetDate')).toHaveValue('');
   await expect(custom).toHaveClass(/is-disabled/);
+  await expect(trend).toHaveAttribute('aria-pressed','true');
+  await expect(canvas).toHaveAttribute('data-ma-projection-scenario','trend');
+  await expect(page.locator('#maProjectionLegendLabel')).toHaveText('Projected MA · Trend continuation');
   const saved=await page.evaluate(()=>({
     tracker:JSON.parse(localStorage.getItem('tv_trend_tracker_state_v1')),
     current:JSON.parse(localStorage.getItem('tv_lookfirst_data_v3')).find(row=>row.id==='e2e-a')?.c,
     vr:JSON.parse(localStorage.getItem('tv_thenleap_data_v3')).find(row=>row.id==='e2e-a')?.v
   }));
-  expect(saved.tracker.instruments['e2e-a']).toEqual({horizon:20,target:'',targetDate:''});
+  expect(saved.tracker.instruments['e2e-a']).toEqual({horizon:20,target:'',targetDate:'',maProjectionScenario:'trend'});
   expect(saved.current).toBe('70');
   expect(saved.vr).toBe('1');
   expect(saved.tracker.visibleMas.length).toBeGreaterThan(0);
@@ -362,6 +398,9 @@ test('Tracker compares all Scenario paths and resets only the active Scenario in
   await expect(page.locator('#scenarioTarget')).toHaveValue('');
   await expect(page.locator('#scenarioTargetDate')).toHaveValue('');
   await expect(page.locator('#scenarioResult .scenario-result-row')).toHaveCount(3);
+  await expect(page.locator('[data-scenario="trend"]')).toHaveAttribute('aria-pressed','true');
+  const rowHeight=await page.locator('[data-scenario="trend"]').evaluate(node=>node.getBoundingClientRect().height);
+  expect(rowHeight).toBeGreaterThanOrEqual(44);
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(1);
 });
@@ -450,6 +489,9 @@ test('tracker MA Status and Scenario Lab share the read-only help modal', async 
   await helpButtons.nth(1).click();
   await expect(page.locator('#trackerHelpTitle')).toContainText('Scenario Lab');
   await expect(page.locator('#trackerHelpContent')).toContainText('Trend continuation');
+  await expect(page.locator('#trackerHelpContent')).toContainText('Projected moving averages');
+  await expect(page.locator('#trackerHelpContent')).toContainText('现有 SMA 公式');
+  await expect(page.locator('#trackerHelpContent')).toContainText('不是独立价格预测');
   for (const state of ['Long Bull','Long Bear','Transition','Uptrend','Downtrend','Range','趋势延续','反转确认','下跌反抽','调整探底','反转观察','震荡等待']) {
     await expect(page.locator('#trackerHelpContent')).toContainText(state);
   }
