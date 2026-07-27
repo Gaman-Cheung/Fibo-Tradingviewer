@@ -93,6 +93,13 @@ The page stylesheet must not contain selectors beginning with `.fibo-header` or 
 - A mobile action sheet stays open until the Saved state has been visible, then closes. On failure it remains open so the user can retry.
 - Saved and Saving presentation belongs to `components.css` and uses the existing semantic success, spacing and motion tokens. Do not add page-local colors or duplicate timing tokens for this state.
 
+## Trend Tracker chart forecast
+
+- Historical Close and MA series remain the chart's primary visual area. A forecast trading day uses one-third of a historical trading day's horizontal display interval, with no minimum tail width and a 15% total-width cap.
+- Horizontal compression is presentation only. It must not remove forecast points, shorten the selected horizon or alter Scenario, MA or MACD calculations.
+- Flat, Trend continuation and Custom target price paths use 2px solid Material-color lines. Historical MAs remain solid; conditional projected MAs use the same MA colors with 1.25px short dashes and reduced opacity.
+- Compact forecast tails must keep the latest official date, forecast endpoint label and endpoint marker readable on desktop and iPhone layouts.
+
 ## Responsive contract
 
 CSS custom properties cannot be used reliably inside media-query conditions, so breakpoints are named here:

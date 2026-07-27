@@ -4,7 +4,7 @@ import { inferMainlandMarket, migrateLegacyMarket, toBaoStockCode } from '../../
 import { buildFrontAdjustedSeries } from '../../src/core/front-adjusted-series.js';
 import { runMigrations, CURRENT_SCHEMA_VERSION } from '../../src/core/migrations.js';
 import { analyzeTrend, appendProvisionalCurrent, maSnapshot, macd, projectScenario, sma, turnState } from '../../src/tracker/trend-engine.js';
-import { buildTrackerChartModel, buildTrackerChartXModel, buildTrackerChartYModel, trackerChartEdge, trackerForecastRatio, TRACKER_CHART_WINDOW, TRACKER_FORECAST_MIN_RATIO, TRACKER_FORECAST_MAX_RATIO } from '../../src/tracker/chart-model.js';
+import { buildTrackerChartModel, buildTrackerChartXModel, buildTrackerChartYModel, trackerChartEdge, trackerForecastRatio, TRACKER_CHART_WINDOW, TRACKER_FORECAST_DAY_SCALE, TRACKER_FORECAST_MAX_RATIO } from '../../src/tracker/chart-model.js';
 import { buildScenarioComparison } from '../../src/tracker/scenario-comparison.js';
 import { projectMovingAverageSeries } from '../../src/tracker/ma-projection.js';
 import { formatTurnLabel } from '../../src/tracker/status-presenter.js';
@@ -251,21 +251,28 @@ test('chart model aligns dates and combines coincident high low latest markers',
   assert.match(model.ariaLabel,/2026-01-02 to 2026-01-06/);
 });
 
-test('chart x model gives short horizons a compact tail and caps long forecasts', () => {
+test('chart x model renders forecast days at one-third scale without a minimum and caps long forecasts', () => {
   const plot={left:32,right:968};
-  assert.equal(trackerForecastRatio(120,1),TRACKER_FORECAST_MIN_RATIO);
-  assert.ok(Math.abs(trackerForecastRatio(120,20)-20/139)<1e-12);
-  assert.equal(trackerForecastRatio(120,60),TRACKER_FORECAST_MAX_RATIO);
+  const expectedRatio=(points,horizon)=>Math.min(
+    TRACKER_FORECAST_MAX_RATIO,
+    horizon*TRACKER_FORECAST_DAY_SCALE/(points-1+horizon*TRACKER_FORECAST_DAY_SCALE)
+  );
+  assert.ok(Math.abs(trackerForecastRatio(120,1)-expectedRatio(120,1))<1e-12);
+  assert.ok(trackerForecastRatio(120,1)<.01);
+  assert.ok(Math.abs(trackerForecastRatio(120,20)-expectedRatio(120,20))<1e-12);
+  assert.ok(Math.abs(trackerForecastRatio(120,60)-expectedRatio(120,60))<1e-12);
   assert.equal(trackerForecastRatio(120,240),TRACKER_FORECAST_MAX_RATIO);
+  assert.ok(Math.abs(trackerForecastRatio(80,20)-expectedRatio(80,20))<1e-12);
   for(const horizon of [1,20,60,240]){
     const model=buildTrackerChartXModel(120,horizon,plot);
     assert.equal(model.history[0],plot.left);
-    assert.equal(model.history.at(-1),model.historyRight);
-    assert.ok(model.historyRight>=plot.left+(plot.right-plot.left)*.75);
+    assert.ok(Math.abs(model.history.at(-1)-model.historyRight)<1e-9);
+    assert.ok(model.historyRight>=plot.left+(plot.right-plot.left)*.85);
     assert.ok(model.forecast[0]>model.historyRight);
     assert.equal(model.forecast.length,horizon);
-    assert.equal(model.forecast.at(-1),plot.right);
+    assert.ok(Math.abs(model.forecast.at(-1)-plot.right)<1e-9);
     assert.ok(model.forecast.every(value=>value>model.historyRight&&value<=plot.right));
+    assert.ok(model.forecast.every((value,index)=>index===0||value>model.forecast[index-1]));
   }
 });
 

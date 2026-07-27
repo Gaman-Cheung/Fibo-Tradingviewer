@@ -314,17 +314,30 @@ test('Tracker compares all Scenario paths and extends MAs for one persisted Scen
   const flatSaved=await page.evaluate(()=>JSON.parse(localStorage.getItem('tv_trend_tracker_state_v1')).instruments['e2e-a'].maProjectionScenario);
   expect(flatSaved).toBe('flat');
 
-  const legendColors=await page.evaluate(()=>Object.fromEntries(['flat','trend','custom'].map(key=>[
-    key,getComputedStyle(document.querySelector(`.scenario-line--${key}`)).borderTopColor
-  ])));
-  expect(legendColors).toEqual({flat:'rgb(66, 133, 244)',trend:'rgb(52, 168, 83)',custom:'rgb(234, 67, 53)'});
+  const legendPresentation=await page.evaluate(()=>({
+    scenarios:Object.fromEntries(['flat','trend','custom'].map(key=>{
+      const style=getComputedStyle(document.querySelector(`.scenario-line--${key}`));
+      return [key,{color:style.borderTopColor,lineStyle:style.borderTopStyle}];
+    })),
+    projectedMa:getComputedStyle(document.querySelector('.projected-ma-line')).borderTopStyle
+  }));
+  expect(legendPresentation).toEqual({
+    scenarios:{
+      flat:{color:'rgb(66, 133, 244)',lineStyle:'solid'},
+      trend:{color:'rgb(52, 168, 83)',lineStyle:'solid'},
+      custom:{color:'rgb(234, 67, 53)',lineStyle:'solid'}
+    },
+    projectedMa:'dashed'
+  });
 
   await page.locator('#scenarioTargetDate').fill('2026-05-12');
   await page.locator('#scenarioTargetDate').blur();
   await expect(canvas).toHaveAttribute('data-forecast-horizon','1');
-  await expect(canvas).toHaveAttribute('data-forecast-ratio','0.0400');
+  await expect(canvas).toHaveAttribute('data-forecast-ratio','0.0028');
   await page.locator('#scenarioTargetDate').fill('');
   await page.locator('#scenarioTargetDate').blur();
+  await expect(canvas).toHaveAttribute('data-forecast-horizon','20');
+  await expect(canvas).toHaveAttribute('data-forecast-ratio','0.0531');
 
   await page.locator('#scenarioHorizon').fill('13');
   await page.locator('#scenarioTarget').fill('42.96');

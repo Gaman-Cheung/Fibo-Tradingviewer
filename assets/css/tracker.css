@@ -37,7 +37,7 @@ label input,label select { box-sizing:border-box; width:100%; min-height:var(--c
 .close-line,.preview-line,.scenario-line,.projected-ma-line { display:inline-block; width:18px; height:0; border-top:3px solid var(--color-text); }
 .preview-line { border-top-color:var(--color-text-secondary); border-top-style:dashed; }
 .projected-ma-line { border-top-width:2px; border-top-color:var(--color-text-secondary); border-top-style:dashed; }
-.scenario-line { border-top-style:dashed; }
+.scenario-line { border-top-style:solid; }
 .scenario-line--flat { border-top-color:var(--brand-blue); }
 .scenario-line--trend { border-top-color:var(--brand-green); }
 .scenario-line--custom { border-top-color:var(--brand-red); }

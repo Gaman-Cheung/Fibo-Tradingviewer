@@ -5,16 +5,17 @@
  */
 
 export const TRACKER_CHART_WINDOW = 120;
-export const TRACKER_FORECAST_MIN_RATIO = 0.04;
-export const TRACKER_FORECAST_MAX_RATIO = 0.25;
+export const TRACKER_FORECAST_DAY_SCALE = 1 / 3;
+export const TRACKER_FORECAST_MAX_RATIO = 0.15;
 export const TRACKER_HISTORY_Y_PADDING_RATIO = 0.08;
 export const TRACKER_FORECAST_Y_LIMIT_RATIO = 0.15;
 
 export function trackerForecastRatio(pointCount, horizon) {
   const historyIntervals=Math.max(1,Math.floor(Number(pointCount)||0)-1);
   const forecastCount=Math.max(1,Math.floor(Number(horizon)||1));
-  const naturalRatio=forecastCount/(historyIntervals+forecastCount);
-  return Math.max(TRACKER_FORECAST_MIN_RATIO,Math.min(TRACKER_FORECAST_MAX_RATIO,naturalRatio));
+  const displayIntervals=forecastCount*TRACKER_FORECAST_DAY_SCALE;
+  const compressedRatio=displayIntervals/(historyIntervals+displayIntervals);
+  return Math.min(TRACKER_FORECAST_MAX_RATIO,compressedRatio);
 }
 
 export function buildTrackerChartXModel(pointCount, horizon, plot) {
