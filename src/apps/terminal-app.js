@@ -859,8 +859,8 @@ import { buildTerminalMacdSuggestion, detectCloseMacdDivergence } from '../track
                 if (['current','entry','previous'].includes(item?.b)) record.b = item.b;
             });
             return [...map.values()].filter(item => {
-                const h = parseFloat(item.h), l = parseFloat(item.l), c = parseFloat(item.c);
-                return Number.isFinite(h) && Number.isFinite(l) && Number.isFinite(c) && h > l;
+                const h = parseFloat(item.h), l = parseFloat(item.l);
+                return Number.isFinite(h) && Number.isFinite(l) && h > l;
             });
         }
 
@@ -999,8 +999,28 @@ import { buildTerminalMacdSuggestion, detectCloseMacdDivergence } from '../track
             const trend = read('.trend', 'sideways');
             const rsi = parseFloat(read('.rsi'));
             const macd = read('.macd', 'neutral');
+            const currentInput = row.querySelector('.current-proxy');
+            const missingStructure = !Number.isFinite(h) || !Number.isFinite(l) || h <= l;
+            const missingCurrent = !Number.isFinite(c) || c <= 0;
+            row.classList.toggle('is-current-missing',!missingStructure&&missingCurrent);
+            if(currentInput){
+                currentInput.classList.toggle('is-required',!missingStructure&&missingCurrent);
+                if(!missingStructure&&missingCurrent)currentInput.setAttribute('aria-invalid','true');
+                else currentInput.removeAttribute('aria-invalid');
+            }
 
-            if (!Number.isFinite(h) || !Number.isFinite(l) || !Number.isFinite(c) || h <= l) {
+            if(!missingStructure&&missingCurrent){
+                row.querySelector('.market-summary').innerHTML='<span class="current-required-warning" role="status"><span class="material-icons">error_outline</span>Current required</span><br><small>Derived calculations paused</small>';
+                ['support-cell','pressure-cell','t1-cell','t2-cell','rr-cell'].forEach(cls=>row.querySelector('.'+cls).innerHTML='-');
+                const aiCell=row.querySelector('.ai-cell');
+                aiCell.dataset.explanation='';
+                aiCell.innerHTML='<span class="input-required-badge"><span class="material-icons">error_outline</span>Current Required</span>';
+                syncMobileCompositeSignal(row);
+                if(persist)saveLocalV7();
+                return;
+            }
+
+            if (missingStructure) {
                 row.querySelector('.market-summary').innerHTML = `<span class="risk-bad">Look first 数据不完整</span><br><small>H:${Number.isFinite(h)?h:'--'} L:${Number.isFinite(l)?l:'--'} C:${Number.isFinite(c)?c:'--'}</small>`;
                 ['support-cell','pressure-cell','t1-cell','t2-cell','rr-cell','ai-cell'].forEach(cls => row.querySelector('.' + cls).innerHTML = '-');
                 return;
@@ -1195,6 +1215,48 @@ import { buildTerminalMacdSuggestion, detectCloseMacdDivergence } from '../track
             return `<div class="macd-divergence-candidate ${className}"><strong>${label}</strong><span>${escapePoolHtml(first.date || 'Earlier pivot')} · Close ${first.close.toFixed(3)} · DIF ${formatMacdValue(first.dif)}</span><span>${escapePoolHtml(second.date || 'Later pivot')} · Close ${second.close.toFixed(3)} · DIF ${formatMacdValue(second.dif)}</span></div>`;
         }
 
+        function renderMacdSuggestionContent() {
+            const pending=pendingMacdSuggestion;
+            if(!pending)return;
+            const content=document.getElementById('macdSuggestionContent');
+            const applyButton=document.getElementById('applyMacdSuggestionButton');
+            const selected=pending.results[pending.selectedBasis]||pending.results.official;
+            const hasPreview=!!pending.results.preview;
+            const sourceLabel=pending.selectedBasis==='preview'
+                ? `Current Preview · ${Number(pending.current).toFixed(3)}`
+                : `Official Close · ${pending.officialDate||'--'}`;
+            const candidateHtml=divergenceCandidateHtml(pending.divergence.bullish,'Potential Bullish Close/DIF Divergence','is-bullish')
+                +divergenceCandidateHtml(pending.divergence.bearish,'Potential Bearish Close/DIF Divergence','is-bearish');
+            content.dataset.macdBasis=pending.selectedBasis;
+            content.innerHTML=`
+                <div class="macd-suggestion-summary">
+                    <div class="macd-suggestion-summary__top">
+                        <span class="fibo-analysis-source fibo-analysis-source--${pending.selectedBasis}">${escapePoolHtml(sourceLabel)}</span>
+                        <div class="macd-basis-toggle" role="group" aria-label="MACD analysis basis">
+                            <button type="button" class="${pending.selectedBasis==='official'?'is-active':''}" data-fibo-click="selectMacdSuggestionBasis('official')" aria-pressed="${pending.selectedBasis==='official'}">Official</button>
+                            <button type="button" class="${pending.selectedBasis==='preview'?'is-active':''}" data-fibo-click="selectMacdSuggestionBasis('preview')" aria-pressed="${pending.selectedBasis==='preview'}" ${hasPreview?'':'disabled'}>Preview</button>
+                        </div>
+                    </div>
+                    <strong>${escapePoolHtml(selected.suggestion.label)}</strong>
+                    <p>${escapePoolHtml(selected.suggestion.reason)}</p>
+                </div>
+                <div class="macd-suggestion-metrics">
+                    <span><small>DIF</small><strong>${formatMacdValue(selected.snapshot.dif)}</strong></span>
+                    <span><small>DEA</small><strong>${formatMacdValue(selected.snapshot.dea)}</strong></span>
+                    <span><small>Histogram</small><strong>${formatMacdValue(selected.snapshot.histogram)}</strong></span>
+                    <span><small>State</small><strong>${escapePoolHtml(selected.snapshot.cross)} cross · ${escapePoolHtml(selected.snapshot.zeroAxis)} zero</strong></span>
+                </div>
+                <div class="macd-divergence-section"><h3>Close/DIF divergence candidates</h3>${candidateHtml||'<p>No confirmed five-point candidate in the latest 60 official sessions.</p>'}<small>Candidate only. Current Preview is excluded. Verify the full K-line before manually choosing Bullish Divergence (+2).</small></div>`;
+            applyButton.disabled=!selected;
+        }
+
+        function selectMacdSuggestionBasis(basis) {
+            if(!pendingMacdSuggestion||!['official','preview'].includes(basis))return;
+            if(basis==='preview'&&!pendingMacdSuggestion.results.preview)return;
+            pendingMacdSuggestion.selectedBasis=basis;
+            renderMacdSuggestionContent();
+        }
+
         async function openMacdSuggestion(button) {
             const row = button?.closest('tr');
             const instrumentId = row?.dataset.instrumentId || '';
@@ -1226,26 +1288,11 @@ import { buildTerminalMacdSuggestion, detectCloseMacdDivergence } from '../track
                 const dates = rows.map(item => String(item.trade_date || ''));
                 const live = readSharedLiveInputs(localStorage,instrumentId);
                 const hasPreview = Number.isFinite(Number(live.current)) && Number(live.current) > 0;
-                const analysisValues = appendProvisionalCurrent(officialCloses,hasPreview ? live.current : '');
-                const result = buildTerminalMacdSuggestion(analysisValues);
+                const officialResult = buildTerminalMacdSuggestion(officialCloses);
+                const previewResult = hasPreview ? buildTerminalMacdSuggestion(appendProvisionalCurrent(officialCloses,live.current)) : null;
                 const divergence = detectCloseMacdDivergence(officialCloses,dates,{lookback:60,pivotRadius:2});
-                pendingMacdSuggestion = { instrumentId, value:result.suggestion.value };
-                applyButton.disabled = false;
-                const candidateHtml = divergenceCandidateHtml(divergence.bullish,'Potential Bullish Close/DIF Divergence','is-bullish')
-                    + divergenceCandidateHtml(divergence.bearish,'Potential Bearish Close/DIF Divergence','is-bearish');
-                content.innerHTML = `
-                    <div class="macd-suggestion-summary">
-                        <small>${hasPreview ? 'CURRENT PREVIEW' : `OFFICIAL CLOSE · ${escapePoolHtml(dates.at(-1) || '--')}`}</small>
-                        <strong>${result.suggestion.label}</strong>
-                        <p>${result.suggestion.reason}</p>
-                    </div>
-                    <div class="macd-suggestion-metrics">
-                        <span><small>DIF</small><strong>${formatMacdValue(result.snapshot.dif)}</strong></span>
-                        <span><small>DEA</small><strong>${formatMacdValue(result.snapshot.dea)}</strong></span>
-                        <span><small>Histogram</small><strong>${formatMacdValue(result.snapshot.histogram)}</strong></span>
-                        <span><small>State</small><strong>${escapePoolHtml(result.snapshot.cross)} cross · ${escapePoolHtml(result.snapshot.zeroAxis)} zero</strong></span>
-                    </div>
-                    <div class="macd-divergence-section"><h3>Close/DIF divergence candidates</h3>${candidateHtml || '<p>No confirmed five-point candidate in the latest 60 official sessions.</p>'}<small>Candidate only. Current Preview is excluded. Verify the full K-line before manually choosing Bullish Divergence (+2).</small></div>`;
+                pendingMacdSuggestion = { instrumentId, selectedBasis:hasPreview?'preview':'official', current:hasPreview?Number(live.current):null, officialDate:dates.at(-1)||'', results:{official:officialResult,preview:previewResult}, divergence };
+                renderMacdSuggestionContent();
             } catch (error) {
                 if (requestId === macdSuggestionRequest) content.innerHTML = `<div class="macd-suggestion-error">History unavailable: ${escapePoolHtml(error?.message || error)}</div>`;
             } finally {
@@ -1256,11 +1303,12 @@ import { buildTerminalMacdSuggestion, detectCloseMacdDivergence } from '../track
 
         function applyMacdSuggestion() {
             const pending = pendingMacdSuggestion;
-            if (!pending || !['neutral','bullish','bearish'].includes(pending.value)) return;
+            const value=pending?.results?.[pending.selectedBasis]?.suggestion?.value;
+            if (!pending || !['neutral','bullish','bearish'].includes(value)) return;
             const row = document.querySelector(`#tableBodyV7 tr[data-instrument-id="${pending.instrumentId}"]`);
             const select = row?.querySelector('.macd');
             if (!select) return;
-            select.value = pending.value;
+            select.value = value;
             calcV7(select);
             closeMacdSuggestion();
         }
@@ -1565,4 +1613,4 @@ import { buildTerminalMacdSuggestion, detectCloseMacdDivergence } from '../track
     
 
 // Central event registry; handlers stay module-scoped and are not globals.
-bindDeclarativeEvents({ checkAuth, showLoader, hideLoader, saveToCloud, loadFromCloud, normalizeInstrumentName, createInstrumentId, loadInstrumentPool, mergeInstrumentPools, saveInstrumentPool, getInstrumentById, isInstrumentActive, migrateInstrumentIdentity, escapePoolHtml, readStoredRows, mergeRowsWithHiddenInstruments, renderInstrumentPool, initPoolDrag, savePoolDomOrder, reorderStoredRowsByPool, createDesktopInstrumentRow, handleDesktopTickerInput, openInstrumentDialog, closeInstrumentDialog, handleInstrumentBackdrop, saveInstrumentDialog, openInstrument, openInstrumentWave, archiveInstrument, removeInstrumentFromCurrentLayout, restoreInstrument, permanentlyDeleteInstrument, switchTab, switchMobileTerminal, updateMobileNavigation, ensureMobileCardControls, syncMobileCompositeSignal, applyMobileActiveInstrument, openMobileActions, closeMobileActions, handleMobileActionsBackdrop, syncV7ScrollWidth, initV7TableUX, applyAutoHighlight, updateV6Medals, calcV6, addV6Row, refreshPreviousCloseRow, refreshAllAutoPreviousCloses, togglePreviousCloseMode, handlePreviousCloseInput, handleCurrentInput, mergeLookFirstRecords, collectLookFirstRecords, updateLookFirstCurrent, syncV7withV6, getAutoPlan, movePct, levelHtml, getStopCandidates, useStopCandidate, calcV7, addV7Row, openMacdSuggestion, closeMacdSuggestion, handleMacdSuggestionBackdrop, applyMacdSuggestion, makeRowDraggable, getDragAfterElement, saveLocalV6, saveLocalV7, openHelp, closeHelp, handleHelpBackdrop, openSignalExplanation, renderHeaderMarquee, openNoteEditor, closeNoteEditor, saveNoteEditor, handleNoteBackdrop, exportData, importData, migrateExecutionFields });
+bindDeclarativeEvents({ checkAuth, showLoader, hideLoader, saveToCloud, loadFromCloud, normalizeInstrumentName, createInstrumentId, loadInstrumentPool, mergeInstrumentPools, saveInstrumentPool, getInstrumentById, isInstrumentActive, migrateInstrumentIdentity, escapePoolHtml, readStoredRows, mergeRowsWithHiddenInstruments, renderInstrumentPool, initPoolDrag, savePoolDomOrder, reorderStoredRowsByPool, createDesktopInstrumentRow, handleDesktopTickerInput, openInstrumentDialog, closeInstrumentDialog, handleInstrumentBackdrop, saveInstrumentDialog, openInstrument, openInstrumentWave, archiveInstrument, removeInstrumentFromCurrentLayout, restoreInstrument, permanentlyDeleteInstrument, switchTab, switchMobileTerminal, updateMobileNavigation, ensureMobileCardControls, syncMobileCompositeSignal, applyMobileActiveInstrument, openMobileActions, closeMobileActions, handleMobileActionsBackdrop, syncV7ScrollWidth, initV7TableUX, applyAutoHighlight, updateV6Medals, calcV6, addV6Row, refreshPreviousCloseRow, refreshAllAutoPreviousCloses, togglePreviousCloseMode, handlePreviousCloseInput, handleCurrentInput, mergeLookFirstRecords, collectLookFirstRecords, updateLookFirstCurrent, syncV7withV6, getAutoPlan, movePct, levelHtml, getStopCandidates, useStopCandidate, calcV7, addV7Row, openMacdSuggestion, closeMacdSuggestion, handleMacdSuggestionBackdrop, selectMacdSuggestionBasis, applyMacdSuggestion, makeRowDraggable, getDragAfterElement, saveLocalV6, saveLocalV7, openHelp, closeHelp, handleHelpBackdrop, openSignalExplanation, renderHeaderMarquee, openNoteEditor, closeNoteEditor, saveNoteEditor, handleNoteBackdrop, exportData, importData, migrateExecutionFields });

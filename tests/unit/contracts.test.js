@@ -131,6 +131,19 @@ test('all systems use the shared inline cloud Push feedback contract', () => {
   }
 });
 
+test('official and preview MACD results use one shared source-label contract', () => {
+  const components=fs.readFileSync(path.join(root,'assets/css/components.css'),'utf8');
+  const terminal=fs.readFileSync(path.join(root,'src/apps/terminal-app.js'),'utf8');
+  const tracker=fs.readFileSync(path.join(root,'src/apps/tracker-app.js'),'utf8');
+  assert.match(components,/\.fibo-analysis-source--official/);
+  assert.match(components,/\.fibo-analysis-source--preview/);
+  for(const source of [terminal,tracker]){
+    assert.match(source,/fibo-analysis-source--\$\{/);
+    assert.match(source,/Official Close/);
+    assert.match(source,/Current Preview/);
+  }
+});
+
 test('local BaoStock launcher keeps credentials and its environment out of Git', () => {
   const ignore=fs.readFileSync(path.join(root,'.gitignore'),'utf8');
   const launcher=fs.readFileSync(path.join(root,'SyncBaoStock.cmd'),'utf8');

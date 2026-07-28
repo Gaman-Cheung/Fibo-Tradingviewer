@@ -40,6 +40,7 @@ const TRACKER_HELP_TOPICS = {
     html:`<h3>三种情景同时对照</h3><p><strong>Flat</strong>：未来价格保持在起点。<br><strong>Trend continuation</strong>：延续近期对数收益率方向，并用近期波动率限制斜率，避免无限外推。<br><strong>Custom target</strong>：从起点以对数线性路径推演到手动 Target。三种情景共用同一个期限并同时展示，不再通过 Mode 单选。</p><h3>起点与输入优先级</h3><p>填写 Current 时，三种情景均以 <strong>Current Preview</strong> 为起点；未填写时以 BaoStock 最新正式收盘价为起点。<strong>Trading days</strong> 设置 1–240 个交易日；填写 <strong>Target date</strong> 后，系统按起止日期估算工作日并优先使用该结果。Target 只影响 Custom target；Target 为空、非法或不大于零时，Custom 显示 <strong>Set Target</strong> 且不绘制路径，Flat 与 Trend 仍正常运行。</p><h3>主图显示</h3><p>为保证历史走势始终是主视觉，未来每个交易日在横轴上按历史交易日间距的<strong>三分之一</strong>绘制，不设置最小宽度，并将整个预测尾部限制在主图宽度的 15% 以内。这只是显示压缩：系统仍会完整计算并展示全部未来交易日。三条 Scenario 价格路径为同色实线，条件预测 MA 保持同色短虚线。纵轴以可见 Close 与 MA 为主，Scenario 最多向历史价格范围外扩展 15%；更远的路径会在边缘截断并显示同色方向箭头，精确终点仍以下方结果行为准。</p><h3>Reset</h3><p>Reset 只把当前标的的 Trading days 恢复为 20，并清空 Target 与 Target date。它不会清除 Current、VR、MA 显示开关或其他标的数据。</p><h3>如何读三行结果</h3><p>蓝色 Flat、绿色 Trend 和红色 Custom 每一行，都是把对应假设路径加入历史后，在<strong>情景最后一天</strong>重新计算出的“长期背景 · 当前结构 · 事件结论”。它们不是页面左侧的当前正式状态。</p><h3>长期背景</h3><ul><li><strong>Long Bull</strong>：终点价格不低于 MA240，且 MA240 方向为 up。</li><li><strong>Long Bear</strong>：终点价格低于 MA240，且 MA240 方向为 down。</li><li><strong>Transition</strong>：不满足上述两组完整条件，包括 MA240 数据不足、价格侧与斜率方向不一致等过渡状态。</li></ul><h3>当前结构</h3><ul><li><strong>Uptrend</strong>：MA5 &gt; MA10 &gt; MA20，同时 MA5、MA10 均为 up。</li><li><strong>Downtrend</strong>：MA5 &lt; MA10 &lt; MA20，同时 MA5、MA10 均为 down。</li><li><strong>Range</strong>：不满足完整 Uptrend 或 Downtrend 条件；它表示均线结构未形成单边排列，不是波动区间数值。</li></ul><h3>事件结论</h3><ul><li><strong>反转确认</strong>：Long Bear + Uptrend，并且 MA20 方向连续确认、最近两个计算收盘位于 MA60 上方。</li><li><strong>下跌反抽</strong>：Long Bear + Uptrend，但尚未同时满足上述 MA20 与 MA60 确认条件。</li><li><strong>调整探底</strong>：Long Bull + Downtrend。</li><li><strong>反转观察</strong>：Transition，且出现 MA20 Turn Alert 或价格首次切换到 MA60 另一侧。</li><li><strong>震荡等待</strong>：前述优先条件均未触发，且结构为 Range。</li><li><strong>趋势延续</strong>：前述特殊组合均未触发，系统保留默认结论；它是分类结果，不等于趋势强度评分。</li></ul><h3>波动范围</h3><div class="formula"><code>情景上下界 = 路径价格 × exp(±σ√d)</code></div><p>σ 来自近 20 个交易日的对数收益率。上下界保留在结果行中，不额外画成六条线。它只是波动情景范围，不是置信区间、概率预测或止盈目标。</p><h3>边界</h3><p>Scenario终点状态是条件推演，不是发生概率、目标价承诺或交易信号。Scenario Lab不改变MA、MACD、Terminal Composite Signal或任何交易评分。</p>`
   }
 };
+TRACKER_HELP_TOPICS['ma-status'].html += `<h3>Official Close 与 Current Preview</h3><p><strong>Official Close</strong> 只使用 BaoStock 最新正式收盘序列，代表已经确认的客观 MACD；<strong>Current Preview</strong> 会在正式历史后追加手动 Current，用于盘中条件预演。两者同时展示便于比较，但 Preview 的金叉、死叉、零轴和动能状态都不等于正式收盘确认。Current 为空时只保留 Official，Preview 显示待输入提示。</p>`;
 TRACKER_HELP_TOPICS.scenario.html += `<h3>Projected moving averages</h3><p>点击 Flat、Trend continuation 或 Custom target 结果行，会选择该情景用于未来均线预演；三条价格路径仍会同时保留。系统把所选情景的逐日收盘价依次追加到历史序列，并用现有 SMA 公式延长当前勾选的 MA。填写 Current 时，Current Preview 也会进入这组条件计算。</p><p>历史均线为实线，未来均线为同色短虚线。它们表示“如果该价格路径成立，均线可能如何演化”，不是独立价格预测、发生概率或交易信号。Custom Target 被清空或 Reset 时，均线预演会自动回到 Trend continuation。</p>`;
 let pool = loadInstrumentPool();
 let history = [];
@@ -194,7 +195,8 @@ function renderTracker(forceLiveInputs=false) {
     const turnText=formatTurnLabel(turn,item.direction,live.current !== '');
     return `<tr><td>MA${period}</td><td>${Number.isFinite(item.value)?item.value.toFixed(3):'--'}</td><td>${Number.isFinite(item.delta)?item.delta.toFixed(4):'--'}</td><td class="status-${item.direction}">${item.direction}</td><td>${turnText}</td></tr>`;
   }).join('');
-  document.getElementById('macdSummary').innerHTML=`<strong>MACD 12/26/9</strong><br>DIF ${format(preview.macd.dif)} · DEA ${format(preview.macd.dea)} · Histogram ${format(preview.macd.histogram)}<br>${preview.macd.cross} cross · ${preview.macd.zeroAxis} zero axis · ${preview.macd.direction}`;
+  const hasCurrent=Number.isFinite(Number(live.current))&&Number(live.current)>0;
+  document.getElementById('macdSummary').innerHTML=`<strong class="macd-summary__title">MACD 12/26/9</strong><div class="macd-comparison">${macdBasisCardHtml({basis:'official',label:`Official Close · ${historyDates.at(-1)||'--'}`,analysis:official.macd})}${hasCurrent?macdBasisCardHtml({basis:'preview',label:`Current Preview · ${Number(live.current).toFixed(3)}`,analysis:preview.macd}):macdPreviewPlaceholderHtml()}</div>`;
   const target=document.getElementById('scenarioTarget').value, targetDate=document.getElementById('scenarioTargetDate').value;
   const manualHorizon=Number(document.getElementById('scenarioHorizon').value)||20;
   const horizon=targetDate ? businessDaysUntil(historyDates.at(-1),targetDate) : manualHorizon;
@@ -232,6 +234,14 @@ function renderScenarioResults(scenarios,targetDate,selectedKey) {
 }
 
 function format(value) { return Number.isFinite(value) ? value.toFixed(4) : '--'; }
+
+function macdBasisCardHtml({basis,label,analysis}) {
+  return `<section class="macd-basis-card" data-macd-basis="${basis}"><span class="fibo-analysis-source fibo-analysis-source--${basis}">${escapeHtml(label)}</span><div class="macd-basis-values"><span><small>DIF</small><strong>${format(analysis?.dif)}</strong></span><span><small>DEA</small><strong>${format(analysis?.dea)}</strong></span><span><small>Histogram</small><strong>${format(analysis?.histogram)}</strong></span></div><div class="macd-basis-state">${escapeHtml(analysis?.cross||'none')} cross · ${escapeHtml(analysis?.zeroAxis||'unknown')} zero axis · ${escapeHtml(analysis?.direction||'insufficient')}</div></section>`;
+}
+
+function macdPreviewPlaceholderHtml() {
+  return `<section class="macd-basis-card is-placeholder" data-macd-basis="preview"><span class="fibo-analysis-source fibo-analysis-source--preview">Current Preview</span><span>Set Current to preview</span></section>`;
+}
 
 function businessDaysUntil(startValue,targetValue) {
   const start=startValue ? new Date(`${startValue}T00:00:00`) : new Date();

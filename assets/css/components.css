@@ -67,6 +67,15 @@
 .fibo-header__actions > .fibo-button--logout { margin-left:10px; }
 .fibo-header__actions > .fibo-button--logout:hover { border-color:#f5c2c7; background:#fdf2f2; color:var(--color-danger-text); }
 
+/* Shared source labels distinguish confirmed market data from provisional inputs. */
+.fibo-analysis-source {
+  display:inline-flex; align-items:center; width:max-content; max-width:100%; padding:3px 7px;
+  border-radius:var(--radius-pill); font-size:var(--font-size-2xs); font-weight:var(--font-weight-bold);
+  letter-spacing:var(--letter-spacing-eyebrow); line-height:1.35; text-transform:uppercase;
+}
+.fibo-analysis-source--official { background:var(--color-primary-soft); color:var(--color-primary); }
+.fibo-analysis-source--preview { background:var(--color-warning-soft); color:var(--color-warning-text); }
+
 /* Shared modal geometry used by system-neutral editors and action sheets. */
 .fibo-modal-backdrop { display:none; position:fixed; inset:0; z-index:var(--z-dialog); padding:24px; align-items:center; justify-content:center; background:rgba(32,33,36,.48); }
 .fibo-modal-backdrop.open { display:flex; }

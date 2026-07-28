@@ -93,6 +93,12 @@ The page stylesheet must not contain selectors beginning with `.fibo-header` or 
 - A mobile action sheet stays open until the Saved state has been visible, then closes. On failure it remains open so the user can retry.
 - Saved and Saving presentation belongs to `components.css` and uses the existing semantic success, spacing and motion tokens. Do not add page-local colors or duplicate timing tokens for this state.
 
+## Analysis source labels
+
+- Confirmed market-data results use the shared `fibo-analysis-source--official` label and include the official trading date when available.
+- Manual live-price results use `fibo-analysis-source--preview` and must say `Current Preview`; provisional states must never be styled or worded as confirmed closes.
+- When both bases are available, changing the visible basis must not write a trading value until the user invokes the page's explicit Apply action.
+
 ## Trend Tracker chart forecast
 
 - Historical Close and MA series remain the chart's primary visual area. A forecast trading day uses one-third of a historical trading day's horizontal display interval, with no minimum tail width and a 15% total-width cap.

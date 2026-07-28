@@ -186,6 +186,11 @@
         .level-map .event { color:#b06000; font-weight:900; }
         .market-cell { min-width:115px; line-height:1.55; }
         .current-proxy { width:78px; font-weight:900; border-color:var(--g-blue); }
+        .current-proxy.is-required { border-color:var(--color-danger); background:var(--color-danger-soft); color:var(--color-danger-text); }
+        .current-required-warning { display:inline-flex; align-items:center; justify-content:center; gap:3px; color:var(--color-danger-text); font-size:var(--font-size-xs); font-weight:var(--font-weight-bold); }
+        .current-required-warning .material-icons { font-size:15px; }
+        .input-required-badge { display:inline-flex; align-items:center; gap:4px; padding:6px 9px; border-radius:var(--radius-xs); background:var(--color-danger-soft); color:var(--color-danger-text); font-size:11px; font-weight:900; text-transform:uppercase; }
+        .input-required-badge .material-icons { font-size:15px; }
         .macd-input-shell { width:105px; display:flex; align-items:center; gap:4px; margin:auto; }
         .macd-input-shell .macd { box-sizing:border-box; min-width:0; width:auto; flex:1 1 auto; }
         .macd-suggest-button {
@@ -200,9 +205,15 @@
         .macd-suggestion-loading .material-icons { margin-right:6px; vertical-align:middle; animation:previousCloseSpin 1s linear infinite; }
         .macd-suggestion-error { background:var(--color-danger-soft); color:var(--color-danger-text); }
         .macd-suggestion-summary { padding:16px; border:1px solid var(--color-primary-soft-strong); border-radius:var(--radius-sm); background:var(--color-primary-soft); }
+        .macd-suggestion-summary__top { display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); }
         .macd-suggestion-summary small { display:block; color:var(--color-primary); font-weight:var(--font-weight-bold); letter-spacing:var(--letter-spacing-eyebrow); }
         .macd-suggestion-summary strong { display:block; margin-top:4px; font-size:var(--font-size-2xl); }
         .macd-suggestion-summary p { margin:4px 0 0; color:var(--color-text-secondary); }
+        .macd-basis-toggle { display:inline-grid; grid-template-columns:repeat(2,auto); padding:2px; border:1px solid var(--color-border); border-radius:var(--radius-pill); background:var(--color-surface); }
+        .macd-basis-toggle button { min-height:28px; padding:3px 9px; border:0; border-radius:var(--radius-pill); background:transparent; color:var(--color-text-secondary); font-size:var(--font-size-xs); font-weight:var(--font-weight-bold); cursor:pointer; }
+        .macd-basis-toggle button.is-active { background:var(--color-primary); color:var(--color-on-primary); }
+        .macd-basis-toggle button:disabled { cursor:not-allowed; opacity:.42; }
+        .macd-basis-toggle button:focus-visible { outline:2px solid var(--color-primary); outline-offset:2px; }
         .macd-suggestion-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:var(--space-2); margin-top:var(--space-3); }
         .macd-suggestion-metrics > span { padding:10px; border:1px solid var(--color-border-subtle); border-radius:var(--radius-sm); background:var(--color-surface-subtle); }
         .macd-suggestion-metrics small,.macd-suggestion-metrics strong { display:block; }
@@ -345,6 +356,9 @@
             #tab-v7 .macd-input-shell { width:100%; gap:8px; }
             #tab-v7 .macd-input-shell .macd { width:auto; min-width:0; }
             #tab-v7 .macd-suggest-button { width:44px; height:44px; min-height:44px; flex-basis:44px; border-radius:10px; }
+            .macd-suggestion-summary__top { align-items:stretch; flex-direction:column; }
+            .macd-basis-toggle { width:100%; grid-template-columns:1fr 1fr; }
+            .macd-basis-toggle button { min-height:44px; }
             .macd-suggestion-metrics { grid-template-columns:1fr 1fr; }
             #tab-v6 .previous-shell { position:static; width:100%; display:grid; grid-template-columns:minmax(0,1fr) 44px; gap:8px; }
             #tab-v6 .previous-shell .previous { width:100%; padding:8px 4px; }

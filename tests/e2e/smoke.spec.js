@@ -197,6 +197,48 @@ test('terminal Auto Prev Close preserves a cached value when no market row is av
   await expect(row.locator('.previous')).toHaveJSProperty('readOnly',false);
 });
 
+test('Then Leap retains an instrument and its manual fields when Current is cleared', async ({ page },testInfo) => {
+  await page.goto('/Terminal.html?tab=v6');
+  const lookFirst=page.locator('#tableBodyV6 tr[data-instrument-id="e2e-a"]');
+  await lookFirst.locator('.current').fill('');
+  await page.locator('#btn-v7').click();
+
+  let row=page.locator('#tableBodyV7 tr[data-instrument-id="e2e-a"]');
+  await expect(row).toHaveCount(1);
+  await expect(row).toHaveClass(/is-current-missing/);
+  await expect(row.locator('.current-proxy')).toHaveValue('');
+  await expect(row.locator('.current-proxy')).toHaveAttribute('aria-invalid','true');
+  await expect(row.locator('.market-summary')).toContainText('Current required');
+  await expect(row.locator('.support-cell')).toHaveText('-');
+  await expect(row.locator('.pressure-cell')).toHaveText('-');
+  await expect(row.locator('.rr-cell')).toHaveText('-');
+  await expect(row.locator('.ai-cell')).toContainText('Current Required');
+  await expect(row.locator('.rsi')).toHaveValue('50');
+  await expect(row.locator('.volume-ratio')).toHaveValue('1');
+  await expect(row.locator('.stop')).toHaveValue('60');
+  await expect(row.locator('.target1')).toHaveValue('75');
+  await expect(row.locator('.target')).toHaveValue('100');
+  if(testInfo.project.name==='iphone')await expect(row.locator('.mobile-signal-summary')).toContainText('Current Required');
+
+  const sameTicker=page.locator('#tableBodyV7 tr[data-instrument-id="e2e-b"]');
+  await expect(sameTicker).not.toHaveClass(/is-current-missing/);
+  await expect(sameTicker.locator('.current-proxy')).toHaveValue('60');
+
+  await page.reload();
+  row=page.locator('#tableBodyV7 tr[data-instrument-id="e2e-a"]');
+  await expect(row).toHaveCount(1);
+  await expect(row).toHaveClass(/is-current-missing/);
+  await expect(row.locator('.rsi')).toHaveValue('50');
+  await expect(row.locator('.volume-ratio')).toHaveValue('1');
+  await page.locator('#tableBodyV6 tr[data-instrument-id="e2e-a"] .current').fill('72');
+  await page.locator('#btn-v7').click();
+  row=page.locator('#tableBodyV7 tr[data-instrument-id="e2e-a"]');
+  await expect(row).not.toHaveClass(/is-current-missing/);
+  await expect(row.locator('.current-proxy')).not.toHaveAttribute('aria-invalid','true');
+  await expect(row.locator('.market-summary')).not.toContainText('Current required');
+  await expect(row.locator('.support-cell')).not.toHaveText('-');
+});
+
 test('all systems share the established header geometry', async ({ page }, testInfo) => {
   const results=[];
   for (const name of ['Terminal.html?tab=v6','WaveAnalysis.html','TrendTracker.html']) {
@@ -269,6 +311,13 @@ test('tracker uses Pool code and mobile Pro Tips without a cloud shortcut', asyn
 test('tracker chart exposes official markers, dates and separate Current preview', async ({ page }) => {
   await page.goto('/TrendTracker.html');
   const canvas=page.locator('#trackerChart');
+  const officialMacd=page.locator('#macdSummary [data-macd-basis="official"]');
+  const previewMacd=page.locator('#macdSummary [data-macd-basis="preview"]');
+  await expect(officialMacd.locator('.fibo-analysis-source')).toContainText('Official Close');
+  await expect(officialMacd.locator('.fibo-analysis-source')).toContainText('2026-05-11');
+  await expect(previewMacd.locator('.fibo-analysis-source')).toContainText('Current Preview');
+  await expect(previewMacd.locator('.fibo-analysis-source')).toContainText('70.000');
+  const officialBefore=await officialMacd.textContent();
   await expect(canvas).toHaveAttribute('aria-label',/Trend chart range 2026-01-13 to 2026-05-11\./);
   await expect(canvas).toHaveAttribute('aria-label',/High close 160\.000 on 2026-03-13\./);
   await expect(canvas).toHaveAttribute('aria-label',/Low close 80\.000 on 2026-01-22\./);
@@ -278,6 +327,13 @@ test('tracker chart exposes official markers, dates and separate Current preview
   await page.locator('#trackerCurrent').fill('220');
   await expect(canvas).toHaveAttribute('aria-label',/Current preview 220\.000\./);
   await expect(canvas).toHaveAttribute('aria-label',/High close 160\.000/);
+  await expect(previewMacd.locator('.fibo-analysis-source')).toContainText('220.000');
+  expect(await officialMacd.textContent()).toBe(officialBefore);
+  await page.locator('#trackerCurrent').fill('');
+  await expect(officialMacd.locator('.fibo-analysis-source')).toContainText('Official Close');
+  expect(await officialMacd.textContent()).toBe(officialBefore);
+  await expect(previewMacd).toHaveClass(/is-placeholder/);
+  await expect(previewMacd).toContainText('Set Current to preview');
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(1);
 });
@@ -445,15 +501,33 @@ test('Then Leap MACD suggestion is on-demand and divergence remains manual', asy
   await expect(select).toHaveValue('neutral');
   await row.locator('.macd-suggest-button').click();
   await expect(page.locator('#macdSuggestionBackdrop')).toHaveClass(/open/);
-  await expect(page.locator('#macdSuggestionContent')).toContainText('Close/DIF divergence candidates');
-  await expect(page.locator('#macdSuggestionContent')).toContainText('CURRENT PREVIEW');
+  const content=page.locator('#macdSuggestionContent');
+  await expect(content).toContainText('Close/DIF divergence candidates');
+  await expect(content).toHaveAttribute('data-macd-basis','preview');
+  await expect(content.locator('.fibo-analysis-source')).toContainText('Current Preview');
+  await expect(content.locator('.fibo-analysis-source')).toContainText('70.000');
   await expect(select).toHaveValue('neutral');
   await expect(page.locator('#applyMacdSuggestionButton')).toBeEnabled();
+  const divergenceBefore=await content.locator('.macd-divergence-section').textContent();
+  await content.getByRole('button',{name:'Official',exact:true}).click();
+  await expect(content).toHaveAttribute('data-macd-basis','official');
+  await expect(content.locator('.fibo-analysis-source')).toContainText('Official Close');
+  await expect(content.locator('.fibo-analysis-source')).toContainText('2026-05-11');
+  expect(await content.locator('.macd-divergence-section').textContent()).toBe(divergenceBefore);
+  await expect(select).toHaveValue('neutral');
   const suggested=await page.locator('.macd-suggestion-summary > strong').textContent();
   await page.locator('#applyMacdSuggestionButton').click();
   const expected=suggested.includes('Bullish')?'bullish':suggested.includes('Bearish')?'bearish':'neutral';
   await expect(select).toHaveValue(expected);
   await expect(select.locator('option[value="divergence"]')).toHaveText(/Bullish Divergence/);
+
+  await row.locator('.current-proxy').fill('');
+  await row.locator('.macd-suggest-button').click();
+  await expect(content).toHaveAttribute('data-macd-basis','official');
+  await expect(content.getByRole('button',{name:'Preview',exact:true})).toBeDisabled();
+  await expect(content.locator('.fibo-analysis-source')).toContainText('Official Close');
+  await page.locator('[data-fibo-click="closeMacdSuggestion()"]:visible').first().click();
+  await expect(select).toHaveValue(expected);
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(1);
 });
@@ -496,6 +570,8 @@ test('tracker MA Status and Scenario Lab share the read-only help modal', async 
   await expect(page.locator('#trackerHelpContent')).toContainText('below zero axis');
   await expect(page.locator('#trackerHelpContent')).toContainText('strengthening');
   await expect(page.locator('#trackerHelpContent')).toContainText('(preview)');
+  await expect(page.locator('#trackerHelpContent')).toContainText('Official Close');
+  await expect(page.locator('#trackerHelpContent')).toContainText('Current Preview');
   await page.locator('#trackerHelpBackdrop [data-fibo-click="closeTrackerHelp()"]' ).last().click();
   await expect(page.locator('#trackerHelpBackdrop')).not.toHaveClass(/open/);
 
