@@ -99,6 +99,14 @@ The page stylesheet must not contain selectors beginning with `.fibo-header` or 
 - Manual live-price results use `fibo-analysis-source--preview` and must say `Current Preview`; provisional states must never be styled or worded as confirmed closes.
 - When both bases are available, changing the visible basis must not write a trading value until the user invokes the page's explicit Apply action.
 
+## Brand-ring selected cards and Index Radar
+
+- `fibo-card--brand-ring` is the shared quiet-card variant for a system-selected item. Its 2px conic border uses the existing Google blue, red, yellow and green brand tokens over a white surface, shared radius and low elevation.
+- The four-color ring means “selected by this system,” not bullishness, safety or a four-level score. Warnings and risks continue to use semantic warning/danger tokens; large colored card fills are prohibited.
+- Index Radar composes this shared card in a page-owned horizontal rail. Desktop motion is allowed only when content overflows, targets approximately 10px/s, and pauses on hover, keyboard focus or an open Radar dialog. Mobile disables autoplay and uses horizontal Scroll Snap with 44px controls.
+- `prefers-reduced-motion` disables Radar autoplay and movement transitions. A disabled/no-data Radar must remain a quiet independent section and may never block or resize the Look First table into horizontal page overflow.
+- Radar owns one `fibo-help-button` in its section header. Cards never duplicate the help icon; clicking a card opens detail using the shared `fibo-modal` geometry.
+
 ## Trend Tracker chart forecast
 
 - Historical Close and MA series remain the chart's primary visual area. A forecast trading day uses one-third of a historical trading day's horizontal display interval, with no minimum tail width and a 15% total-width cap.

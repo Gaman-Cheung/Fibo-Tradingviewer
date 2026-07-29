@@ -9,6 +9,7 @@ This file is mandatory reading before changing the project.
 3. Do not change trading weights, thresholds, labels or formulas without explicit user authorization.
 4. Keep the public entry filenames `TradingViewer.html`, `Terminal.html`, `WaveAnalysis.html`, `TrendTracker.html` and all storage/Supabase wire keys compatible.
 5. A data-contract change requires an idempotent migration and a regression test.
+6. Index Radar is global market context. It must never read Pool/permanent IDs or feed Composite Signal. Its score, event vocabulary, 60-point gate, classification seed and help guide are algorithm contracts and require explicit authorization to change.
 
 ## Module boundaries
 
@@ -16,6 +17,7 @@ This file is mandatory reading before changing the project.
 - `src/terminal`: pure Look First/Then Leap calculations. No DOM, storage or network access.
 - `src/wave`: pure Wave calculations and validation. No DOM, storage or network access.
 - `src/tracker`: pure MA, MACD, confirmation and scenario calculations. No DOM, storage or network access.
+- `src/radar` and `scripts/index_radar.py`: pure Radar view normalization and market ranking. No DOM, localStorage, Supabase client or permanent-ID access.
 - `src/apps`: page controllers and rendering adapters. They may access the DOM and call core services.
 - `assets/css`: tokens, common components and page-specific presentation.
 
@@ -38,6 +40,7 @@ Do not copy a core implementation into an app. Do not make a pure algorithm impo
 2. Change only the owning module and its tests.
 3. Run `npm test`. For UI changes also run `npm run test:e2e` in both configured projects and compare shared-component geometry across every consuming page.
 4. Report exactly which modules and contracts changed. Explicitly say when algorithms were untouched.
+5. A Radar change must keep `scripts/index_radar.py`, `src/radar/radar-help.js` and `docs/INDEX_RADAR_GUIDE.md` on the same algorithm/universe version and run both JS and Python contract tests.
 
 ## Compatibility
 

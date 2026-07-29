@@ -8,11 +8,25 @@ window.supabase={createClient(){
    const previous=index===0?close:index-1===20?80:index-1===70?160:100+(index-1)*.2;
    return {trade_date:date.toISOString().slice(0,10),close,pct_chg:index?(close/previous-1)*100:0,trade_status:1,synced_at:'2026-07-27T11:00:00Z'};
  }).reverse();
+ const radarLeaders=[
+   ['国证算力基础设施','SZ','399363','ai_computing','AI & Computing',92.4,4.8,10.2,'MA60 Breakout',8],
+   ['中证新能源','SZ','399808','new_energy','New Energy',88.1,3.9,8.4,'Relative Strength New High',6],
+   ['上证环保产业','SH','000158','environmental','Environmental',82.7,3.1,7.2,'20D High Breakout',7],
+   ['上证公用事业','SH','000007','utilities','Utilities',78.3,2.6,5.9,'Persistent Advance',4],
+   ['中证煤炭','SZ','399998','coal','Coal',74.5,1.8,4.7,'3-Day Streak',3]
+ ].map((item,index)=>({
+   rank:index+1,name:item[0],market:item[1],code:item[2],category:'theme',themeGroup:item[3],themeLabel:item[4],score:item[5],
+   events:[{key:'event_'+index,label:item[8],points:item[9],kind:'signal'}],risks:index===1?[{key:'extended',label:'Extended',penalty:10}]:[],
+   metrics:{close:100+index,return1D:1.2+index/10,return3D:3.4+index/10,return5D:5.2+index/10,return20D:12.4+index/10,benchmarkReturn5D:.4,benchmarkReturn20D:2.2,rs5:item[6],rs20:item[7],ma20:96+index,ma60:90+index,ma60SlopePct:.08,distanceMA60Pct:8.2+index},
+   scoreBreakdown:{rs5:22-index,rs20:28-index,trend:30,event:Math.min(item[9],15),risk:index===1?10:0},
+   trendBreakdown:{aboveMA60:5,ma60Rising:10,alignment:15},appearances:{consecutive:index+1,days15:8-index,days30:14-index}
+ }));
+ const radarSnapshot={provider:'baostock',trade_date:'2026-07-28',algorithm_version:1,universe_version:1,benchmark_market:'SH',benchmark_code:'000300',universe_count:507,eligible_count:171,coverage:.9825,leaders:radarLeaders,computed_at:'2026-07-28T11:30:00Z'};
  function builder(table){
    const filters={};
    return {
      select(){return this},eq(column,value){filters[column]=value;return this},limit(){return this},
-     order(){if(table==='market_daily_bar')window.__marketDailyBarOrders=(window.__marketDailyBarOrders||0)+1;return Promise.resolve({data:table==='market_daily_bar'&&filters.code==='300657'?marketRows:[],error:null})},
+     order(){if(table==='market_daily_bar')window.__marketDailyBarOrders=(window.__marketDailyBarOrders||0)+1;return Promise.resolve({data:table==='market_daily_bar'&&filters.code==='300657'?marketRows:table==='market_index_radar_snapshot'?[radarSnapshot]:[],error:null})},
      single(){return Promise.resolve({data:null,error:{code:'PGRST116'}})},
      maybeSingle(){return Promise.resolve({data:table==='market_sync_checkpoint'?{last_status:'success'}:null,error:null})},
      upsert(){return Promise.resolve({data:null,error:null})}
@@ -135,6 +149,66 @@ test('terminal controller switches tabs and persists shared Pro Tips', async ({ 
   await page.locator('#noteEditorText').fill('E2E discipline');
   await page.locator('[data-fibo-click="saveNoteEditor()"]' ).click();
   await expect.poll(() => page.evaluate(() => localStorage.getItem('tv_header_tips_v1'))).toBe('E2E discipline');
+});
+
+test('Look First Index Radar renders one guide entry and an official leader rail', async ({ page }, testInfo) => {
+  await page.goto('/Terminal.html?tab=v6');
+  const radar=page.locator('#indexRadar');
+  await expect(radar).toBeVisible();
+  await expect(radar.locator('#indexRadarHelpButton')).toHaveCount(1);
+  await expect(radar.locator('#indexRadarStatus')).toContainText('Official Close');
+  await expect(radar.locator('#indexRadarStatus')).toContainText('2026-07-28');
+  const cards=radar.locator('[data-index-radar-leader]');
+  await expect(cards).toHaveCount(5);
+  await expect(cards.first()).toContainText('国证算力基础设施');
+  await expect(cards.first()).toContainText('MA60 Breakout');
+  await expect(cards.first()).toContainText('15D 8×');
+  const ring=await cards.first().evaluate(node=>({
+    border:getComputedStyle(node).borderTopWidth,
+    background:getComputedStyle(node).backgroundImage
+  }));
+  expect(ring.border).toBe('2px');
+  expect(ring.background).toContain('conic-gradient');
+
+  await radar.locator('#indexRadarHelpButton').click();
+  await expect(page.locator('#indexRadarHelpBackdrop')).toHaveClass(/open/);
+  const guide=page.locator('#indexRadarHelpContent');
+  await expect(guide).toContainText('Score = 25 × PctRank(RS5) + 30 × PctRank(RS20)');
+  await expect(guide).toContainText('MA60 Reclaim Confirmed');
+  await expect(guide).toContainText('Theme Group');
+  await expect(guide).toContainText('Composite Signal');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#indexRadarHelpBackdrop')).not.toHaveClass(/open/);
+
+  await cards.first().focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#indexRadarDetailBackdrop')).toHaveClass(/open/);
+  await expect(page.locator('#indexRadarDetailTitle')).toContainText('#1 国证算力基础设施');
+  await expect(page.locator('#indexRadarDetailContent')).toContainText('RS5 rank points');
+  await expect(page.locator('#indexRadarDetailContent')).toContainText('Leaderboard history');
+  await page.locator('#indexRadarDetailClose').click();
+
+  const motion=await radar.evaluate(node=>{
+    const viewport=node.querySelector('.index-radar-viewport');
+    const track=node.querySelector('.index-radar-track');
+    return {animated:track.classList.contains('is-animated'),scrollWidth:viewport.scrollWidth,clientWidth:viewport.clientWidth,scrollSnap:getComputedStyle(viewport).scrollSnapType};
+  });
+  expect(motion.scrollWidth).toBeGreaterThan(motion.clientWidth);
+  if(testInfo.project.name==='iphone'){
+    expect(motion.animated).toBe(false);
+    expect(motion.scrollSnap).toContain('x');
+    await radar.locator('.index-radar-viewport').evaluate(node=>node.scrollTo({left:node.scrollWidth,behavior:'instant'}));
+    expect(await radar.locator('.index-radar-viewport').evaluate(node=>node.scrollLeft)).toBeGreaterThan(0);
+  }else{
+    expect(motion.animated).toBe(true);
+    await radar.locator('.index-radar-viewport').hover();
+    expect(await radar.locator('.index-radar-track').evaluate(node=>getComputedStyle(node).animationPlayState)).toBe('paused');
+    await page.emulateMedia({reducedMotion:'reduce'});
+    await page.evaluate(()=>window.dispatchEvent(new Event('resize')));
+    await expect(radar.locator('.index-radar-track')).not.toHaveClass(/is-animated/);
+  }
+  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
 });
 
 test('terminal Auto Prev Close is deduplicated by symbol and remains overridable per permanent ID', async ({ page }) => {
@@ -474,7 +548,7 @@ test('Tracker compares all Scenario paths and extends MAs for one persisted Scen
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
-test('Terminal and Tracker share Current and VR by permanent ID across tabs', async ({ page,context }) => {
+test('Terminal and Tracker share Current and VR by permanent ID across tabs', async ({ page,context },testInfo) => {
   await page.goto('/Terminal.html?tab=v6');
   const tracker=await context.newPage();
   await tracker.route('https://cdn.jsdelivr.net/**',route=>route.fulfill({status:200,contentType:'application/javascript',body:supabaseMock}));
@@ -483,8 +557,15 @@ test('Terminal and Tracker share Current and VR by permanent ID across tabs', as
   await terminalA.locator('.current').fill('77.5');
   await expect(tracker.locator('#trackerCurrent')).toHaveValue('77.5');
 
+  await expect(tracker.locator('#trackerVr')).toHaveValue('1');
+  await page.locator('#btn-v7').click();
+  const terminalThenLeap=page.locator('#tableBodyV7 tr[data-instrument-id="e2e-a"]');
+  if(testInfo.project.name==='iphone')await terminalThenLeap.locator('.mobile-detail-toggle').click();
+  await terminalThenLeap.locator('.volume-ratio').fill('1.4');
+  await expect(tracker.locator('#trackerVr')).toHaveValue('1.4');
+
   await tracker.locator('#trackerVr').fill('1.8');
-  await expect(page.locator('#tableBodyV7 tr[data-instrument-id="e2e-a"] .volume-ratio')).toHaveValue('1.8');
+  await expect(terminalThenLeap.locator('.volume-ratio')).toHaveValue('1.8');
   const distinct=await page.evaluate(()=>({
     current:JSON.parse(localStorage.getItem('tv_lookfirst_data_v3')).find(row=>row.id==='e2e-b')?.c,
     vr:JSON.parse(localStorage.getItem('tv_thenleap_data_v3')).find(row=>row.id==='e2e-b')?.v

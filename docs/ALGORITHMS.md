@@ -46,3 +46,26 @@ This document records current behavior; it is not investment advice. Changes req
 - Volatility bounds use 20-session log-return sigma and `±σ√d`; they are scenario ranges, not probability claims.
 - Tracker calculations never feed Terminal Composite Signal automatically; only an explicit Apply action writes Bullish/Bearish/Neutral, while divergence always remains manual.
 - Then Leap retains an instrument with a valid High/Low structure when Current is blank, but pauses every Current-dependent derived calculation and displays an input-required state. Missing Current never reuses a stale Composite Signal.
+
+## Look First Index Radar · Algorithm v1 / Universe v1
+
+Index Radar is independent market context computed from BaoStock official index closes. Only explicitly seeded `sector` and `theme` indices with at least 62 formal closes are candidates; `SH.000300` is the benchmark and can never rank.
+
+```text
+RS5  = index 5-session return  − CSI300 5-session return
+RS20 = index 20-session return − CSI300 20-session return
+
+Score = 25 × PctRank(RS5)
+      + 30 × PctRank(RS20)
+      + Trend(0–30)
+      + min(Event points, 15)
+      − Risk
+```
+
+Trend contributes `+5` for Close above MA60, `+10` when MA60 daily percentage change is greater than `+0.01%`, and `+15` when `Close > MA20 > MA60` with both MA20 and MA60 rising by more than `+0.01%`. A candidate qualifies only at Score ≥ 60, Close above MA60, positive RS5 or RS20, and no MA60 Breakdown.
+
+Scored events are MA60 Reclaim Confirmed `+9`, MA60 Breakout `+8`, 20D High Breakout `+7`, Relative Strength New High `+6`, MA60 Turn Up `+6`, 3D Acceleration `+5`, Persistent Advance `+4`, 3-Day Streak `+3`, and 1D Surge `+2`. MA60 Retest, Healthy Retest and qualified Near MA60 `±0.8%` are context-only. Extended above MA60 by more than 12% deducts 10; a fresh MA60 Breakdown excludes the candidate.
+
+Theme Group normally contributes one final leader. A second representative is allowed only when both are in the raw Top 5 and within five points. A prior final leader can receive the stability buffer only while raw Top 8, still at least 60 points and within five points of the fifth selected leader. Recent 30-session final-list appearances break an exactly equal score before RS20/RS5; Consecutive/15D/30D appearances count only final, deduplicated lists and never add recurring score.
+
+Coverage below 95%, missing benchmark history or an incomplete index run produces no new snapshot. Full event definitions, UI reading guidance and boundaries are normative in `docs/INDEX_RADAR_GUIDE.md`; its version must match the Python algorithm and in-product help.

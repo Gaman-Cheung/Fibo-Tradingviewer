@@ -56,3 +56,15 @@ Existing columns and metadata carriers must remain readable. A new schema must b
 - Same-device tabs synchronize these two canonical storage keys through browser storage events. Cross-device synchronization remains explicit Push/Pull through existing `v6_data/v7_data`; Supabase Realtime is not part of this contract.
 - Terminal Auto Prev Close reads the latest traded row for the Pool instrument's explicit Market/Code. It may reuse one market request for duplicate symbols, but writes `p/pm/pd` only to each exact permanent ID. Manual mode never changes another instrument.
 - Service-role credentials may exist only in protected server-side secrets or the ignored local `.env.local` used by the manual synchronization launcher. They must never enter browser code, tracked files, backups or cloud payloads.
+
+## Index Radar market contract
+
+- Index prices reuse `market_daily_bar` and its `(provider,market,code,trade_date)` key. Index rows use official raw closes; they are not front-adjusted. High/Low may exist only in synchronizer memory for Retest classification and are never persisted.
+- `market_index_catalog` is keyed by `(provider,market,code)` and owns the index name, `category`, `theme_group`, `theme_label`, Radar enablement, universe version and per-symbol backfill state.
+- Allowed catalog categories are `broad`, `sector`, `theme`, `style`, `strategy`, `fund`, `bond` and `other`. Only active `sector`/`theme` rows explicitly enabled by the versioned seed may rank.
+- Universe v1 is the 507-code map in `scripts/index_catalog_seed_v1.py`. A future code absent from that map is stored as `other`, remains disabled and emits a synchronization warning; names are never used to guess it into Radar.
+- `market_index_radar_snapshot` is keyed by `(provider,trade_date)`. It stores algorithm/universe versions, benchmark Market/Code, universe and eligible counts, coverage, `computed_at`, and an ordered `leaders` JSON array of at most five entries.
+- Each leader carries Market/Code/name/category/theme, rank/raw rank, score and score breakdown, official return/RS/MA metrics, event/risk arrays, trend breakdown and final-list appearance counts. It contains no user ID, Pool ID or permanent instrument ID.
+- `CN_INDEX` is an independent `market_sync_checkpoint.scope`; it cannot advance or overwrite `CN_A`. Per-index resumability is stored in the catalog. A failed coverage/benchmark/publication step records `CN_INDEX.last_status=error`, preserves the latest valid snapshot and performs no retention deletion.
+- Authenticated browser users may read catalog/snapshots. Only the Service Role used by the Action or ignored local launcher may write them.
+- The browser reads only the latest snapshot through `src/core/index-radar-repository.js`; it never loads the 507 histories or calculates the leaderboard.

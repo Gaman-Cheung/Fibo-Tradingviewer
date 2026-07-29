@@ -23,7 +23,7 @@ test('cloud payload keeps legacy columns and metadata carriers round-trippable',
 });
 
 test('pure algorithm modules cannot depend on DOM, storage or Supabase', () => {
-  const dirs = ['src/terminal','src/wave','src/tracker'];
+  const dirs = ['src/terminal','src/wave','src/tracker','src/radar'];
   for (const dir of dirs) {
     for (const name of fs.readdirSync(path.join(root,dir))) {
       if (!name.endsWith('.js')) continue;

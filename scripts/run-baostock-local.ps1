@@ -1,6 +1,8 @@
 param(
     [ValidateSet('smoke','daily','backfill','repair')]
     [string]$Mode = 'daily',
+    [ValidateSet('a-shares','indices','all')]
+    [string]$Dataset = 'all',
     [string]$StartDate = '',
     [string]$EndDate = ''
 )
@@ -46,7 +48,7 @@ try {
     Write-Host '=== Fibo TradingViewer - BaoStock Full-Market Sync ===' -ForegroundColor Cyan
 
     if ($Mode -eq 'repair' -and (-not $StartDate -or -not $EndDate)) {
-        Stop-Sync 'Repair mode requires: SyncBaoStock.cmd repair YYYY-MM-DD YYYY-MM-DD'
+        Stop-Sync 'Repair mode requires: SyncBaoStock.cmd repair YYYY-MM-DD YYYY-MM-DD [indices|a-shares|all]'
     }
 
     if ($Mode -ne 'smoke' -and -not (Test-Path -LiteralPath $configPath)) {
@@ -87,8 +89,8 @@ try {
     if ($installExit -ne 0) { Stop-Sync "Dependency installation failed with code $installExit." }
 
     $env:PYTHONUTF8 = '1'
-    Write-Host "[SYNC] Running shared mode: $Mode" -ForegroundColor Cyan
-    $syncArguments = @(('"' + $syncScript + '"'), '--mode', $Mode, '--sessions', '400')
+    Write-Host "[SYNC] Running shared mode: $Mode / $Dataset" -ForegroundColor Cyan
+    $syncArguments = @(('"' + $syncScript + '"'), '--mode', $Mode, '--dataset', $Dataset, '--sessions', '400')
     if ($Mode -eq 'repair') { $syncArguments += @('--start', $StartDate, '--end', $EndDate) }
     $syncExit = Start-NativeProcess $venvPython $syncArguments
     if ($syncExit -ne 0) { Stop-Sync "sync_baostock.py exited with code $syncExit." }

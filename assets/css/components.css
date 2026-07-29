@@ -76,6 +76,23 @@
 .fibo-analysis-source--official { background:var(--color-primary-soft); color:var(--color-primary); }
 .fibo-analysis-source--preview { background:var(--color-warning-soft); color:var(--color-warning-text); }
 
+/* Shared quiet card and four-color brand-ring highlight. The ring means
+   "system selected" only; semantic success/warning/danger remain separate. */
+.fibo-card {
+  box-sizing:border-box; padding:var(--space-4); border:1px solid var(--color-border);
+  border-radius:var(--radius-lg); background:var(--color-surface); color:var(--color-text);
+  box-shadow:var(--shadow-low); font-family:var(--font-family-sans);
+}
+.fibo-card--brand-ring {
+  border:2px solid transparent;
+  background:
+    linear-gradient(var(--color-surface),var(--color-surface)) padding-box,
+    conic-gradient(from 215deg,var(--brand-blue),var(--brand-red),var(--brand-yellow),var(--brand-green),var(--brand-blue)) border-box;
+}
+.fibo-card--brand-ring:focus-visible {
+  outline:2px solid var(--color-primary); outline-offset:3px; box-shadow:var(--shadow-focus),var(--shadow-low);
+}
+
 /* Shared modal geometry used by system-neutral editors and action sheets. */
 .fibo-modal-backdrop { display:none; position:fixed; inset:0; z-index:var(--z-dialog); padding:24px; align-items:center; justify-content:center; background:rgba(32,33,36,.48); }
 .fibo-modal-backdrop.open { display:flex; }

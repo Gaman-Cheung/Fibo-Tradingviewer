@@ -18,6 +18,7 @@ import { readSharedLiveInputs, reconcileLegacyTrackerInputs } from '../core/shar
 import { runCloudPushFeedback } from './cloud-action-feedback.js';
 import { appendProvisionalCurrent } from '../tracker/trend-engine.js';
 import { buildTerminalMacdSuggestion, detectCloseMacdDivergence } from '../tracker/macd-suggestion.js';
+import { initializeIndexRadar } from './index-radar-controller.js';
 
 // ================= Supabase 配置区域 =================
             // ⚠️ 请在这里填入你的真实数据
@@ -1564,6 +1565,7 @@ import { buildTerminalMacdSuggestion, detectCloseMacdDivergence } from '../track
 
         window.onload = () => {
             renderHeaderMarquee();
+            initializeIndexRadar({ client:supabaseClient });
             let savedV6Data = readStoredRows('tv_lookfirst_data_v3');
             let savedV7Data = readStoredRows('tv_thenleap_data_v3');
             const migrated = migrateInstrumentIdentity(savedV6Data, savedV7Data);

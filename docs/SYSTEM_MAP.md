@@ -4,6 +4,7 @@
 Auth HTML ───────> auth-app ───────> shared Supabase client
 Terminal HTML ───> terminal-app ───> identity / storage / cloud contract
                          ├─────────> Fibonacci + Composite Signal
+                         ├─────────> index-radar-controller -> latest precomputed snapshot
                          └─────────> DOM render and interaction adapters
 Wave HTML ───────> wave-app ───────> shared identity / storage / Supabase
                          ├─────────> wave model + validation + math
@@ -18,6 +19,8 @@ GitHub Action (primary) -----\
                              > shared BaoStock sync core ----> full-market tables in Supabase
 Manual Windows launcher -----/              |
                                             `---- smoke / daily / backfill / repair
+                                                   |-- CN_A -> A-share close history
+                                                   `-- CN_INDEX -> index catalog/history/Radar snapshots
 ```
 
 ## Ownership
@@ -31,6 +34,8 @@ Manual Windows launcher -----/              |
 - Trend calculations: `src/tracker/`; `trend-engine.js` owns the unchanged formulas, `scenario-comparison.js` coordinates simultaneous Flat/Trend/Custom results, `ma-projection.js` derives conditional SMA tails from one selected path, and `chart-model.js` owns display-only history/forecast geometry.
 - BaoStock code normalization plus Tracker history and Terminal latest-close queries: `src/core/market-code.js` and `src/core/market-repository.js`.
 - Full-market synchronization: GitHub Action and `SyncBaoStock.cmd` both call `scripts/sync_baostock.py`; neither implementation may duplicate sync rules.
+- Index classification seed: `scripts/index_catalog_seed_v1.py` owns the reviewed 507-code universe result. Unknown future codes remain `other` and Radar-disabled until an explicit universe-version update.
+- Index Radar ranking: pure `scripts/index_radar.py`; Supabase reads in `src/core/index-radar-repository.js`; browser normalization/help in `src/radar/`; DOM rail and dialogs in `src/apps/index-radar-controller.js`. Radar modules never import Pool identity or Terminal algorithms.
 - BaoStock connectivity/local CSV diagnostics: `scripts/test_baostock_local.py`; it never writes Supabase.
 - DOM, navigation, drag/drop, modal and responsive behavior: `src/apps/`.
 - Shared Push button state and confirmation behavior: `src/apps/cloud-action-feedback.js` plus the shared component states in `assets/css/components.css`.
