@@ -71,27 +71,42 @@ High/Low 只在同步任务当次计算 Retest 时存在，计算后丢弃；数
 2. 只有两个代表都位于去重前原始 Top 5，且分差不超过 5 分时，才允许同主题展示两张卡。
 3. 昨日最终 Leader 若今日仍在原始 Top 8、Score ≥ 60，且与今日第五名分差不超过 5 分，可以替换最低分的新上榜者。
 4. 稳定缓冲不让不合格指数留下；MA60 Breakdown、低于 60 分或相对强弱门槛失败仍会退出。
-5. `Consecutive ND`、`15D N×`、`30D N×` 只统计 Theme Group 去重后的最终榜单。最近 30 个交易日的最终上榜次数只在 Score 完全相同时先于 RS20/RS5 破同分，并用于稳定缓冲和展示；它不会持续累加到主分数。
+5. 主卡显示的 `Consecutive ND`、`13D N×`、`60D N×` 由浏览器对兼容的最终快照按 Theme Group 重新统计。Python快照中的旧15D/30D字段继续兼容，其中最近30个交易日的最终上榜次数仍只在Score完全相同时先于RS20/RS5破同分，并用于稳定缓冲；它不会持续累加到主分数。
 
-## 7. 如何读一张卡
+## 7. Leadership Memory v1
+
+Leadership Memory读取最近最多60份最终Top 5快照，不下载507个指数的历史，也不保存或还原当日第6名以后的原始候选排名。
+
+- `Yesterday`：前一个正式交易日的实际Top 5，并对照同一Theme Group今天是否仍在榜及当前名次。
+- `3D Fast`、`13D Swing`、`60D Regime`：均包含最新正式交易日，并向前取对应数量的兼容交易日。
+- 每个交易日第1至第5名依次获得`5 / 4 / 3 / 2 / 1`分；同一Theme Group当日出现两个代表时只计算排名更高者。
+- `Leadership Score = 名次分合计 ÷ (5 × 实际可用交易日) × 100`。
+- 同分时依次比较上榜交易日数量、平均名次、最近上榜时间和稳定主题名称。
+- 60日榜完整保留窗口内的长期强者。已经退出当前榜时显示`Last Seen N sessions ago`，不设置近期13日入榜门槛，也不做时间衰减。
+- 算法版本或Universe版本不同的快照不会混合。历史不足时使用实际可用交易日计算，并明确显示`History N/目标 · Building`。
+- Mini卡只显示前三名；详情最多显示Yesterday 5个、3D 15个，以及当前分类下13D/60D最多28个Theme Group。60日每日历史默认先展示最近13日，再由用户展开剩余日期。
+
+这些分数只描述“最终Top 5中持续出现的程度”，不会反馈到Radar Score或Terminal Composite Signal。
+
+## 8. 如何读一张卡
 
 示例：
 
 ```text
 #1 AI & Computing · MA60 Reclaim Confirmed
 RS5 +4.6% · RS20 +8.2% · Score 88.4
-Consecutive 4D · 15D 7× · 30D 12×
+Consecutive 4D · 13D 7× · 60D 12×
 ```
 
 含义依次是：当前最终排名第一；刚出现正式的 MA60 收复确认；5 日和 20 日都跑赢沪深300；总分通过质量门槛；并且不是只在今天偶然上榜。点击卡片可查看 RS、Trend、Event、Risk 的完整拆分、MA 状态和历史次数。
 
-## 8. 数据质量与发布规则
+## 9. 数据质量与发布规则
 
 - 基准历史缺失、指数请求未恢复，或有效行业/主题覆盖率低于 95% 时，不发布新快照。
 - 失败不会覆盖最后一份有效榜单，不推进 `CN_INDEX` 成功检查点，也不触发历史清理。
 - 首次 Backfill 按日期顺序重建历史榜单；Repair 或算法/分类版本升级会重算受影响日期之后的快照。
 - Radar 页面读取失败不会阻止 Look First 表格使用。
 
-## 9. 明确边界
+## 10. 明确边界
 
 Index Radar 是市场背景和注意力工具，不是上涨概率、目标价、买入建议或收益承诺。它不读取 Pool、Ticker、Current 或永久 ID，也不会更改 Terminal Composite Signal、Fibonacci、Stop、R:R、MACD、Trend Tracker 或 Wave 的任何结果。

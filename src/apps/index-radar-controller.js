@@ -6,6 +6,11 @@
 import { loadLatestIndexRadar } from '../core/index-radar-repository.js';
 import { INDEX_RADAR_GUIDE_HTML } from '../radar/radar-help.js';
 import {
+  buildLeadershipMemory,
+  findLeadershipPeriod,
+  radarThemeKey,
+} from '../radar/radar-memory.js';
+import {
   escapeRadarHtml,
   formatRadarNumber,
   formatRadarSigned,
@@ -16,10 +21,13 @@ import {
 const state = {
   client:null,
   snapshot:null,
+  memory:null,
+  historyError:null,
+  activeMemoryPeriod:null,
+  expandedMemoryPeriod:null,
   loading:false,
   bound:false,
   returnFocus:null,
-  resizeTimer:null,
 };
 
 const byId = id => document.getElementById(id);
@@ -34,12 +42,26 @@ function riskBadges(leader) {
   return (leader.risks || []).map(risk => `<span class="index-radar-risk"><span class="material-icons" aria-hidden="true">warning_amber</span>${escapeRadarHtml(risk.label)}</span>`).join('');
 }
 
-function cardMarkup(leader,index,{ clone=false } = {}) {
-  const tag = clone ? 'div' : 'button';
-  const attributes = clone
-    ? 'aria-hidden="true"'
-    : `type="button" data-index-radar-leader="${index}" aria-label="Open details for rank ${leader.rank} ${escapeRadarHtml(leader.name)}"`;
-  return `<${tag} class="fibo-card fibo-card--brand-ring index-radar-card" ${attributes}>
+function appearanceStats(leader) {
+  return (!state.historyError && state.memory?.currentAppearances?.[radarThemeKey(leader)]) || {
+    consecutive:leader?.appearances?.consecutive || 1,
+    days13:null,
+    days60:null,
+  };
+}
+
+function appearanceLabel(leader) {
+  const stats=appearanceStats(leader);
+  const days13=stats.days13===null?'—':stats.days13;
+  const days60=stats.days60===null?'—':stats.days60;
+  return `Consecutive ${stats.consecutive}D · 13D ${days13}× · 60D ${days60}×`;
+}
+
+function cardMarkup(leader,index) {
+  const coverage=state.memory
+    ? `Leadership Memory uses ${state.memory.sessionsAvailable}/${state.memory.historyTarget} compatible official sessions.`
+    : 'Leadership Memory history is unavailable.';
+  return `<button class="fibo-card fibo-card--brand-ring index-radar-card" type="button" data-index-radar-leader="${index}" aria-label="Open details for rank ${leader.rank} ${escapeRadarHtml(leader.name)}">
     <span class="index-radar-card__top">
       <span class="index-radar-rank">#${leader.rank}</span>
       <span class="index-radar-symbol">${escapeRadarHtml(leader.market)} · ${escapeRadarHtml(leader.code)}</span>
@@ -51,9 +73,9 @@ function cardMarkup(leader,index,{ clone=false } = {}) {
       <span><small>RS20</small><b>${formatRadarSigned(leader.metrics.rs20)}</b></span>
       <span><small>Score</small><b>${formatRadarNumber(leader.score,1)}</b></span>
     </span>
-    <span class="index-radar-history">Consecutive ${leader.appearances.consecutive}D · 15D ${leader.appearances.days15}× · 30D ${leader.appearances.days30}×</span>
+    <span class="index-radar-history" title="${escapeRadarHtml(coverage)}">${appearanceLabel(leader)}</span>
     ${riskBadges(leader)}
-  </${tag}>`;
+  </button>`;
 }
 
 function setStatus(content,className='') {
@@ -63,30 +85,49 @@ function setStatus(content,className='') {
   node.innerHTML = content;
 }
 
-function renderMessage(title,message,{retry=false,error=false}={}) {
-  const viewport = byId('indexRadarViewport');
-  if (!viewport) return;
-  viewport.innerHTML = `<div class="index-radar-message${error ? ' is-error' : ''}">
+function messageMarkup(title,message,{retry=false,error=false}={}) {
+  return `<div class="index-radar-message${error ? ' is-error' : ''}">
     <span class="material-icons" aria-hidden="true">${error ? 'cloud_off' : 'radar'}</span>
     <span><strong>${escapeRadarHtml(title)}</strong><small>${escapeRadarHtml(message)}</small></span>
     ${retry ? '<button type="button" class="fibo-button fibo-button--control" data-index-radar-retry>Retry</button>' : ''}
   </div>`;
 }
 
-function configureMotion() {
+function renderMessage(title,message,options={}) {
   const viewport = byId('indexRadarViewport');
-  const track = byId('indexRadarTrack');
-  const group = track?.querySelector('.index-radar-group:not(.index-radar-group--clone)');
-  if (!viewport || !track || !group) return;
-  track.classList.remove('is-animated');
-  track.style.removeProperty('--index-radar-duration');
-  requestAnimationFrame(() => {
-    const mobile = window.matchMedia('(max-width: 768px)').matches;
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (mobile || reduced || group.scrollWidth <= viewport.clientWidth) return;
-    track.style.setProperty('--index-radar-duration',`${Math.max(60,group.scrollWidth / 10).toFixed(1)}s`);
-    track.classList.add('is-animated');
-  });
+  if (viewport) viewport.innerHTML=messageMarkup(title,message,options);
+}
+
+function memoryCoverage(period) {
+  if (state.historyError) return 'History unavailable';
+  if (!period) return 'History unavailable';
+  if (period.id==='yesterday') return period.complete?'1/1 session':'0/1 · Building';
+  return `${period.sessionsUsed}/${period.target}${period.complete?' sessions':' · Building'}`;
+}
+
+function memoryLeaderChip(leader,index) {
+  return `<span class="index-radar-memory-chip" title="${escapeRadarHtml(leader.representative?.name||leader.displayLabel)}"><b>#${index+1}</b><span>${escapeRadarHtml(leader.displayLabel)}</span></span>`;
+}
+
+function memoryCardMarkup(period) {
+  const leaders=state.historyError?[]:(period?.leaders||[]).slice(0,3);
+  const summary=leaders.length
+    ? leaders.map(memoryLeaderChip).join('')
+    : `<span class="index-radar-memory-empty">${state.historyError?'Unavailable':'Waiting for history'}</span>`;
+  const disabled=state.historyError || !period?.sessionsUsed;
+  return `<button type="button" class="fibo-card index-radar-memory-card" data-index-radar-memory="${escapeRadarHtml(period?.id||'')}" ${disabled?'disabled':''} aria-label="Open ${escapeRadarHtml(period?.label||'Leadership Memory')} ranking">
+    <span class="index-radar-memory-card__top"><strong>${escapeRadarHtml(period?.label||'History')}</strong><small>${escapeRadarHtml(memoryCoverage(period))}</small></span>
+    <span class="index-radar-memory-card__leaders">${summary}</span>
+    <span class="material-icons index-radar-memory-card__arrow" aria-hidden="true">chevron_right</span>
+  </button>`;
+}
+
+function memoryPanelMarkup() {
+  const periods=state.memory?.periods||[];
+  if (!periods.length) return '';
+  return `<aside class="index-radar-memory" aria-label="Leadership Memory historical rankings">
+    <div class="index-radar-memory-track">${periods.map(memoryCardMarkup).join('')}</div>
+  </aside>`;
 }
 
 function renderSnapshot(snapshot,checkpoint) {
@@ -99,17 +140,20 @@ function renderSnapshot(snapshot,checkpoint) {
       : '';
   if (!snapshot.leaders.length) {
     setStatus(`<span class="fibo-analysis-source fibo-analysis-source--official">Official Close · ${escapeRadarHtml(snapshot.tradeDate)}</span>${warning}`);
-    renderMessage('No qualified sector leader','No sector or theme crossed the 60-point quality gate for this official session.');
+    viewport.innerHTML=`<div class="index-radar-dashboard">
+      <div class="index-radar-leaders-viewport">${messageMarkup('No qualified sector leader','No sector or theme crossed the 60-point quality gate for this official session.')}</div>
+      ${memoryPanelMarkup()}
+    </div>`;
     return;
   }
   setStatus(`<span class="fibo-analysis-source fibo-analysis-source--official">Official Close · ${escapeRadarHtml(snapshot.tradeDate)}</span>${warning}`);
-  const original = snapshot.leaders.map((leader,index) => cardMarkup(leader,index)).join('');
-  const clone = snapshot.leaders.map((leader,index) => cardMarkup(leader,index,{clone:true})).join('');
-  viewport.innerHTML = `<div class="index-radar-track" id="indexRadarTrack">
-    <div class="index-radar-group">${original}</div>
-    <div class="index-radar-group index-radar-group--clone" aria-hidden="true">${clone}</div>
+  const leaders=snapshot.leaders.map((leader,index)=>cardMarkup(leader,index)).join('');
+  viewport.innerHTML = `<div class="index-radar-dashboard">
+    <div class="index-radar-leaders-viewport">
+      <div class="index-radar-group" data-count="${snapshot.leaders.length}">${leaders}</div>
+    </div>
+    ${memoryPanelMarkup()}
   </div>`;
-  configureMotion();
 }
 
 function metricRow(label,value) {
@@ -148,6 +192,8 @@ function openDetails(index,trigger) {
   if (title) title.textContent = `#${leader.rank} ${leader.name}`;
   if (content) {
     const breakdown = leader.scoreBreakdown || {};
+    const history=appearanceStats(leader);
+    const historyCoverage=state.memory?`${state.memory.sessionsAvailable}/${state.memory.historyTarget} compatible sessions`:'history unavailable';
     const events = (leader.events || []).map(event => `<li><strong>${escapeRadarHtml(event.label)}</strong><span>${Number(event.points || 0) ? `+${Number(event.points)} points` : 'Context only'}</span></li>`).join('') || '<li><strong>No fresh event</strong><span>Qualified through relative strength and trend.</span></li>';
     const risks = (leader.risks || []).map(risk => `<li><strong>${escapeRadarHtml(risk.label)}</strong><span>−${Number(risk.penalty || 0)} points</span></li>`).join('') || '<li><strong>No active Radar risk flag</strong><span>Risk can still exist outside this model.</span></li>';
     content.innerHTML = `<div class="index-radar-detail">
@@ -175,11 +221,86 @@ function openDetails(index,trigger) {
         ${metricRow('Distance to MA60',formatRadarSigned(leader.metrics.distanceMA60Pct))}
       </div></section>
       <section class="index-radar-detail-columns"><div><h3>Events</h3><ul>${events}</ul></div><div><h3>Risks</h3><ul>${risks}</ul></div></section>
-      <section><h3>Leaderboard history</h3><p>Consecutive <strong>${leader.appearances.consecutive}D</strong> · 15D <strong>${leader.appearances.days15}×</strong> · 30D <strong>${leader.appearances.days30}×</strong>. Counts start only after final Theme Group deduplication.</p></section>
+      <section><h3>Leadership Memory</h3><p>Consecutive <strong>${history.consecutive}D</strong> · 13D <strong>${history.days13??'—'}×</strong> · 60D <strong>${history.days60??'—'}×</strong>. Counts aggregate final leaders by Theme Group using ${escapeRadarHtml(historyCoverage)}.</p></section>
       <p class="index-radar-disclaimer">Context only. This ranking is not a probability, target price or buy signal and never changes Terminal Composite Signal.</p>
     </div>`;
   }
   openModal(byId('indexRadarDetailBackdrop'),trigger);
+}
+
+function memoryStatus(leader,period) {
+  if (period.kind==='snapshot') {
+    if (leader.currentRank===null) return '<span class="index-radar-memory-status is-out">Out today</span>';
+    const label=leader.movement==='up'?'Moved up':leader.movement==='down'?'Moved down':'Unchanged';
+    return `<span class="index-radar-memory-status is-current">Today #${leader.currentRank} · ${label}</span>`;
+  }
+  return leader.isCurrent
+    ? `<span class="index-radar-memory-status is-current">Current #${leader.currentRank}</span>`
+    : `<span class="index-radar-memory-status">Last Seen ${leader.lastSeenSessionsAgo} sessions ago</span>`;
+}
+
+function memoryRankingRow(leader,period) {
+  const representative=leader.representative||{};
+  const metric=period.kind==='snapshot'
+    ? `<span><small>Previous rank</small><b>#${leader.rank}</b></span><span><small>Today</small><b>${leader.currentRank===null?'Out':`#${leader.currentRank}`}</b></span>`
+    : `<span><small>Appearances</small><b>${leader.appearances}/${period.sessionsUsed}</b></span><span><small>Avg rank</small><b>#${formatRadarNumber(leader.averageRank,1)}</b></span><span><small>Leadership</small><b>${formatRadarNumber(leader.leadershipScore,1)}</b></span>`;
+  return `<div class="index-radar-memory-ranking-row" role="listitem">
+    <span class="index-radar-memory-ranking-rank">#${leader.rank}</span>
+    <span class="index-radar-memory-ranking-name"><strong>${escapeRadarHtml(leader.displayLabel)}</strong><small>${escapeRadarHtml(representative.name||'Unknown representative')} · ${escapeRadarHtml(representative.market||'')} ${escapeRadarHtml(representative.code||'')}</small></span>
+    <span class="index-radar-memory-ranking-metrics">${metric}</span>
+    ${memoryStatus(leader,period)}
+  </div>`;
+}
+
+function dailyHistoryRow(snapshot) {
+  const leaders=(snapshot.leaders||[]).map(leader=>`<span class="index-radar-memory-daily-leader" title="${escapeRadarHtml(leader.name)}"><b>#${leader.rank}</b>${escapeRadarHtml(leader.themeLabel||leader.name)}</span>`).join('') || '<span class="index-radar-memory-empty">No qualified leader</span>';
+  return `<div class="index-radar-memory-daily-row"><time datetime="${escapeRadarHtml(snapshot.tradeDate)}">${escapeRadarHtml(snapshot.tradeDate)}</time><span class="index-radar-memory-daily-leaders">${leaders}</span></div>`;
+}
+
+function renderMemoryModal() {
+  const period=findLeadershipPeriod(state.memory,state.activeMemoryPeriod);
+  if (!period) return;
+  const title=byId('indexRadarMemoryTitle');
+  const content=byId('indexRadarMemoryContent');
+  if (title) title.textContent=`${period.label} · Leadership Memory`;
+  if (!content) return;
+  const ranking=period.leaders.length
+    ? period.leaders.map(leader=>memoryRankingRow(leader,period)).join('')
+    : '<div class="index-radar-memory-modal-empty">No compatible historical leader is available for this window.</div>';
+  const expanded=state.expandedMemoryPeriod===period.id;
+  const visibleLimit=period.id==='regime60'&&!expanded?13:period.daily.length;
+  const visibleDaily=period.daily.slice(0,visibleLimit);
+  const remaining=Math.max(0,period.daily.length-visibleDaily.length);
+  const daily=visibleDaily.length
+    ? visibleDaily.map(dailyHistoryRow).join('')
+    : '<div class="index-radar-memory-modal-empty">Daily history is still building.</div>';
+  const formula=period.kind==='snapshot'
+    ? 'Yesterday is the exact final Top 5 from the previous official trading session. Today status compares the same Theme Group with the latest list.'
+    : 'Daily ranks earn 5 / 4 / 3 / 2 / 1 points. Leadership is the total divided by 5 × available sessions. One Theme Group can score only once per day.';
+  content.innerHTML=`<div class="index-radar-memory-modal-content">
+    <div class="index-radar-memory-modal-source"><span class="fibo-analysis-source fibo-analysis-source--official">Official sessions · ${escapeRadarHtml(memoryCoverage(period))}</span><span>Leadership Memory v${state.memory.version}</span></div>
+    <p class="index-radar-memory-formula">${escapeRadarHtml(formula)}</p>
+    <section><h3>Complete ranking</h3><div class="index-radar-memory-ranking" role="list">${ranking}</div></section>
+    <section><h3>Daily history</h3><div class="index-radar-memory-daily">${daily}</div>
+      ${remaining?`<button type="button" class="fibo-button fibo-button--control index-radar-memory-expand" data-index-radar-memory-expand>Show earlier ${remaining} sessions</button>`:''}
+    </section>
+    <p class="index-radar-disclaimer">This is persistence among final Top 5 snapshots, not the stored raw ranking of all eligible indices and not a trading signal.</p>
+  </div>`;
+}
+
+function openMemory(periodId,trigger) {
+  const period=findLeadershipPeriod(state.memory,periodId);
+  if (!period || !period.sessionsUsed) return;
+  state.activeMemoryPeriod=period.id;
+  state.expandedMemoryPeriod=null;
+  renderMemoryModal();
+  openModal(byId('indexRadarMemoryBackdrop'),trigger);
+}
+
+function expandMemoryHistory() {
+  if (!state.activeMemoryPeriod) return;
+  state.expandedMemoryPeriod=state.activeMemoryPeriod;
+  renderMemoryModal();
 }
 
 async function load() {
@@ -193,13 +314,19 @@ async function load() {
     const snapshot = normalizeRadarSnapshot(result.snapshot);
     if (!snapshot) {
       state.snapshot = null;
+      state.memory = null;
+      state.historyError = null;
       setStatus('Waiting for first Index Backfill');
       renderMessage('Index Radar is not ready','Run the Index BaoStock smoke and backfill after applying the Radar migration.',{retry:true});
       return;
     }
     state.snapshot = snapshot;
+    state.historyError=result.historyError||null;
+    state.memory=buildLeadershipMemory(result.historyError?[]:result.snapshots,{ latestSnapshot:result.snapshot });
     renderSnapshot(snapshot,result.checkpoint);
   } catch (error) {
+    state.memory=null;
+    state.historyError=null;
     setStatus('<span class="index-radar-sync-warning"><span class="material-icons" aria-hidden="true">error_outline</span>Snapshot unavailable</span>','is-error');
     renderMessage('Could not load Index Radar',error?.message || 'The Supabase snapshot request failed.',{retry:true,error:true});
   } finally {
@@ -214,12 +341,18 @@ function bindEvents() {
   byId('indexRadarViewport')?.addEventListener('click',event => {
     const retry = event.target.closest('[data-index-radar-retry]');
     if (retry) { load(); return; }
+    const memoryCard = event.target.closest('[data-index-radar-memory]');
+    if (memoryCard) { openMemory(memoryCard.dataset.indexRadarMemory,memoryCard); return; }
     const card = event.target.closest('[data-index-radar-leader]');
     if (card) openDetails(card.dataset.indexRadarLeader,card);
+  });
+  byId('indexRadarMemoryContent')?.addEventListener('click',event => {
+    if (event.target.closest('[data-index-radar-memory-expand]')) expandMemoryHistory();
   });
   for (const [backdropId,closeId] of [
     ['indexRadarHelpBackdrop','indexRadarHelpClose'],
     ['indexRadarDetailBackdrop','indexRadarDetailClose'],
+    ['indexRadarMemoryBackdrop','indexRadarMemoryClose'],
   ]) {
     const backdrop = byId(backdropId);
     byId(closeId)?.addEventListener('click',() => closeModal(backdrop));
@@ -229,10 +362,6 @@ function bindEvents() {
     if (event.key !== 'Escape') return;
     const open = document.querySelector('.index-radar-modal-backdrop.open');
     if (open) closeModal(open);
-  });
-  window.addEventListener('resize',() => {
-    clearTimeout(state.resizeTimer);
-    state.resizeTimer = setTimeout(configureMotion,120);
   });
 }
 

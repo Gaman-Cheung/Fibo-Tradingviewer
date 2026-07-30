@@ -21,12 +21,18 @@ window.supabase={createClient(){
    scoreBreakdown:{rs5:22-index,rs20:28-index,trend:30,event:Math.min(item[9],15),risk:index===1?10:0},
    trendBreakdown:{aboveMA60:5,ma60Rising:10,alignment:15},appearances:{consecutive:index+1,days15:8-index,days30:14-index}
  }));
- const radarSnapshot={provider:'baostock',trade_date:'2026-07-28',algorithm_version:1,universe_version:1,benchmark_market:'SH',benchmark_code:'000300',universe_count:507,eligible_count:171,coverage:.9825,leaders:radarLeaders,computed_at:'2026-07-28T11:30:00Z'};
+ const radarSnapshots=Array.from({length:60},(_,offset)=>{
+   const date=new Date(Date.UTC(2026,6,28-offset)).toISOString().slice(0,10);
+   const leaders=radarLeaders.map((leader,index)=>({...leader,rank:(index+offset)%5+1})).sort((a,b)=>a.rank-b.rank);
+   return {provider:'baostock',trade_date:date,algorithm_version:1,universe_version:1,benchmark_market:'SH',benchmark_code:'000300',universe_count:507,eligible_count:171,coverage:.9825,leaders,computed_at:date+'T11:30:00Z'};
+ });
+ const radarSnapshot=radarSnapshots[0];
  function builder(table){
    const filters={};
+   let requestedLimit=0;
    return {
-     select(){return this},eq(column,value){filters[column]=value;return this},limit(){return this},
-     order(){if(table==='market_daily_bar')window.__marketDailyBarOrders=(window.__marketDailyBarOrders||0)+1;return Promise.resolve({data:table==='market_daily_bar'&&filters.code==='300657'?marketRows:table==='market_index_radar_snapshot'?[radarSnapshot]:[],error:null})},
+     select(){return this},eq(column,value){filters[column]=value;return this},limit(value){requestedLimit=value;return this},
+     order(){if(table==='market_daily_bar')window.__marketDailyBarOrders=(window.__marketDailyBarOrders||0)+1;return Promise.resolve({data:table==='market_daily_bar'&&filters.code==='300657'?marketRows:table==='market_index_radar_snapshot'?(requestedLimit===1?[radarSnapshot]:radarSnapshots):[],error:null})},
      single(){return Promise.resolve({data:null,error:{code:'PGRST116'}})},
      maybeSingle(){return Promise.resolve({data:table==='market_sync_checkpoint'?{last_status:'success'}:null,error:null})},
      upsert(){return Promise.resolve({data:null,error:null})}
@@ -151,7 +157,7 @@ test('terminal controller switches tabs and persists shared Pro Tips', async ({ 
   await expect.poll(() => page.evaluate(() => localStorage.getItem('tv_header_tips_v1'))).toBe('E2E discipline');
 });
 
-test('Look First Index Radar renders one guide entry and an official leader rail', async ({ page }, testInfo) => {
+test('Look First Index Radar renders current leaders and Leadership Memory', async ({ page }, testInfo) => {
   await page.goto('/Terminal.html?tab=v6');
   const radar=page.locator('#indexRadar');
   await expect(radar).toBeVisible();
@@ -162,7 +168,12 @@ test('Look First Index Radar renders one guide entry and an official leader rail
   await expect(cards).toHaveCount(5);
   await expect(cards.first()).toContainText('国证算力基础设施');
   await expect(cards.first()).toContainText('MA60 Breakout');
-  await expect(cards.first()).toContainText('15D 8×');
+  await expect(cards.first()).toContainText('13D 13×');
+  await expect(cards.first()).toContainText('60D 60×');
+  const memoryCards=radar.locator('[data-index-radar-memory]');
+  await expect(memoryCards).toHaveCount(4);
+  await expect(radar.locator('[data-index-radar-memory="yesterday"]')).toContainText('1/1 session');
+  await expect(radar.locator('[data-index-radar-memory="regime60"]')).toContainText('60/60 sessions');
   const ring=await cards.first().evaluate(node=>({
     border:getComputedStyle(node).borderTopWidth,
     background:getComputedStyle(node).backgroundImage
@@ -176,6 +187,8 @@ test('Look First Index Radar renders one guide entry and an official leader rail
   await expect(guide).toContainText('Score = 25 × PctRank(RS5) + 30 × PctRank(RS20)');
   await expect(guide).toContainText('MA60 Reclaim Confirmed');
   await expect(guide).toContainText('Theme Group');
+  await expect(guide).toContainText('Leadership Memory v1');
+  await expect(guide).toContainText('5 / 4 / 3 / 2 / 1');
   await expect(guide).toContainText('Composite Signal');
   await page.keyboard.press('Escape');
   await expect(page.locator('#indexRadarHelpBackdrop')).not.toHaveClass(/open/);
@@ -185,30 +198,90 @@ test('Look First Index Radar renders one guide entry and an official leader rail
   await expect(page.locator('#indexRadarDetailBackdrop')).toHaveClass(/open/);
   await expect(page.locator('#indexRadarDetailTitle')).toContainText('#1 国证算力基础设施');
   await expect(page.locator('#indexRadarDetailContent')).toContainText('RS5 rank points');
-  await expect(page.locator('#indexRadarDetailContent')).toContainText('Leaderboard history');
+  await expect(page.locator('#indexRadarDetailContent')).toContainText('Leadership Memory');
   await page.locator('#indexRadarDetailClose').click();
 
-  const motion=await radar.evaluate(node=>{
-    const viewport=node.querySelector('.index-radar-viewport');
-    const track=node.querySelector('.index-radar-track');
-    return {animated:track.classList.contains('is-animated'),scrollWidth:viewport.scrollWidth,clientWidth:viewport.clientWidth,scrollSnap:getComputedStyle(viewport).scrollSnapType};
+  const fastCard=radar.locator('[data-index-radar-memory="fast3"]');
+  await fastCard.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#indexRadarMemoryBackdrop')).toHaveClass(/open/);
+  await expect(page.locator('#indexRadarMemoryTitle')).toContainText('3D Fast');
+  await expect(page.locator('#indexRadarMemoryContent')).toContainText('Complete ranking');
+  await page.locator('#indexRadarMemoryClose').click();
+
+  await radar.locator('[data-index-radar-memory="regime60"]').click();
+  await expect(page.locator('#indexRadarMemoryTitle')).toContainText('60D Regime');
+  await expect(page.locator('#indexRadarMemoryContent .index-radar-memory-daily-row')).toHaveCount(13);
+  const expandHistory=page.locator('[data-index-radar-memory-expand]');
+  await expect(expandHistory).toContainText('Show earlier 47 sessions');
+  await expandHistory.click();
+  await expect(page.locator('#indexRadarMemoryContent .index-radar-memory-daily-row')).toHaveCount(60);
+  await page.keyboard.press('Escape');
+
+  const geometry=await radar.evaluate(node=>{
+    const leaders=node.querySelector('.index-radar-leaders-viewport');
+    const memory=node.querySelector('.index-radar-memory');
+    const memoryCard=node.querySelector('.index-radar-memory-card');
+    return {
+      leaderScrollWidth:leaders.scrollWidth,leaderClientWidth:leaders.clientWidth,leaderSnap:getComputedStyle(leaders).scrollSnapType,
+      memoryScrollWidth:memory.scrollWidth,memoryClientWidth:memory.clientWidth,memorySnap:getComputedStyle(memory).scrollSnapType,
+      memoryCardHeight:memoryCard.getBoundingClientRect().height,
+      animated:Boolean(node.querySelector('.is-animated')),
+    };
   });
-  expect(motion.scrollWidth).toBeGreaterThan(motion.clientWidth);
+  expect(geometry.animated).toBe(false);
   if(testInfo.project.name==='iphone'){
-    expect(motion.animated).toBe(false);
-    expect(motion.scrollSnap).toContain('x');
-    await radar.locator('.index-radar-viewport').evaluate(node=>node.scrollTo({left:node.scrollWidth,behavior:'instant'}));
-    expect(await radar.locator('.index-radar-viewport').evaluate(node=>node.scrollLeft)).toBeGreaterThan(0);
+    expect(geometry.leaderScrollWidth).toBeGreaterThan(geometry.leaderClientWidth);
+    expect(geometry.memoryScrollWidth).toBeGreaterThan(geometry.memoryClientWidth);
+    expect(geometry.leaderSnap).toContain('x');
+    expect(geometry.memorySnap).toContain('x');
+    expect(geometry.memoryCardHeight).toBeGreaterThanOrEqual(44);
   }else{
-    expect(motion.animated).toBe(true);
-    await radar.locator('.index-radar-viewport').hover();
-    expect(await radar.locator('.index-radar-track').evaluate(node=>getComputedStyle(node).animationPlayState)).toBe('paused');
-    await page.emulateMedia({reducedMotion:'reduce'});
-    await page.evaluate(()=>window.dispatchEvent(new Event('resize')));
-    await expect(radar.locator('.index-radar-track')).not.toHaveClass(/is-animated/);
+    expect(geometry.leaderScrollWidth-geometry.leaderClientWidth).toBeLessThanOrEqual(1);
+    expect(geometry.memoryScrollWidth-geometry.memoryClientWidth).toBeLessThanOrEqual(1);
   }
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test('Radar desktop breakpoints never require horizontal navigation', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name==='iphone','Desktop-only responsive geometry');
+  await page.setViewportSize({width:1024,height:900});
+  await page.goto('/Terminal.html?tab=v6');
+  const radar=page.locator('#indexRadar');
+  await expect(radar.locator('[data-index-radar-leader]')).toHaveCount(5);
+  for(const width of [1024,1280,2048]){
+    await page.setViewportSize({width,height:900});
+    const geometry=await radar.evaluate(node=>{
+      const dashboard=node.querySelector('.index-radar-dashboard').getBoundingClientRect();
+      const leaders=node.querySelector('.index-radar-leaders-viewport');
+      const memory=node.querySelector('.index-radar-memory');
+      const leaderCards=[...node.querySelectorAll('[data-index-radar-leader]')].map(card=>card.getBoundingClientRect());
+      const memoryRect=memory.getBoundingClientRect();
+      return {
+        dashboardWidth:dashboard.width,
+        dashboardScrollWidth:node.querySelector('.index-radar-dashboard').scrollWidth,
+        leaderOverflow:leaders.scrollWidth-leaders.clientWidth,
+        memoryOverflow:memory.scrollWidth-memory.clientWidth,
+        leaderRows:new Set(leaderCards.map(rect=>Math.round(rect.top))).size,
+        leaderRight:Math.max(...leaderCards.map(rect=>rect.right)),
+        memoryLeft:memoryRect.left,
+        memoryTop:memoryRect.top,
+        leaderTop:leaderCards[0].top,
+      };
+    });
+    expect(geometry.dashboardScrollWidth-geometry.dashboardWidth).toBeLessThanOrEqual(1);
+    expect(geometry.leaderOverflow).toBeLessThanOrEqual(1);
+    expect(geometry.memoryOverflow).toBeLessThanOrEqual(1);
+    if(width===2048){
+      expect(geometry.leaderRows).toBe(1);
+      expect(geometry.memoryLeft).toBeGreaterThanOrEqual(geometry.leaderRight);
+      expect(Math.abs(geometry.memoryTop-geometry.leaderTop)).toBeLessThanOrEqual(2);
+    }else{
+      expect(geometry.memoryTop).toBeGreaterThan(geometry.leaderTop);
+    }
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth)).toBeLessThanOrEqual(1);
+  }
 });
 
 test('terminal Auto Prev Close is deduplicated by symbol and remains overridable per permanent ID', async ({ page }) => {

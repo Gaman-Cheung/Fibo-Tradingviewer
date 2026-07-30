@@ -1,8 +1,10 @@
 /**
  * Index Radar indicator vocabulary and in-product guide.
- * Allowed dependencies: none. Forbidden: DOM, storage, network and trading scores.
+ * Allowed dependencies: pure Leadership Memory constants. Forbidden: DOM, storage, network and trading scores.
  * Covered by: contract and Radar view-model tests.
  */
+import { LEADERSHIP_MEMORY_VERSION } from './radar-memory.js';
+
 export const INDEX_RADAR_ALGORITHM_VERSION = 1;
 export const INDEX_RADAR_UNIVERSE_VERSION = 1;
 
@@ -32,7 +34,7 @@ const riskRows = RADAR_RISK_GUIDE.map(([name, score, meaning]) => `
   <tr><th>${name}</th><td><code>${score}</code></td><td>${meaning}</td></tr>`).join('');
 
 export const INDEX_RADAR_GUIDE_HTML = `
-  <div class="fibo-help-content index-radar-guide" data-radar-guide-version="${INDEX_RADAR_ALGORITHM_VERSION}">
+  <div class="fibo-help-content index-radar-guide" data-radar-guide-version="${INDEX_RADAR_ALGORITHM_VERSION}" data-leadership-memory-version="${LEADERSHIP_MEMORY_VERSION}">
     <h3>Purpose and official data</h3>
     <p>Index Radar reads BaoStock official daily index closes. It stores a rolling 400-session history, ranks only explicitly classified sector and theme indices, and uses <code>SH.000300</code> CSI300 only as the relative-strength benchmark. Broad, style, fund and bond indices cannot occupy the leader rail.</p>
     <p><span class="fibo-analysis-source fibo-analysis-source--official">Official Close</span> means a completed exchange session. Manual Current, Pool, Ticker and permanent IDs never enter this module.</p>
@@ -60,11 +62,24 @@ export const INDEX_RADAR_GUIDE_HTML = `
     <ul>
       <li>Normally one representative is shown per Theme Group. A second is allowed only when both are in the raw Top 5 and their scores differ by no more than five points.</li>
       <li>A previous leader may survive the cutoff only when it remains in the raw Top 8, still scores at least 60 and stays within five points of today's fifth leader.</li>
-      <li><code>Consecutive</code>, <code>15D</code> and <code>30D</code> count appearances after final theme deduplication. Recent final appearances break an exact score tie and support the one-day stability buffer, but never add score.</li>
+      <li>The main card displays Theme Group <code>Consecutive</code>, <code>13D</code> and <code>60D</code> appearances derived from compatible final snapshots.</li>
+      <li>The snapshot's legacy 30-session appearance count still breaks an exact Score tie and supports the one-day stability buffer. It never adds recurring points to the Radar Score.</li>
+    </ul>
+
+    <h3>Leadership Memory v${LEADERSHIP_MEMORY_VERSION}</h3>
+    <p>Leadership Memory reads only the latest 60 final Top 5 snapshots. It does not download 507 index histories and is not the discarded raw ranking of every eligible candidate.</p>
+    <ul>
+      <li><code>Yesterday</code> is the exact final Top 5 from the previous official trading session and compares each Theme Group with today's final list.</li>
+      <li><code>3D Fast</code>, <code>13D Swing</code> and <code>60D Regime</code> include the latest official session and the preceding compatible sessions.</li>
+      <li>Each day awards 5 / 4 / 3 / 2 / 1 points to ranks 1–5. If two representatives from one Theme Group appear, only the better daily rank is counted.</li>
+      <li><code>Leadership Score = accumulated rank points ÷ (5 × available sessions) × 100</code>. Ties use appearances, average rank, recency and then the stable theme name.</li>
+      <li>A 60D leader remains visible for the full window even after leaving the current list; <code>Last Seen</code> states how many official sessions ago it last appeared.</li>
+      <li><code>History N/60 · Building</code> means only N compatible snapshots are available. Algorithm or Universe version mismatches are never mixed.</li>
+      <li>Mini cards show three themes. Details contain every theme that appeared in the selected window: at most 5 for Yesterday, 15 for 3D and the currently classified 28 Theme Groups for 13D/60D.</li>
     </ul>
 
     <h3>How to read one card</h3>
-    <p><code>#1 AI &amp; Computing · MA60 Reclaim · RS5 +4.6% · Consecutive 4D · 15D 7× · 30D 12×</code> means this theme currently ranks first, has an official reclaim event, outperformed CSI300 over five sessions and has repeatedly survived the final deduplicated board. It does not say that a constituent stock should be bought.</p>
+    <p><code>#1 AI &amp; Computing · MA60 Reclaim · RS5 +4.6% · Consecutive 4D · 13D 7× · 60D 12×</code> means this theme currently ranks first, has an official reclaim event, outperformed CSI300 over five sessions and has repeatedly survived compatible final boards. It does not say that a constituent stock should be bought.</p>
 
     <h3>Boundary</h3>
     <p>Index Radar is a context and attention tool—not a probability, price target, buy signal or promise. It never changes Terminal Composite Signal, Fibonacci, Stop, R:R, MACD, Trend Tracker or Wave calculations.</p>

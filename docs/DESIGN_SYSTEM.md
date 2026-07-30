@@ -103,8 +103,10 @@ The page stylesheet must not contain selectors beginning with `.fibo-header` or 
 
 - `fibo-card--brand-ring` is the shared quiet-card variant for a system-selected item. Its 2px conic border uses the existing Google blue, red, yellow and green brand tokens over a white surface, shared radius and low elevation.
 - The four-color ring means “selected by this system,” not bullishness, safety or a four-level score. Warnings and risks continue to use semantic warning/danger tokens; large colored card fills are prohibited.
-- Index Radar composes this shared card in a page-owned horizontal rail. Desktop motion is allowed only when content overflows, targets approximately 10px/s, and pauses on hover, keyboard focus or an open Radar dialog. Mobile disables autoplay and uses horizontal Scroll Snap with 44px controls.
-- `prefers-reduced-motion` disables Radar autoplay and movement transitions. A disabled/no-data Radar must remain a quiet independent section and may never block or resize the Look First table into horizontal page overflow.
+- Index Radar composes the shared selected card in a page-owned responsive Grid on desktop. Desktop never uses autoplay, cloned cards, horizontal scrolling or drag navigation; cards wrap when the available width is insufficient.
+- At the documented Wide desktop breakpoint, current leaders occupy the left column and four quiet Leadership Memory summaries occupy the right column. Below that breakpoint the summaries move under the leaders without creating page overflow.
+- Mobile uses separate horizontal Scroll Snap containers for current leaders and Leadership Memory, disables autoplay and preserves 44px controls. `prefers-reduced-motion` also disables card movement transitions.
+- A disabled/no-data Radar must remain a quiet independent section and may never block or resize the Look First table into horizontal page overflow.
 - Radar owns one `fibo-help-button` in its section header. Cards never duplicate the help icon; clicking a card opens detail using the shared `fibo-modal` geometry.
 
 ## Trend Tracker chart forecast
@@ -124,6 +126,7 @@ CSS custom properties cannot be used reliably inside media-query conditions, so 
 | Phone | `max-width: 650px` | Single-column instrument workflow |
 | Mobile/tablet | `max-width: 768px` | Mobile navigation and touch controls |
 | Compact desktop | `max-width: 1100px` | Wrap wide desktop toolbars |
+| Wide desktop | `min-width: 1800px` | Place Radar Leadership Memory beside five current leaders |
 
 New pages should use the smallest number of breakpoints necessary and preserve safe-area insets on iOS.
 

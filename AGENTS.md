@@ -9,7 +9,7 @@ This file is mandatory reading before changing the project.
 3. Do not change trading weights, thresholds, labels or formulas without explicit user authorization.
 4. Keep the public entry filenames `TradingViewer.html`, `Terminal.html`, `WaveAnalysis.html`, `TrendTracker.html` and all storage/Supabase wire keys compatible.
 5. A data-contract change requires an idempotent migration and a regression test.
-6. Index Radar is global market context. It must never read Pool/permanent IDs or feed Composite Signal. Its score, event vocabulary, 60-point gate, classification seed and help guide are algorithm contracts and require explicit authorization to change.
+6. Index Radar is global market context. It must never read Pool/permanent IDs or feed Composite Signal. Its score, event vocabulary, 60-point gate, classification seed and help guide are algorithm contracts and require explicit authorization to change. Leadership Memory is a separate final-snapshot contract: Yesterday plus 3/13/60-session Theme Group persistence using 5/4/3/2/1 rank points.
 
 ## Module boundaries
 

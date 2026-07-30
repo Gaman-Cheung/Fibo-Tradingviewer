@@ -69,3 +69,15 @@ Scored events are MA60 Reclaim Confirmed `+9`, MA60 Breakout `+8`, 20D High Brea
 Theme Group normally contributes one final leader. A second representative is allowed only when both are in the raw Top 5 and within five points. A prior final leader can receive the stability buffer only while raw Top 8, still at least 60 points and within five points of the fifth selected leader. Recent 30-session final-list appearances break an exactly equal score before RS20/RS5; Consecutive/15D/30D appearances count only final, deduplicated lists and never add recurring score.
 
 Coverage below 95%, missing benchmark history or an incomplete index run produces no new snapshot. Full event definitions, UI reading guidance and boundaries are normative in `docs/INDEX_RADAR_GUIDE.md`; its version must match the Python algorithm and in-product help.
+
+### Leadership Memory v1
+
+Leadership Memory is a browser-side persistence view over final Top 5 snapshots; it does not change Radar Algorithm v1 or reconstruct the discarded raw ranking of all eligible indices.
+
+- Yesterday is the previous official session's exact Top 5. Rolling 3D, 13D and 60D windows include the latest compatible official session.
+- For each session and Theme Group, only the highest-ranked representative counts. Ranks 1–5 receive 5/4/3/2/1 points.
+- `Leadership Score = accumulated rank points / (5 × available compatible sessions) × 100`.
+- Ties resolve by more appearances, lower average rank, more recent appearance, then stable theme name.
+- A 60D theme remains ranked for the complete window after leaving the current list and displays `Last Seen N sessions ago`; no recency decay or recent-appearance gate is applied.
+- Main cards derive Theme Group `Consecutive`, `13D` and `60D` counts from the same snapshots. Python's legacy 30-session exact-score tie-break and stability buffer remain intact and do not receive Leadership Memory points.
+- Different Algorithm/Universe versions never mix. Partial history uses only available sessions and must display `N / target · Building`.
