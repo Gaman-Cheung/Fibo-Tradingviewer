@@ -1153,6 +1153,32 @@ def _etf_target_dates(args, client: BaoStockClient, retention_dates: list[str], 
     return retention_dates[-5:]
 
 
+def _etf_catalog_history_start(catalog: list[dict]) -> str | None:
+    """Return the earliest ETF session that is known to contain stored rows."""
+    dates = [str(row.get("history_from") or "") for row in catalog]
+    available = [value for value in dates if value]
+    return min(available) if available else None
+
+
+def _is_skippable_etf_leading_gap(
+    mode: str,
+    trade_date: str,
+    raw_rows: list[dict],
+    coverage_start: str | None,
+) -> bool:
+    """Allow only an empty provider prefix before the first known ETF session.
+
+    A non-empty but malformed/small response is never skipped. Once official
+    ETF history has begun, an empty date is a real sequence gap and remains a
+    hard failure.
+    """
+    return (
+        mode == "backfill"
+        and not raw_rows
+        and (coverage_start is None or trade_date < coverage_start)
+    )
+
+
 def _run_etf_sync(args, client: BaoStockClient, db: SupabaseRest) -> None:
     cutoff = completed_market_date()
     retention_dates = recent_trading_dates(client, args.etf_sessions, cutoff)
@@ -1191,12 +1217,32 @@ def _run_etf_sync(args, client: BaoStockClient, db: SupabaseRest) -> None:
     latest_cache = {latest_date: latest_raw}
     intraday_by_symbol: dict[str, dict[str, dict]] = {}
     uploaded_rows = 0
+    coverage_start = _etf_catalog_history_start(catalog)
+    skipped_leading_dates: list[str] = []
     try:
         for position, trade_date in enumerate(target_dates, 1):
             print(f"[ETF PROGRESS] {position}/{len(target_dates)} · {trade_date}", flush=True)
             raw = latest_cache.get(trade_date) or client.daily_etfs(trade_date)
             persistent, transient = normalize_etf_rows(raw, utc_now())
             if len(persistent) < MIN_ETF_DAILY_ROWS:
+                if _is_skippable_etf_leading_gap(args.mode, trade_date, raw, coverage_start):
+                    skipped_leading_dates.append(trade_date)
+                    values = {
+                        "last_status": "running",
+                        "last_error": None,
+                        "last_mode": args.mode,
+                        "last_row_count": 0,
+                        "retention_sessions": args.etf_sessions,
+                        "backfill_cursor": trade_date,
+                    }
+                    db.save_checkpoint(ETF_SCOPE, **values)
+                    checkpoint.update(values)
+                    print(
+                        f"[ETF COVERAGE] {trade_date} predates BaoStock bulk ETF history; "
+                        "recorded as an unavailable leading session and continued.",
+                        flush=True,
+                    )
+                    continue
                 raise RuntimeError(
                     f"{trade_date} returned only {len(persistent):,} valid ETF rows; "
                     "nothing was uploaded for that date and the checkpoint did not advance."
@@ -1219,6 +1265,15 @@ def _run_etf_sync(args, client: BaoStockClient, db: SupabaseRest) -> None:
                 known_catalog_keys.update(symbol_key(row["market"], row["code"]) for row in newly_seen)
             db.upsert_daily_rows(persistent)
             uploaded_rows += len(persistent)
+            if coverage_start is None or trade_date < coverage_start:
+                coverage_start = trade_date
+                if skipped_leading_dates:
+                    print(
+                        f"[ETF COVERAGE] BaoStock bulk ETF history begins at {coverage_start}; "
+                        f"{len(skipped_leading_dates)} leading session(s) were unavailable. "
+                        f"The retention target remains {args.etf_sessions} sessions.",
+                        flush=True,
+                    )
             for key, values in transient.items():
                 intraday_by_symbol.setdefault(key, {}).update(values)
             progress = _etf_catalog_progress(catalog, persistent)
@@ -1228,7 +1283,7 @@ def _run_etf_sync(args, client: BaoStockClient, db: SupabaseRest) -> None:
                 "last_error": None,
                 "last_mode": args.mode,
                 "last_row_count": len(persistent),
-                "oldest_trade_date": retention_dates[0],
+                "oldest_trade_date": coverage_start,
                 "retention_sessions": args.etf_sessions,
             }
             if args.mode == "backfill":
@@ -1237,6 +1292,12 @@ def _run_etf_sync(args, client: BaoStockClient, db: SupabaseRest) -> None:
             checkpoint.update(values)
 
         catalog = db.get_etf_catalog()
+        coverage_start = _etf_catalog_history_start(catalog) or coverage_start
+        if coverage_start is None:
+            raise RuntimeError(
+                "BaoStock returned no valid ETF session inside the requested retention window; "
+                "the checkpoint remains incomplete."
+            )
         full_rebuild = args.mode in ("backfill", "repair")
         build_plan: dict[str, tuple[list[dict], list[str], list[dict]]] = {}
         for scope in ETF_SCOPES:
@@ -1251,7 +1312,11 @@ def _run_etf_sync(args, client: BaoStockClient, db: SupabaseRest) -> None:
             priors = [] if rebuild_scope else db.get_etf_radar_snapshots(scope, limit=30, before=snapshot_dates[0])
             build_plan[scope] = ([], snapshot_dates, priors)
 
-        print(f"[ETF RADAR] loading {args.etf_sessions} sessions from {retention_dates[0]}...", flush=True)
+        print(
+            f"[ETF RADAR] loading up to {args.etf_sessions} sessions from {retention_dates[0]} "
+            f"(actual provider coverage starts {coverage_start})...",
+            flush=True,
+        )
         market_rows = db.load_etf_history(catalog, retention_dates[0])
         print(f"      loaded {len(market_rows):,} ETF/benchmark rows; building both scopes...", flush=True)
         for scope, (_, snapshot_dates, priors) in list(build_plan.items()):
@@ -1286,7 +1351,7 @@ def _run_etf_sync(args, client: BaoStockClient, db: SupabaseRest) -> None:
             last_error=None,
             last_mode=args.mode,
             latest_trade_date=max(str(checkpoint.get("latest_trade_date") or latest_date), latest_date),
-            oldest_trade_date=retention_dates[0],
+            oldest_trade_date=coverage_start,
             retention_sessions=args.etf_sessions,
             last_row_count=uploaded_rows,
         )
