@@ -16,7 +16,7 @@ Static multi-page trading journal and Elliott Wave analysis system for GitHub Pa
 2. Add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` as GitHub repository Actions secrets.
 3. Manually run the **Sync BaoStock full market** Action with `smoke / indices`.
 4. After smoke passes, run `backfill / indices`. The 507-index job resumes from per-symbol catalog progress after interruption.
-5. Run `smoke / etfs`, review ETF Universe v1, then run `backfill / etfs`.
+5. Validate the reviewed Universe v2 with `npm run audit:radar`; use `npm run audit:radar:dry-run` before publication, then run `daily / indices` followed by `daily / etfs` so version changes rebuild snapshots from stored history.
 6. Verify both ETF Scope snapshots and database capacity, then leave the schedule on `daily / all` at 19:00 Asia/Shanghai on weekdays.
 
 The database stores 400 sessions for SH/SZ A-shares and indices, and 144 sessions for ETFs. ETF cleanup is Market+Code scoped and cannot shorten the existing 400-session store. Tracker matches shared history by explicit Market + six-digit Code; Pool and permanent IDs never own or duplicate prices.

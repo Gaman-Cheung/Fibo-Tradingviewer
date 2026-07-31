@@ -10,7 +10,7 @@ This file is mandatory reading before changing the project.
 4. Keep the public entry filenames `TradingViewer.html`, `Terminal.html`, `WaveAnalysis.html`, `TrendTracker.html` and all storage/Supabase wire keys compatible.
 5. A data-contract change requires an idempotent migration and a regression test.
 6. Index Radar is global market context. It must never read Pool/permanent IDs or feed Composite Signal. Its score, event vocabulary, 60-point gate, classification seed and help guide are algorithm contracts and require explicit authorization to change. Leadership Memory is a separate final-snapshot contract: Yesterday plus 3/13/60-session Theme Group persistence using 5/4/3/2/1 rank points.
-7. ETF Radar is another global context scope, never a Pool feature. Sector Index v1 remains unchanged. ETF v1 keeps RS5/RS20, 144 sessions, the RMB 20 million 20D-average-Amount gate, strict one-Theme representative and Cross Asset two-per-category cap. Unknown ETF codes stay raw-only and disabled until a reviewed code seed update.
+7. ETF Radar is another global context scope, never a Pool feature. Sector Index Algorithm v1 remains unchanged. ETF Algorithm v1 keeps RS5/RS20, 144 sessions, the RMB 20 million 20D-average-Amount gate, strict one-Theme representative and Cross Asset two-per-category cap. Universe v2 classifications come only from the reviewed CSV manifests and generated Market+Code seeds. Unknown ETF codes stay raw-only and disabled until a reviewed universe update.
 
 ## Module boundaries
 
