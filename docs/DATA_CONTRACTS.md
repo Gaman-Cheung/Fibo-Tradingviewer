@@ -46,9 +46,9 @@ Existing columns and metadata carriers must remain readable. A new schema must b
 - Legacy `CN-A` is inferred only for unambiguous ordinary stock prefixes. Legacy `INDEX` is never guessed.
 - Existing additive keys remain `(user_id,instrument_id)` for bindings, `(provider,market,code,trade_date)` for legacy closes, `(provider,market,code)` for legacy sync state, and `user_id` for Tracker state.
 - The full-market key is `(provider,market,code,trade_date)` in `market_daily_bar`; it is shared market data and must never include or merge by `instrument.id`.
-- `market_daily_bar` stores only official raw `close`, `pct_chg`, trading status and synchronization metadata. Tracker reconstructs BaoStock's front-adjusted sequence from these official returns, anchored to the latest raw close.
+- `market_daily_bar` stores official raw `close`, `pct_chg`, trading status and synchronization metadata. Nullable `amount` is populated only for ETF rows and is never treated as fund flow. Tracker reconstructs BaoStock's front-adjusted sequence from official returns, anchored to the latest raw close.
 - `market_sync_checkpoint` has one `(provider,scope)` row for idempotent backfill progress and global freshness. A cursor advances only after every batch for that date succeeds.
-- Full-market data retains the latest 400 official trading sessions. Incomplete or abnormally small snapshots never advance the checkpoint or trigger retention deletion.
+- A-share and index data retain the latest 400 official trading sessions. ETF rows retain 144. Incomplete or abnormally small snapshots never advance a checkpoint or trigger retention deletion.
 - `market_daily_close` and `market_sync_state` remain readable compatibility fallbacks and are not dropped or repurposed.
 - Current and five-day VR remain manual per permanent ID, but have exactly one canonical storage location: Look First `c` for Current and Then Leap `v` for VR. Tracker inputs are proxies into those rows and must never own a second live copy.
 - Shared Current/VR reads and writes use exact `instrument.id` only. A missing row may be created only for an ID present in Pool; duplicate Tickers or Market/Code values never share the manual value.
@@ -71,3 +71,17 @@ Existing columns and metadata carriers must remain readable. A new schema must b
 - `CN_INDEX` is an independent `market_sync_checkpoint.scope`; it cannot advance or overwrite `CN_A`. Per-index resumability is stored in the catalog. A failed coverage/benchmark/publication step records `CN_INDEX.last_status=error`, preserves the latest valid snapshot and performs no retention deletion.
 - Authenticated browser users may read catalog/snapshots. Only the Service Role used by the Action or ignored local launcher may write them.
 - The browser reads the latest snapshot independently plus at most 60 recent snapshot rows through `src/core/index-radar-repository.js`. It never loads the 507 histories or recalculates the Radar Score/raw eligible ranking; a history-read failure cannot block the current five leaders.
+
+## ETF Radar market contract
+
+- ETF raw rows reuse `market_daily_bar` and keep Provider, Market, Code, Date, official Close, pctChg, Trade Status, unadjusted Amount and sync time. They contain no user or permanent instrument identity. High/Low is transient Retest input only.
+- ETF prices are converted to a continuous-return series by walking backward from the latest official Close with official `pct_chg`. Amount is not adjusted.
+- `market_etf_catalog` is keyed by `(provider,market,code)`. Categories are `equity_broad`, `equity_sector`, `equity_theme`, `equity_strategy`, `overseas`, `commodity`, `bond`, `money` and `other`; Radar scopes are nullable `EQUITY_ETF` or `CROSS_ASSET`.
+- Universe v1 is code-keyed in `scripts/etf_catalog_seed_v1.py`. Names are display metadata only. An unknown code is synchronized for 144 sessions as `other`, has no scope and stays Radar-disabled until an explicit reviewed seed/version update.
+- `market_etf_radar_snapshot` is keyed by `(provider,scope,trade_date)`. Each of the two scopes has an independent final Top 5, algorithm/universe versions, benchmark, coverage and ordered leader JSON.
+- ETF leaders use the Index Radar v1 score vocabulary plus `radarScope`, `assetCategory` and `averageAmount20D`. The same Theme Group has exactly one daily representative: the ETF with highest valid 20-session average Amount. If that representative is below RMB 20 million, the Theme is excluded.
+- Cross Asset final lists allow at most two representatives from each of `overseas`, `commodity`, `bond` and `money`; the stability buffer cannot break this cap. Equity ETF has no category quota.
+- Leadership Memory filters Algorithm, Universe and Scope together and aggregates continuity by Theme Group, so a liquidity-driven representative-code change does not reset history.
+- `CN_ETF` is an independent checkpoint with 144-session retention. ETF cleanup must issue Market+Code-scoped deletes from the ETF catalog; it must never call the global cutoff that could shorten 400-session A-share/index history.
+- The browser defaults to `SECTOR_INDEX`, lazy-loads an ETF scope on first selection and caches it only for the page session. No selection is persisted to localStorage or cloud state. A scope failure cannot clear another scope or block Look First.
+- Authenticated users may read ETF catalog and snapshots. Only Service Role may write them.

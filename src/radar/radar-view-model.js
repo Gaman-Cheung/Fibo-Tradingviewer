@@ -38,6 +38,10 @@ export function normalizeRadarSnapshot(row) {
       name:String(leader?.name || `${leader?.market || ''}.${leader?.code || ''}`),
       themeGroup:String(leader?.themeGroup || ''),
       themeLabel:String(leader?.themeLabel || ''),
+      category:String(leader?.category || leader?.assetCategory || ''),
+      assetCategory:String(leader?.assetCategory || leader?.category || ''),
+      radarScope:String(leader?.radarScope || row.scope || 'SECTOR_INDEX'),
+      averageAmount20D:finiteNumber(leader?.averageAmount20D,null),
       events:Array.isArray(leader?.events) ? leader.events : [],
       risks:Array.isArray(leader?.risks) ? leader.risks : [],
       metrics,
@@ -52,6 +56,7 @@ export function normalizeRadarSnapshot(row) {
   }).slice(0,5) : [];
   return {
     provider:String(row.provider || 'baostock'),
+    scope:String(row.scope || 'SECTOR_INDEX'),
     tradeDate,
     algorithmVersion:finiteNumber(row.algorithm_version ?? row.algorithmVersion,0),
     universeVersion:finiteNumber(row.universe_version ?? row.universeVersion,0),

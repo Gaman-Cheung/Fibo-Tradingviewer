@@ -76,13 +76,18 @@
     <div id="tab-v6" class="tab-content active">
         <section class="index-radar" id="indexRadar" aria-labelledby="indexRadarTitle">
             <div class="index-radar__header">
-                <div>
+                <div class="index-radar__identity">
                     <span class="index-radar__eyebrow">MARKET CONTEXT</span>
                     <h2 id="indexRadarTitle">INDEX RADAR · SECTOR LEADERS</h2>
                 </div>
                 <div class="index-radar__tools">
+                    <div class="fibo-segmented-control index-radar-mode" id="indexRadarMode" role="tablist" aria-label="Market Radar universe">
+                        <button type="button" role="tab" class="is-active" aria-selected="true" aria-pressed="true" data-market-radar-scope="SECTOR_INDEX">Sector Index</button>
+                        <button type="button" role="tab" aria-selected="false" aria-pressed="false" data-market-radar-scope="EQUITY_ETF">Equity ETF</button>
+                        <button type="button" role="tab" aria-selected="false" aria-pressed="false" data-market-radar-scope="CROSS_ASSET">Cross Asset</button>
+                    </div>
                     <div class="index-radar-status" id="indexRadarStatus" aria-live="polite">Loading official index snapshot…</div>
-                    <button type="button" class="fibo-help-button" id="indexRadarHelpButton" title="Index Radar indicator guide" aria-label="Open Index Radar indicator guide">?</button>
+                    <button type="button" class="fibo-help-button" id="indexRadarHelpButton" title="Market Radar indicator guide" aria-label="Open Market Radar indicator guide">?</button>
                 </div>
             </div>
             <div class="index-radar-viewport" id="indexRadarViewport" aria-live="polite">
@@ -189,7 +194,7 @@
                 <button type="button" class="fibo-modal__close" id="indexRadarHelpClose" title="Close"><span class="material-icons">close</span></button>
             </header>
             <div class="fibo-modal__body" id="indexRadarHelpContent"></div>
-            <footer class="fibo-modal__footer"><span class="index-radar-modal-version">Radar Algorithm v1 · Official Close</span></footer>
+            <footer class="fibo-modal__footer"><span class="index-radar-modal-version" id="indexRadarHelpVersion">Radar Algorithm v1 · Official Close</span></footer>
         </div>
     </div>
 

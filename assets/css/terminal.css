@@ -95,10 +95,12 @@
 
         /* Look First Index Radar: page-specific rail composition over shared cards. */
         .index-radar { margin-bottom:var(--space-4); }
-        .index-radar__header { display:flex; align-items:flex-end; justify-content:space-between; gap:var(--space-4); margin-bottom:var(--space-3); }
+        .index-radar__header { display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:var(--space-4); margin-bottom:var(--space-3); }
         .index-radar__eyebrow { display:block; margin-bottom:var(--space-1); color:var(--color-text-tertiary); font-size:var(--font-size-2xs); font-weight:var(--font-weight-bold); letter-spacing:var(--letter-spacing-eyebrow); }
         .index-radar__header h2 { margin:0; color:var(--color-text); font-size:var(--font-size-xl); line-height:var(--line-height-tight); }
-        .index-radar__tools { display:flex; align-items:center; justify-content:flex-end; gap:var(--space-2); min-width:0; }
+        .index-radar__identity { min-width:max-content; }
+        .index-radar__tools { flex:1 1 620px; display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:var(--space-2); min-width:0; }
+        .index-radar-mode { flex:0 0 auto; }
         .index-radar-status { display:flex; align-items:center; justify-content:flex-end; gap:var(--space-2); min-width:0; color:var(--color-text-secondary); font-size:var(--font-size-xs); }
         .index-radar-loading-label,.index-radar-sync-warning,.index-radar-sync-running { display:inline-flex; align-items:center; gap:var(--space-1); font-weight:var(--font-weight-bold); }
         .index-radar-loading-label .material-icons,.index-radar-sync-running .material-icons { font-size:var(--icon-size-sm); animation:previousCloseSpin 1s linear infinite; }
@@ -126,6 +128,7 @@
         .index-radar-history { margin-top:auto; color:var(--color-text-secondary); font-size:var(--font-size-2xs); font-weight:var(--font-weight-semibold); white-space:nowrap; }
         .index-radar-risk { display:inline-flex; align-items:center; gap:var(--space-1); color:var(--color-warning-text); font-size:var(--font-size-2xs); font-weight:var(--font-weight-bold); }
         .index-radar-risk .material-icons { font-size:var(--icon-size-sm); }
+        .index-radar-category { width:max-content; max-width:100%; padding:2px 7px; border:1px solid var(--color-border-subtle); border-radius:var(--radius-pill); background:var(--color-surface-muted); color:var(--color-text-secondary); font-size:var(--font-size-2xs); font-weight:var(--font-weight-bold); letter-spacing:var(--letter-spacing-eyebrow); text-transform:uppercase; }
         .index-radar-memory { min-width:0; }
         .index-radar-memory-track { min-width:0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:var(--space-3); }
         .index-radar-memory-card { min-width:0; min-height:88px; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:var(--space-2); appearance:none; padding:var(--space-3); text-align:left; cursor:pointer; transition:transform var(--duration-base) var(--ease-standard),box-shadow var(--duration-base) var(--ease-standard); }
@@ -217,9 +220,11 @@
         @media (max-width:768px) {
             .index-radar { margin-bottom:var(--space-4); }
             .index-radar__header { align-items:center; gap:var(--space-2); }
+            .index-radar__identity { min-width:0; }
             .index-radar__header h2 { font-size:var(--font-size-base); }
             .index-radar__eyebrow { font-size:var(--font-size-2xs); }
-            .index-radar__tools { gap:var(--space-1); }
+            .index-radar__tools { display:grid; grid-template-columns:minmax(0,1fr) auto; width:100%; gap:var(--space-1); }
+            .index-radar-mode { grid-column:1/-1; width:100%; }
             .index-radar-status { max-width:155px; flex-wrap:wrap; font-size:var(--font-size-2xs); text-align:right; }
             .index-radar-viewport { margin-inline:calc(-1 * var(--space-2)); padding:var(--space-1) var(--space-2) var(--space-3); overflow:visible; }
             .index-radar-dashboard { display:block; }
@@ -362,11 +367,6 @@
         .macd-suggestion-summary small { display:block; color:var(--color-primary); font-weight:var(--font-weight-bold); letter-spacing:var(--letter-spacing-eyebrow); }
         .macd-suggestion-summary strong { display:block; margin-top:4px; font-size:var(--font-size-2xl); }
         .macd-suggestion-summary p { margin:4px 0 0; color:var(--color-text-secondary); }
-        .macd-basis-toggle { display:inline-grid; grid-template-columns:repeat(2,auto); padding:2px; border:1px solid var(--color-border); border-radius:var(--radius-pill); background:var(--color-surface); }
-        .macd-basis-toggle button { min-height:28px; padding:3px 9px; border:0; border-radius:var(--radius-pill); background:transparent; color:var(--color-text-secondary); font-size:var(--font-size-xs); font-weight:var(--font-weight-bold); cursor:pointer; }
-        .macd-basis-toggle button.is-active { background:var(--color-primary); color:var(--color-on-primary); }
-        .macd-basis-toggle button:disabled { cursor:not-allowed; opacity:.42; }
-        .macd-basis-toggle button:focus-visible { outline:2px solid var(--color-primary); outline-offset:2px; }
         .macd-suggestion-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:var(--space-2); margin-top:var(--space-3); }
         .macd-suggestion-metrics > span { padding:10px; border:1px solid var(--color-border-subtle); border-radius:var(--radius-sm); background:var(--color-surface-subtle); }
         .macd-suggestion-metrics small,.macd-suggestion-metrics strong { display:block; }
@@ -510,8 +510,8 @@
             #tab-v7 .macd-input-shell .macd { width:auto; min-width:0; }
             #tab-v7 .macd-suggest-button { width:44px; height:44px; min-height:44px; flex-basis:44px; border-radius:10px; }
             .macd-suggestion-summary__top { align-items:stretch; flex-direction:column; }
-            .macd-basis-toggle { width:100%; grid-template-columns:1fr 1fr; }
-            .macd-basis-toggle button { min-height:44px; }
+            .macd-basis-toggle { width:100%; }
+            .macd-basis-toggle button { flex:1 1 50%; }
             .macd-suggestion-metrics { grid-template-columns:1fr 1fr; }
             #tab-v6 .previous-shell { position:static; width:100%; display:grid; grid-template-columns:minmax(0,1fr) 44px; gap:8px; }
             #tab-v6 .previous-shell .previous { width:100%; padding:8px 4px; }

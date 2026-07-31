@@ -6,10 +6,15 @@ from zoneinfo import ZoneInfo
 
 import scripts.sync_baostock as sync_module
 from scripts.sync_baostock import (
+    ETF_RETENTION_SESSIONS,
+    SupabaseRest,
+    _etf_target_dates,
     chunks,
     completed_market_date,
     normalize_daily_rows,
+    normalize_etf_rows,
     parse_args,
+    publish_etf_radar_snapshots,
     reconstruct_front_adjusted,
     run_sync,
     sync_one_date,
@@ -76,6 +81,9 @@ class SyncBaoStockTests(unittest.TestCase):
         self.assertEqual([len(batch) for batch in chunks(list(range(7)),3)], [3,3,1])
         self.assertEqual(parse_args(["--mode","backfill"]).mode, "backfill")
         self.assertEqual(parse_args(["--mode","repair","--start","2026-01-01","--end","2026-01-02"]).end, "2026-01-02")
+        etf_args = parse_args(["--mode","backfill","--dataset","etfs"])
+        self.assertEqual(etf_args.etf_sessions, ETF_RETENTION_SESSIONS)
+        self.assertEqual(etf_args.dataset, "etfs")
 
     def test_backfill_resumes_after_checkpoint_and_prunes_only_after_success(self):
         client = FakeClient()
@@ -95,6 +103,67 @@ class SyncBaoStockTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,"only 1 valid"):
             sync_one_date(client,db,"2026-01-06")
         self.assertEqual(db.uploaded,[])
+
+    def test_etf_normalization_keeps_amount_and_discards_persistent_high_low(self):
+        persistent, transient = normalize_etf_rows([
+            {
+                "date":"2026-01-06","code":"sh.510300","high":"4.2","low":"4.0",
+                "close":"4.1","pctChg":"1.25","tradestatus":"1","amount":"25000000",
+            },
+            {"date":"2026-01-06","code":"bj.510300","close":"4","amount":"1"},
+        ], "2026-01-06T11:00:00Z")
+        self.assertEqual(len(persistent), 1)
+        self.assertEqual(persistent[0]["amount"], 25_000_000)
+        self.assertNotIn("high", persistent[0])
+        self.assertEqual(transient["SH:510300"]["2026-01-06"]["low"], 4.0)
+
+    def test_etf_daily_refetches_five_sessions_and_backfill_resumes(self):
+        dates = [f"2026-01-{day:02d}" for day in range(1, 11)]
+        client = FakeClient(dates=dates)
+        daily = SimpleNamespace(mode="daily", start=None, end=None)
+        self.assertEqual(_etf_target_dates(daily, client, dates, datetime.now().date(), {}), dates[-5:])
+        backfill = SimpleNamespace(mode="backfill", start=None, end=None)
+        self.assertEqual(
+            _etf_target_dates(backfill, client, dates, datetime.now().date(), {"backfill_cursor":dates[5]}),
+            dates[6:],
+        )
+
+    def test_etf_retention_delete_is_scoped_to_catalog_codes(self):
+        db = SupabaseRest.__new__(SupabaseRest)
+        db.headers = {}
+        calls = []
+        db._request = lambda method, path, **kwargs: calls.append((method, path, kwargs))
+        catalog = [
+            {"market":"SH","code":"510300"},
+            {"market":"SH","code":"510500"},
+            {"market":"SZ","code":"159915"},
+        ]
+        db.prune_etf_before("2026-01-01", catalog)
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(all(call[1] == "market_daily_bar" for call in calls))
+        self.assertTrue(all(call[2]["params"]["trade_date"] == "lt.2026-01-01" for call in calls))
+        self.assertTrue(all("code" in call[2]["params"] and "market" in call[2]["params"] for call in calls))
+
+    def test_etf_snapshot_upload_failure_never_deletes_prior_scope_history(self):
+        class FailingDb:
+            def __init__(self):
+                self.calls=[]
+            def upsert_etf_radar_snapshots(self,rows):
+                self.calls.append("upsert")
+                raise RuntimeError("upload failed")
+            def delete_etf_radar_snapshot_dates(self,scope,dates):
+                self.calls.append("delete")
+            def prune_etf_radar_snapshots_before(self,scope,cutoff):
+                self.calls.append("prune")
+        db=FailingDb()
+        with self.assertRaisesRegex(RuntimeError,"upload failed"):
+            publish_etf_radar_snapshots(
+                db,"EQUITY_ETF",
+                [{"trade_date":"2026-01-02","scope":"EQUITY_ETF","leaders":[]}],
+                ["2026-01-01","2026-01-02"],
+                "2026-01-01",
+            )
+        self.assertEqual(db.calls,["upsert"])
 
 
 if __name__ == "__main__":

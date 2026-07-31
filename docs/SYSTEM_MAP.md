@@ -20,7 +20,8 @@ GitHub Action (primary) -----\
 Manual Windows launcher -----/              |
                                             `---- smoke / daily / backfill / repair
                                                    |-- CN_A -> A-share close history
-                                                   `-- CN_INDEX -> index catalog/history/Radar snapshots
+                                                   |-- CN_INDEX -> index catalog/history/Radar snapshots
+                                                   `-- CN_ETF -> ETF catalog/144-session history/two Radar scopes
 ```
 
 ## Ownership
@@ -35,7 +36,8 @@ Manual Windows launcher -----/              |
 - BaoStock code normalization plus Tracker history and Terminal latest-close queries: `src/core/market-code.js` and `src/core/market-repository.js`.
 - Full-market synchronization: GitHub Action and `SyncBaoStock.cmd` both call `scripts/sync_baostock.py`; neither implementation may duplicate sync rules.
 - Index classification seed: `scripts/index_catalog_seed_v1.py` owns the reviewed 507-code universe result. Unknown future codes remain `other` and Radar-disabled until an explicit universe-version update.
-- Index Radar ranking: pure `scripts/index_radar.py`; Supabase latest/history reads in `src/core/index-radar-repository.js`; browser normalization, Leadership Memory and help in `src/radar/`; DOM grids and dialogs in `src/apps/index-radar-controller.js`. Leadership Memory reads at most 60 final snapshots and never imports Pool identity, raw histories or Terminal algorithms.
+- ETF classification seed: `scripts/etf_catalog_seed_v1.py` owns reviewed Market+Code classification for Equity ETF and Cross Asset. Discovery stores unknown ETFs as `other`, but runtime never infers a Radar category from the security name.
+- Market Radar ranking: pure `scripts/index_radar.py` retains Sector Index v1; pure `scripts/etf_radar.py` reuses its candidate/score semantics and owns ETF liquidity, strict Theme representation and Cross Asset caps. Supabase latest/history reads share `src/core/index-radar-repository.js`; browser normalization, scope-isolated Leadership Memory and help live in `src/radar/`; `src/apps/index-radar-controller.js` owns lazy scope loading, session cache, grids and dialogs. No Radar module imports Pool identity or Terminal algorithms.
 - BaoStock connectivity/local CSV diagnostics: `scripts/test_baostock_local.py`; it never writes Supabase.
 - DOM, navigation, drag/drop, modal and responsive behavior: `src/apps/`.
 - Shared Push button state and confirmation behavior: `src/apps/cloud-action-feedback.js` plus the shared component states in `assets/css/components.css`.

@@ -81,3 +81,31 @@ Leadership Memory is a browser-side persistence view over final Top 5 snapshots;
 - A 60D theme remains ranked for the complete window after leaving the current list and displays `Last Seen N sessions ago`; no recency decay or recent-appearance gate is applied.
 - Main cards derive Theme Group `Consecutive`, `13D` and `60D` counts from the same snapshots. Python's legacy 30-session exact-score tie-break and stability buffer remain intact and do not receive Leadership Memory points.
 - Different Algorithm/Universe versions never mix. Partial history uses only available sessions and must display `N / target · Building`.
+
+## ETF Radar · Algorithm v1 / Universe v1
+
+ETF Radar reuses the unchanged Index Radar v1 candidate, event, risk, score and 60-point gate. Sector Index remains RS5/RS20 with 400 sessions and is not revised by this addition. ETF uses 144 official sessions and two independent scopes: `EQUITY_ETF` and `CROSS_ASSET`.
+
+```text
+RS5  = ETF 5-session continuous return  − CSI300 5-session return
+RS20 = ETF 20-session continuous return − CSI300 20-session return
+
+Score = 25 × PctRank_scope(RS5)
+      + 30 × PctRank_scope(RS20)
+      + Trend(0–30)
+      + min(Event points, 15)
+      − Risk
+```
+
+- Official Close plus pctChg reconstruct a continuous ETF price series anchored to the latest raw Close. Official unadjusted Amount is never part of price adjustment.
+- A candidate still needs 62 valid sessions, Score ≥ 60, Close above MA60, positive RS5 or RS20 and no MA60 Breakdown.
+- Before percentile scoring, each Theme Group contributes only its ETF with the highest valid 20-session average Amount. If that winner is below RMB 20 million, the Theme contributes no candidate; a second ETF is never substituted.
+- Equity ETF contains reviewed domestic broad, sector, theme and strategy ETFs without a category quota.
+- Cross Asset contains reviewed overseas, commodity, bond and money ETFs. After strict Theme deduplication, each category may occupy at most two final cards. The previous-leader stability buffer cannot violate the cap.
+- The final board has at most five cards and is never padded with weak candidates.
+- Stability uses prior final Theme Groups, not ETF codes. A more-liquid ETF can replace yesterday's representative without resetting Theme Group Consecutive or Memory counts.
+- Coverage below 95%, missing CSI300, abnormal ETF rows, incomplete upload or either-scope build failure prevents checkpoint completion and retention cleanup.
+- ETF Leadership Memory uses the same Yesterday/3D/13D/60D, 5/4/3/2/1 and partial-version rules, while additionally requiring equal Scope.
+- Amount means exchange transaction value only. The model has no fund-flow, NAV premium/discount, yield, spot-price or currency-hedge input.
+
+The complete definitions and reading boundary are normative in `docs/ETF_RADAR_GUIDE.md`; Algorithm and Universe versions must match `scripts/etf_radar.py` and the in-product help.

@@ -7,6 +7,9 @@ import {
   INDEX_RADAR_ALGORITHM_VERSION,
   INDEX_RADAR_UNIVERSE_VERSION,
   INDEX_RADAR_GUIDE_HTML,
+  ETF_RADAR_GUIDE_HTML,
+  ETF_RADAR_ALGORITHM_VERSION,
+  ETF_RADAR_UNIVERSE_VERSION,
   RADAR_EVENT_GUIDE,
   RADAR_RISK_GUIDE,
 } from '../../src/radar/radar-help.js';
@@ -17,7 +20,11 @@ import {
   LEADERSHIP_MEMORY_VERSION,
   radarThemeKey,
 } from '../../src/radar/radar-memory.js';
-import { loadLatestIndexRadar } from '../../src/core/index-radar-repository.js';
+import {
+  loadLatestIndexRadar,
+  loadMarketRadar,
+  MARKET_RADAR_SCOPES,
+} from '../../src/core/index-radar-repository.js';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 
@@ -118,6 +125,49 @@ test('Radar history failure is isolated from the latest snapshot request',async(
   assert.match(result.historyError.message,/history unavailable/);
 });
 
+test('Market Radar repositories isolate all three scopes',async()=>{
+  const calls=[];
+  let snapshotRequest=0;
+  const client={from(table){
+    const request={table,filters:{}};
+    calls.push(request);
+    return {
+      select(){return this;},
+      eq(key,value){request.filters[key]=value;return this;},
+      limit(){return this;},
+      order(){
+        snapshotRequest+=1;
+        return Promise.resolve({data:[{
+          ...memorySnapshot('2026-07-30',[memoryLeader(1,'gold','Gold')]),
+          scope:request.filters.scope,
+        }],error:null});
+      },
+      maybeSingle(){return Promise.resolve({data:{last_status:'ok'},error:null});},
+    };
+  }};
+  const equity=await loadMarketRadar(client,MARKET_RADAR_SCOPES.EQUITY_ETF);
+  const cross=await loadMarketRadar(client,MARKET_RADAR_SCOPES.CROSS_ASSET);
+  assert.equal(equity.scope,'EQUITY_ETF');
+  assert.equal(cross.scope,'CROSS_ASSET');
+  const etfCalls=calls.filter(call=>call.table==='market_etf_radar_snapshot');
+  assert.equal(etfCalls.length,4);
+  assert.deepEqual(etfCalls.map(call=>call.filters.scope),['EQUITY_ETF','EQUITY_ETF','CROSS_ASSET','CROSS_ASSET']);
+  assert.equal(snapshotRequest,4);
+});
+
+test('Leadership Memory never mixes different Radar scopes',()=>{
+  const latest={...memorySnapshot('2026-07-30',[memoryLeader(1,'csi300','CSI 300')]),scope:'EQUITY_ETF'};
+  const rows=[
+    latest,
+    {...memorySnapshot('2026-07-29',[memoryLeader(1,'csi500','CSI 500')]),scope:'EQUITY_ETF'},
+    {...memorySnapshot('2026-07-28',[memoryLeader(1,'gold','Gold')]),scope:'CROSS_ASSET'},
+  ];
+  const memory=buildLeadershipMemory(rows,{latestSnapshot:latest});
+  assert.equal(memory.scope,'EQUITY_ETF');
+  assert.equal(memory.sessionsAvailable,2);
+  assert.deepEqual(memory.snapshots.map(item=>item.scope),['EQUITY_ETF','EQUITY_ETF']);
+});
+
 test('Radar algorithm, in-product guide and indicator manual share one vocabulary',()=>{
   const python=fs.readFileSync(path.join(root,'scripts/index_radar.py'),'utf8');
   const manual=fs.readFileSync(path.join(root,'docs/INDEX_RADAR_GUIDE.md'),'utf8');
@@ -177,9 +227,11 @@ test('Radar keeps pure ranking, repository and shared brand-card boundaries',()=
   const terminalCss=fs.readFileSync(path.join(root,'assets/css/terminal.css'),'utf8');
   const terminalHtml=fs.readFileSync(path.join(root,'Terminal.html'),'utf8');
   assert.doesNotMatch(algorithm,/^\s*(?:from|import)\s+(?:requests|supabase)|localStorage\.|instrument\.id/m);
-  assert.match(controller,/loadLatestIndexRadar/);
+  assert.match(controller,/loadMarketRadar/);
+  for(const scope of ['SECTOR_INDEX','EQUITY_ETF','CROSS_ASSET']) assert.match(controller,new RegExp(scope));
   assert.doesNotMatch(controller,/calculateTechnicalScore|classifyCompositeSignal|localStorage\.|loadInstrumentPool|tv_(?:lookfirst|thenleap)/);
   assert.match(repository,/market_index_radar_snapshot/);
+  assert.match(repository,/market_etf_radar_snapshot/);
   assert.match(repository,/HISTORY_LIMIT=60/);
   assert.doesNotMatch(repository,/market_daily_bar|market_index_catalog/);
   assert.doesNotMatch(memory,/document\.|localStorage\.|supabase|instrument\.id|market_daily_bar/);
@@ -193,6 +245,7 @@ test('Radar keeps pure ranking, repository and shared brand-card boundaries',()=
 
 test('Radar schema and both sync launchers preserve the independent CN_INDEX contract',()=>{
   const migration=fs.readFileSync(path.join(root,'supabase/migrations/20260729_index_radar.sql'),'utf8');
+  const etfMigration=fs.readFileSync(path.join(root,'supabase/migrations/20260731_etf_market_radar.sql'),'utf8');
   const workflow=fs.readFileSync(path.join(root,'.github/workflows/sync-baostock.yml'),'utf8');
   const launcher=fs.readFileSync(path.join(root,'SyncBaoStock.cmd'),'utf8');
   const sync=fs.readFileSync(path.join(root,'scripts/sync_baostock.py'),'utf8');
@@ -201,10 +254,51 @@ test('Radar schema and both sync launchers preserve the independent CN_INDEX con
     assert.match(migration,new RegExp(`alter table public\\.${table} enable row level security`,'i'));
   }
   assert.doesNotMatch(migration,/instrument_id|user_id/i);
-  assert.match(workflow,/options:\s*\[indices, a-shares, all\]/);
+  for(const table of ['market_etf_catalog','market_etf_radar_snapshot']){
+    assert.match(etfMigration,new RegExp('create table if not exists public\\.'+table,'i'));
+    assert.match(etfMigration,new RegExp('alter table public\\.'+table+' enable row level security','i'));
+  }
+  assert.match(etfMigration,/add column if not exists amount numeric/i);
+  assert.doesNotMatch(etfMigration,/instrument_id|user_id/i);
+  assert.match(workflow,/options:\s*\[indices, etfs, a-shares, all\]/);
+  assert.match(workflow,/--sessions 400 --etf-sessions 144/);
   assert.match(workflow,/MODE="\$\{REQUESTED_MODE:-daily\}"/);
   assert.match(workflow,/DATASET="\$\{REQUESTED_DATASET:-all\}"/);
   assert.match(launcher,/SYNC_DATASET/);
   assert.match(sync,/INDEX_SCOPE\s*=\s*"CN_INDEX"/);
-  assert.match(sync,/choices=\("a-shares", "indices", "all"\)/);
+  assert.match(sync,/ETF_SCOPE\s*=\s*"CN_ETF"/);
+  assert.match(sync,/choices=\("a-shares", "indices", "etfs", "all"\)/);
+  assert.match(sync,/prune_etf_before/);
+});
+
+test('ETF Radar help, algorithm and shared segmented control preserve the locked contract',()=>{
+  const algorithm=fs.readFileSync(path.join(root,'scripts/etf_radar.py'),'utf8');
+  const seed=fs.readFileSync(path.join(root,'scripts/etf_catalog_seed_v1.py'),'utf8');
+  const manual=fs.readFileSync(path.join(root,'docs/ETF_RADAR_GUIDE.md'),'utf8');
+  const components=fs.readFileSync(path.join(root,'assets/css/components.css'),'utf8');
+  const terminalCss=fs.readFileSync(path.join(root,'assets/css/terminal.css'),'utf8');
+  const terminalHtml=fs.readFileSync(path.join(root,'Terminal.html'),'utf8');
+  assert.match(algorithm,/MIN_AVERAGE_AMOUNT_20D\s*=\s*20_000_000/);
+  assert.match(algorithm,/CROSS_ASSET_CATEGORY_LIMIT\s*=\s*2/);
+  assert.match(algorithm,/score_candidates\(candidates\)/);
+  assert.match(algorithm,/calculate_candidate\(/);
+  assert.match(seed,/ETF_CATALOG_SEED_V1/);
+  for(const guide of Object.values(ETF_RADAR_GUIDE_HTML)){
+    assert.match(guide,/RS5\s*\/\s*RS20/);
+    assert.match(guide,/RMB 20 million/);
+    assert.match(guide,/144 official sessions/i);
+    assert.match(guide,/Leadership Memory/);
+    assert.match(guide,/not fund flow/i);
+    for(const [label] of RADAR_EVENT_GUIDE) assert.ok(guide.includes(label),label+' in ETF product help');
+    for(const [label] of RADAR_RISK_GUIDE) assert.ok(guide.includes(label),label+' in ETF product help');
+  }
+  for(const [label] of [...RADAR_EVENT_GUIDE,...RADAR_RISK_GUIDE]) assert.ok(manual.includes(label),label+' in ETF manual');
+  assert.match(manual,/ETF Radar Algorithm version:\s*\*\*1\*\*/);
+  assert.match(manual,/ETF Universe version:\s*\*\*1\*\*/);
+  assert.equal(ETF_RADAR_ALGORITHM_VERSION,1);
+  assert.equal(ETF_RADAR_UNIVERSE_VERSION,1);
+  assert.match(components,/\.fibo-segmented-control\s*\{/);
+  assert.doesNotMatch(terminalCss,/\.macd-basis-toggle\s+button\s*\{[^}]*border-radius/s);
+  assert.equal((terminalHtml.match(/data-market-radar-scope=/g)||[]).length,3);
+  for(const label of ['Sector Index','Equity ETF','Cross Asset']) assert.ok(terminalHtml.includes(label));
 });

@@ -53,6 +53,8 @@ function normalizedHistory(rows,latestRow) {
   const reference=latest || ordered[0] || null;
   if (!reference) return [];
   return ordered.filter(snapshot =>
+    snapshot.scope === reference.scope
+    &&
     snapshot.algorithmVersion === reference.algorithmVersion
     && snapshot.universeVersion === reference.universeVersion
   ).slice(0,LEADERSHIP_MEMORY_HISTORY_LIMIT);
@@ -181,6 +183,7 @@ export function buildLeadershipMemory(rows,{ latestSnapshot=null }={}) {
   const latest=snapshots[0]||null;
   return {
     version:LEADERSHIP_MEMORY_VERSION,
+    scope:latest?.scope||'SECTOR_INDEX',
     latestTradeDate:latest?.tradeDate||'',
     algorithmVersion:latest?.algorithmVersion||0,
     universeVersion:latest?.universeVersion||0,

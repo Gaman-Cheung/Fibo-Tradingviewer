@@ -67,6 +67,24 @@
 .fibo-header__actions > .fibo-button--logout { margin-left:10px; }
 .fibo-header__actions > .fibo-button--logout:hover { border-color:#f5c2c7; background:#fdf2f2; color:var(--color-danger-text); }
 
+/* Shared segmented choice geometry. Individual pages own only placement. */
+.fibo-segmented-control {
+  max-width:100%; display:inline-flex; align-items:stretch; gap:2px; overflow:auto; padding:2px;
+  border:1px solid var(--color-border); border-radius:var(--radius-pill); background:var(--color-surface);
+  scrollbar-width:none;
+}
+.fibo-segmented-control::-webkit-scrollbar { display:none; }
+.fibo-segmented-control > button {
+  box-sizing:border-box; min-height:28px; flex:0 0 auto; padding:3px 10px; border:0;
+  border-radius:var(--radius-pill); background:transparent; color:var(--color-text-secondary);
+  font:var(--font-weight-bold) var(--font-size-xs)/1.35 var(--font-family-sans); white-space:nowrap; cursor:pointer;
+}
+.fibo-segmented-control > button:hover { background:var(--color-surface-hover); color:var(--color-text); }
+.fibo-segmented-control > button.is-active,
+.fibo-segmented-control > button[aria-pressed='true'] { background:var(--color-primary); color:var(--color-on-primary); }
+.fibo-segmented-control > button:disabled { cursor:not-allowed; opacity:.42; }
+.fibo-segmented-control > button:focus-visible { outline:2px solid var(--color-primary); outline-offset:2px; }
+
 /* Shared source labels distinguish confirmed market data from provisional inputs. */
 .fibo-analysis-source {
   display:inline-flex; align-items:center; width:max-content; max-width:100%; padding:3px 7px;
@@ -118,6 +136,7 @@
   .fibo-modal-backdrop { padding:14px; }
   .fibo-help-button { width:44px; height:44px; min-height:44px; flex-basis:44px; }
   .fibo-button.fibo-button--control { min-height:var(--touch-target-min); }
+  .fibo-segmented-control > button { min-height:var(--touch-target-min); padding-inline:14px; }
 }
 
 @media (prefers-reduced-motion:reduce) {

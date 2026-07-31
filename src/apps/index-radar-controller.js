@@ -1,10 +1,10 @@
 /**
- * Look First Index Radar DOM controller.
+ * Look First Market Radar DOM controller.
  * Allowed: DOM and shared Radar repository/view model. Forbidden: calculating
  * market rankings, reading Pool identity or writing Terminal/Tracker state.
  */
-import { loadLatestIndexRadar } from '../core/index-radar-repository.js';
-import { INDEX_RADAR_GUIDE_HTML } from '../radar/radar-help.js';
+import { loadMarketRadar, MARKET_RADAR_SCOPES } from '../core/index-radar-repository.js';
+import { ETF_RADAR_GUIDE_HTML, INDEX_RADAR_GUIDE_HTML } from '../radar/radar-help.js';
 import {
   buildLeadershipMemory,
   findLeadershipPeriod,
@@ -18,19 +18,83 @@ import {
   primaryRadarEvents,
 } from '../radar/radar-view-model.js';
 
+const SCOPE_CONFIG = Object.freeze({
+  [MARKET_RADAR_SCOPES.SECTOR_INDEX]:Object.freeze({
+    title:'INDEX RADAR · SECTOR LEADERS',
+    shortName:'Sector Index',
+    loadingTitle:'Loading Index Radar',
+    waitingTitle:'Index Radar is not ready',
+    waitingMessage:'Run the Index BaoStock smoke and backfill after applying the Radar migration.',
+    emptyTitle:'No qualified sector leader',
+    emptyMessage:'No sector or theme crossed the 60-point quality gate for this official session.',
+    guideTitle:'INDEX RADAR INDICATOR GUIDE',
+    guideVersion:'Radar Algorithm v1 · 400 Official Sessions',
+    guideHtml:INDEX_RADAR_GUIDE_HTML,
+  }),
+  [MARKET_RADAR_SCOPES.EQUITY_ETF]:Object.freeze({
+    title:'ETF RADAR · EQUITY LEADERS',
+    shortName:'Equity ETF',
+    loadingTitle:'Loading Equity ETF Radar',
+    waitingTitle:'Equity ETF Radar is not ready',
+    waitingMessage:'Apply the ETF migration, run smoke / etfs, then backfill / etfs.',
+    emptyTitle:'No qualified Equity ETF leader',
+    emptyMessage:'No liquid Equity ETF Theme crossed the 60-point quality gate for this official session.',
+    guideTitle:'EQUITY ETF RADAR INDICATOR GUIDE',
+    guideVersion:'ETF Radar Algorithm v1 · 144 Official Sessions',
+    guideHtml:ETF_RADAR_GUIDE_HTML.EQUITY_ETF,
+  }),
+  [MARKET_RADAR_SCOPES.CROSS_ASSET]:Object.freeze({
+    title:'ETF RADAR · CROSS-ASSET LEADERS',
+    shortName:'Cross Asset',
+    loadingTitle:'Loading Cross Asset Radar',
+    waitingTitle:'Cross Asset Radar is not ready',
+    waitingMessage:'Apply the ETF migration, run smoke / etfs, then backfill / etfs.',
+    emptyTitle:'No qualified Cross Asset leader',
+    emptyMessage:'No liquid Cross Asset Theme crossed the 60-point quality gate for this official session.',
+    guideTitle:'CROSS ASSET ETF RADAR INDICATOR GUIDE',
+    guideVersion:'ETF Radar Algorithm v1 · 144 Official Sessions',
+    guideHtml:ETF_RADAR_GUIDE_HTML.CROSS_ASSET,
+  }),
+});
+
 const state = {
   client:null,
+  activeScope:MARKET_RADAR_SCOPES.SECTOR_INDEX,
+  cache:new Map(),
   snapshot:null,
   memory:null,
   historyError:null,
   activeMemoryPeriod:null,
   expandedMemoryPeriod:null,
-  loading:false,
+  loadingScopes:new Set(),
   bound:false,
   returnFocus:null,
 };
 
 const byId = id => document.getElementById(id);
+const activeConfig = () => SCOPE_CONFIG[state.activeScope];
+
+function renderScopeChrome() {
+  const config=activeConfig();
+  const title=byId('indexRadarTitle');
+  if (title) title.textContent=config.title;
+  const guideTitle=byId('indexRadarHelpTitle');
+  if (guideTitle) guideTitle.textContent=config.guideTitle;
+  const guideVersion=byId('indexRadarHelpVersion');
+  if (guideVersion) guideVersion.textContent=config.guideVersion;
+  const help=byId('indexRadarHelpButton');
+  if (help) {
+    help.title=`${config.shortName} indicator guide`;
+    help.setAttribute('aria-label',`Open ${config.shortName} indicator guide`);
+  }
+  byId('indexRadarMode')?.querySelectorAll('[data-market-radar-scope]').forEach(button=>{
+    const selected=button.dataset.marketRadarScope===state.activeScope;
+    button.classList.toggle('is-active',selected);
+    button.setAttribute('aria-selected',String(selected));
+    button.setAttribute('aria-pressed',String(selected));
+    button.tabIndex=selected?0:-1;
+  });
+}
 
 function eventBadges(leader) {
   const events = primaryRadarEvents(leader);
@@ -40,6 +104,19 @@ function eventBadges(leader) {
 
 function riskBadges(leader) {
   return (leader.risks || []).map(risk => `<span class="index-radar-risk"><span class="material-icons" aria-hidden="true">warning_amber</span>${escapeRadarHtml(risk.label)}</span>`).join('');
+}
+
+function categoryLabel(value) {
+  return ({
+    overseas:'Overseas',
+    commodity:'Commodity',
+    bond:'Bond',
+    money:'Money',
+    equity_broad:'Broad Market',
+    equity_sector:'Sector',
+    equity_theme:'Theme',
+    equity_strategy:'Strategy',
+  })[String(value||'')] || String(value||'Other').replaceAll('_',' ');
 }
 
 function appearanceStats(leader) {
@@ -67,6 +144,9 @@ function cardMarkup(leader,index) {
       <span class="index-radar-symbol">${escapeRadarHtml(leader.market)} · ${escapeRadarHtml(leader.code)}</span>
     </span>
     <strong class="index-radar-name">${escapeRadarHtml(leader.name)}</strong>
+    ${state.activeScope===MARKET_RADAR_SCOPES.CROSS_ASSET
+      ? `<span class="index-radar-category">${escapeRadarHtml(categoryLabel(leader.assetCategory||leader.category))}</span>`
+      : ''}
     <span class="index-radar-events">${eventBadges(leader)}</span>
     <span class="index-radar-rs">
       <span><small>RS5</small><b>${formatRadarSigned(leader.metrics.rs5)}</b></span>
@@ -133,15 +213,16 @@ function memoryPanelMarkup() {
 function renderSnapshot(snapshot,checkpoint) {
   const viewport = byId('indexRadarViewport');
   if (!viewport) return;
+  const config=activeConfig();
   const warning = checkpoint?.last_status === 'error'
-    ? `<span class="index-radar-sync-warning" title="${escapeRadarHtml(checkpoint.last_error || 'Latest index synchronization failed.')}"><span class="material-icons" aria-hidden="true">error_outline</span>Last sync failed</span>`
+    ? `<span class="index-radar-sync-warning" title="${escapeRadarHtml(checkpoint.last_error || 'Latest market synchronization failed.')}"><span class="material-icons" aria-hidden="true">error_outline</span>Last sync failed</span>`
     : checkpoint?.last_status === 'running'
       ? '<span class="index-radar-sync-running"><span class="material-icons" aria-hidden="true">sync</span>Syncing</span>'
       : '';
   if (!snapshot.leaders.length) {
     setStatus(`<span class="fibo-analysis-source fibo-analysis-source--official">Official Close · ${escapeRadarHtml(snapshot.tradeDate)}</span>${warning}`);
     viewport.innerHTML=`<div class="index-radar-dashboard">
-      <div class="index-radar-leaders-viewport">${messageMarkup('No qualified sector leader','No sector or theme crossed the 60-point quality gate for this official session.')}</div>
+      <div class="index-radar-leaders-viewport">${messageMarkup(config.emptyTitle,config.emptyMessage)}</div>
       ${memoryPanelMarkup()}
     </div>`;
     return;
@@ -158,6 +239,13 @@ function renderSnapshot(snapshot,checkpoint) {
 
 function metricRow(label,value) {
   return `<div class="index-radar-detail-metric"><small>${escapeRadarHtml(label)}</small><strong>${escapeRadarHtml(value)}</strong></div>`;
+}
+
+function formatRmbAmount(value) {
+  const amount=Number(value);
+  if (!Number.isFinite(amount)) return '—';
+  if (amount>=100000000) return `RMB ${(amount/100000000).toFixed(2)}B`;
+  return `RMB ${(amount/10000).toFixed(0)}万`;
 }
 
 function openModal(backdrop,trigger) {
@@ -180,7 +268,8 @@ function closeModal(backdrop) {
 
 function openGuide(trigger) {
   const content = byId('indexRadarHelpContent');
-  if (content) content.innerHTML = INDEX_RADAR_GUIDE_HTML;
+  renderScopeChrome();
+  if (content) content.innerHTML = activeConfig().guideHtml;
   openModal(byId('indexRadarHelpBackdrop'),trigger);
 }
 
@@ -196,6 +285,13 @@ function openDetails(index,trigger) {
     const historyCoverage=state.memory?`${state.memory.sessionsAvailable}/${state.memory.historyTarget} compatible sessions`:'history unavailable';
     const events = (leader.events || []).map(event => `<li><strong>${escapeRadarHtml(event.label)}</strong><span>${Number(event.points || 0) ? `+${Number(event.points)} points` : 'Context only'}</span></li>`).join('') || '<li><strong>No fresh event</strong><span>Qualified through relative strength and trend.</span></li>';
     const risks = (leader.risks || []).map(risk => `<li><strong>${escapeRadarHtml(risk.label)}</strong><span>−${Number(risk.penalty || 0)} points</span></li>`).join('') || '<li><strong>No active Radar risk flag</strong><span>Risk can still exist outside this model.</span></li>';
+    const etfMetadata=state.activeScope===MARKET_RADAR_SCOPES.SECTOR_INDEX?'':`
+      <section><h3>ETF representative</h3><div class="index-radar-detail-grid">
+        ${metricRow('Scope',activeConfig().shortName)}
+        ${metricRow('Category',categoryLabel(leader.assetCategory||leader.category))}
+        ${metricRow('Theme Group',leader.themeLabel||leader.themeGroup||'—')}
+        ${metricRow('20D avg amount',formatRmbAmount(leader.averageAmount20D))}
+      </div><p>One most-liquid ETF represents this Theme Group. Amount is transaction value, not fund flow.</p></section>`;
     content.innerHTML = `<div class="index-radar-detail">
       <div class="index-radar-detail__source"><span class="fibo-analysis-source fibo-analysis-source--official">Official Close · ${escapeRadarHtml(state.snapshot.tradeDate)}</span><span>${escapeRadarHtml(leader.market)} · ${escapeRadarHtml(leader.code)} · ${escapeRadarHtml(leader.themeLabel || leader.themeGroup)}</span></div>
       <section><h3>Score ${formatRadarNumber(leader.score,1)}</h3><div class="index-radar-detail-grid">
@@ -220,6 +316,7 @@ function openDetails(index,trigger) {
         ${metricRow('MA60 slope',formatRadarSigned(leader.metrics.ma60SlopePct,4))}
         ${metricRow('Distance to MA60',formatRadarSigned(leader.metrics.distanceMA60Pct))}
       </div></section>
+      ${etfMetadata}
       <section class="index-radar-detail-columns"><div><h3>Events</h3><ul>${events}</ul></div><div><h3>Risks</h3><ul>${risks}</ul></div></section>
       <section><h3>Leadership Memory</h3><p>Consecutive <strong>${history.consecutive}D</strong> · 13D <strong>${history.days13??'—'}×</strong> · 60D <strong>${history.days60??'—'}×</strong>. Counts aggregate final leaders by Theme Group using ${escapeRadarHtml(historyCoverage)}.</p></section>
       <p class="index-radar-disclaimer">Context only. This ranking is not a probability, target price or buy signal and never changes Terminal Composite Signal.</p>
@@ -284,7 +381,7 @@ function renderMemoryModal() {
     <section><h3>Daily history</h3><div class="index-radar-memory-daily">${daily}</div>
       ${remaining?`<button type="button" class="fibo-button fibo-button--control index-radar-memory-expand" data-index-radar-memory-expand>Show earlier ${remaining} sessions</button>`:''}
     </section>
-    <p class="index-radar-disclaimer">This is persistence among final Top 5 snapshots, not the stored raw ranking of all eligible indices and not a trading signal.</p>
+    <p class="index-radar-disclaimer">This is persistence among final Top 5 snapshots for the active Radar scope, not a stored raw ranking of every eligible candidate and not a trading signal.</p>
   </div>`;
 }
 
@@ -303,44 +400,98 @@ function expandMemoryHistory() {
   renderMemoryModal();
 }
 
-async function load() {
-  if (!state.client || state.loading) return;
-  state.loading = true;
-  setStatus('<span class="index-radar-loading-label"><span class="material-icons" aria-hidden="true">sync</span>Loading official index snapshot…</span>');
-  renderMessage('Loading Index Radar','Reading the latest precomputed official-close leaderboard.');
+function applyCachedScope(entry) {
+  state.snapshot=entry.snapshot;
+  state.memory=entry.memory;
+  state.historyError=entry.historyError;
+  if (!entry.snapshot) {
+    setStatus('Waiting for first '+activeConfig().shortName+' Backfill');
+    renderMessage(activeConfig().waitingTitle,activeConfig().waitingMessage,{retry:true});
+    return;
+  }
+  renderSnapshot(entry.snapshot,entry.checkpoint);
+}
+
+async function load(scope=state.activeScope,{ force=false }={}) {
+  if (!state.client || state.loadingScopes.has(scope)) return;
+  if (!force && state.cache.has(scope)) {
+    if (scope===state.activeScope) applyCachedScope(state.cache.get(scope));
+    return;
+  }
+  state.loadingScopes.add(scope);
+  if (scope===state.activeScope) {
+    const config=activeConfig();
+    setStatus('<span class="index-radar-loading-label"><span class="material-icons" aria-hidden="true">sync</span>Loading official snapshot…</span>');
+    renderMessage(config.loadingTitle,'Reading the latest precomputed official-close leaderboard.');
+  }
   try {
-    const result = await loadLatestIndexRadar(state.client);
+    const result = await loadMarketRadar(state.client,scope);
     if (result.error) throw result.error;
     const snapshot = normalizeRadarSnapshot(result.snapshot);
+    const entry={
+      snapshot,
+      checkpoint:result.checkpoint,
+      historyError:result.historyError||null,
+      memory:snapshot
+        ? buildLeadershipMemory(result.historyError?[]:result.snapshots,{ latestSnapshot:result.snapshot })
+        : null,
+    };
+    state.cache.set(scope,entry);
+    if (scope!==state.activeScope) return;
     if (!snapshot) {
-      state.snapshot = null;
-      state.memory = null;
-      state.historyError = null;
-      setStatus('Waiting for first Index Backfill');
-      renderMessage('Index Radar is not ready','Run the Index BaoStock smoke and backfill after applying the Radar migration.',{retry:true});
+      applyCachedScope(entry);
       return;
     }
-    state.snapshot = snapshot;
-    state.historyError=result.historyError||null;
-    state.memory=buildLeadershipMemory(result.historyError?[]:result.snapshots,{ latestSnapshot:result.snapshot });
-    renderSnapshot(snapshot,result.checkpoint);
+    applyCachedScope(entry);
   } catch (error) {
-    state.memory=null;
-    state.historyError=null;
-    setStatus('<span class="index-radar-sync-warning"><span class="material-icons" aria-hidden="true">error_outline</span>Snapshot unavailable</span>','is-error');
-    renderMessage('Could not load Index Radar',error?.message || 'The Supabase snapshot request failed.',{retry:true,error:true});
+    if (scope===state.activeScope) {
+      state.snapshot=null;
+      state.memory=null;
+      state.historyError=null;
+      setStatus('<span class="index-radar-sync-warning"><span class="material-icons" aria-hidden="true">error_outline</span>Snapshot unavailable</span>','is-error');
+      renderMessage('Could not load '+activeConfig().shortName+' Radar',error?.message || 'The Supabase snapshot request failed.',{retry:true,error:true});
+    }
   } finally {
-    state.loading = false;
+    state.loadingScopes.delete(scope);
   }
+}
+
+function selectScope(scope,{ focus=false }={}) {
+  if (!SCOPE_CONFIG[scope]) return;
+  state.activeScope=scope;
+  state.activeMemoryPeriod=null;
+  state.expandedMemoryPeriod=null;
+  renderScopeChrome();
+  const button=byId('indexRadarMode')?.querySelector('[data-market-radar-scope="'+scope+'"]');
+  if (focus) button?.focus();
+  if (state.cache.has(scope)) applyCachedScope(state.cache.get(scope));
+  else load(scope);
+}
+
+function handleScopeKeydown(event) {
+  if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+  const buttons=[...byId('indexRadarMode')?.querySelectorAll('[data-market-radar-scope]')||[]];
+  if (!buttons.length) return;
+  event.preventDefault();
+  const current=Math.max(0,buttons.indexOf(event.target));
+  const index=event.key==='Home'?0
+    :event.key==='End'?buttons.length-1
+      :(current+(event.key==='ArrowRight'?1:-1)+buttons.length)%buttons.length;
+  selectScope(buttons[index].dataset.marketRadarScope,{ focus:true });
 }
 
 function bindEvents() {
   if (state.bound) return;
   state.bound = true;
   byId('indexRadarHelpButton')?.addEventListener('click',event => openGuide(event.currentTarget));
+  byId('indexRadarMode')?.addEventListener('click',event=>{
+    const button=event.target.closest('[data-market-radar-scope]');
+    if (button) selectScope(button.dataset.marketRadarScope);
+  });
+  byId('indexRadarMode')?.addEventListener('keydown',handleScopeKeydown);
   byId('indexRadarViewport')?.addEventListener('click',event => {
     const retry = event.target.closest('[data-index-radar-retry]');
-    if (retry) { load(); return; }
+    if (retry) { load(state.activeScope,{ force:true }); return; }
     const memoryCard = event.target.closest('[data-index-radar-memory]');
     if (memoryCard) { openMemory(memoryCard.dataset.indexRadarMemory,memoryCard); return; }
     const card = event.target.closest('[data-index-radar-leader]');
@@ -369,5 +520,6 @@ export function initializeIndexRadar({ client }) {
   if (!byId('indexRadar')) return;
   state.client = client;
   bindEvents();
-  load();
+  renderScopeChrome();
+  load(state.activeScope);
 }

@@ -1233,7 +1233,7 @@ import { initializeIndexRadar } from './index-radar-controller.js';
                 <div class="macd-suggestion-summary">
                     <div class="macd-suggestion-summary__top">
                         <span class="fibo-analysis-source fibo-analysis-source--${pending.selectedBasis}">${escapePoolHtml(sourceLabel)}</span>
-                        <div class="macd-basis-toggle" role="group" aria-label="MACD analysis basis">
+                        <div class="fibo-segmented-control macd-basis-toggle" role="group" aria-label="MACD analysis basis">
                             <button type="button" class="${pending.selectedBasis==='official'?'is-active':''}" data-fibo-click="selectMacdSuggestionBasis('official')" aria-pressed="${pending.selectedBasis==='official'}">Official</button>
                             <button type="button" class="${pending.selectedBasis==='preview'?'is-active':''}" data-fibo-click="selectMacdSuggestionBasis('preview')" aria-pressed="${pending.selectedBasis==='preview'}" ${hasPreview?'':'disabled'}>Preview</button>
                         </div>

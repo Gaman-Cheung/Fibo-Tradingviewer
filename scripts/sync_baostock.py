@@ -12,6 +12,7 @@ dependency on Pool, permanent IDs, DOM code, or trading algorithms.
 from __future__ import annotations
 
 import argparse
+from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 import json
 import os
@@ -24,6 +25,15 @@ from zoneinfo import ZoneInfo
 import requests
 
 try:
+    from .etf_radar import (
+        ALGORITHM_VERSION as ETF_RADAR_ALGORITHM_VERSION,
+        ETF_SCOPES,
+        MIN_AVERAGE_AMOUNT_20D,
+        UNIVERSE_VERSION as ETF_RADAR_UNIVERSE_VERSION,
+        build_etf_historical_snapshots,
+        is_seeded_etf,
+        normalize_etf_universe,
+    )
     from .index_radar import (
         ALGORITHM_VERSION as RADAR_ALGORITHM_VERSION,
         BENCHMARK_CODE,
@@ -36,6 +46,15 @@ try:
         symbol_key,
     )
 except ImportError:  # Direct `python scripts/sync_baostock.py` execution.
+    from etf_radar import (
+        ALGORITHM_VERSION as ETF_RADAR_ALGORITHM_VERSION,
+        ETF_SCOPES,
+        MIN_AVERAGE_AMOUNT_20D,
+        UNIVERSE_VERSION as ETF_RADAR_UNIVERSE_VERSION,
+        build_etf_historical_snapshots,
+        is_seeded_etf,
+        normalize_etf_universe,
+    )
     from index_radar import (
         ALGORITHM_VERSION as RADAR_ALGORITHM_VERSION,
         BENCHMARK_CODE,
@@ -52,9 +71,12 @@ except ImportError:  # Direct `python scripts/sync_baostock.py` execution.
 PROVIDER = "baostock"
 SCOPE = "CN_A"
 INDEX_SCOPE = "CN_INDEX"
+ETF_SCOPE = "CN_ETF"
 RETENTION_SESSIONS = 400
+ETF_RETENTION_SESSIONS = 144
 MIN_DAILY_ROWS = 4000
 MIN_INDEX_COUNT = 450
+MIN_ETF_DAILY_ROWS = 300
 UPLOAD_BATCH_SIZE = 1000
 MAX_DAILY_CATCHUP = 5
 INDEX_QUERY_CODE_BATCH = 80
@@ -139,6 +161,54 @@ def normalize_index_rows(rows: Iterable[dict], synced_at: str) -> tuple[list[dic
         high_text, low_text = str(row.get("high", "")).strip(), str(row.get("low", "")).strip()
         try:
             high, low = float(high_text), float(low_text)
+        except (TypeError, ValueError):
+            continue
+        if high > 0 and low > 0:
+            key = symbol_key(market, code)
+            intraday.setdefault(key, {})[trade_date] = {
+                "date": trade_date,
+                "high": high,
+                "low": low,
+            }
+    return normalized, intraday
+
+
+def normalize_etf_rows(rows: Iterable[dict], synced_at: str) -> tuple[list[dict], dict[str, dict[str, dict]]]:
+    """Keep only the ETF fields required by Radar; High/Low remain transient."""
+    normalized: list[dict] = []
+    intraday: dict[str, dict[str, dict]] = {}
+    for row in rows:
+        raw_symbol = str(row.get("code", "")).strip().lower()
+        if not (raw_symbol.startswith("sh.") or raw_symbol.startswith("sz.")):
+            continue
+        market, code = raw_symbol.split(".", 1)
+        trade_date = str(row.get("date", ""))[:10]
+        try:
+            close = float(str(row.get("close", "")).strip())
+        except (TypeError, ValueError):
+            continue
+        if len(code) != 6 or not code.isdigit() or not trade_date or close <= 0:
+            continue
+        pct_text = str(row.get("pctChg", "")).strip()
+        amount_text = str(row.get("amount", "")).strip()
+        try:
+            amount = float(amount_text) if amount_text else None
+        except (TypeError, ValueError):
+            amount = None
+        normalized.append({
+            "provider": PROVIDER,
+            "market": market.upper(),
+            "code": code,
+            "trade_date": trade_date,
+            "close": close,
+            "pct_chg": float(pct_text) if pct_text else None,
+            "trade_status": str(row.get("tradestatus", "1")) == "1",
+            "amount": amount if amount is not None and amount >= 0 else None,
+            "synced_at": synced_at,
+        })
+        try:
+            high = float(str(row.get("high", "")).strip())
+            low = float(str(row.get("low", "")).strip())
         except (TypeError, ValueError):
             continue
         if high > 0 and low > 0:
@@ -346,6 +416,134 @@ class SupabaseRest:
                 timeout=120,
             )
 
+    def get_etf_catalog(self) -> list[dict]:
+        response = self._request(
+            "GET",
+            "market_etf_catalog",
+            params={"select": "*", "provider": f"eq.{PROVIDER}", "order": "market.asc,code.asc"},
+        )
+        return response.json()
+
+    def upsert_etf_catalog(self, rows: list[dict]) -> None:
+        if not rows:
+            return
+        headers = {**self.headers, "Prefer": "resolution=merge-duplicates,return=minimal"}
+        for batch in chunks(rows):
+            self._request(
+                "POST",
+                "market_etf_catalog?on_conflict=provider,market,code",
+                headers=headers,
+                data=json.dumps(batch, ensure_ascii=False, separators=(",", ":")),
+            )
+
+    def load_etf_history(self, catalog: list[dict], start_date: str) -> list[dict]:
+        """Read only reviewed ETF symbols plus CSI300; never all market rows."""
+        symbols = {
+            (str(row.get("market", "")), str(row.get("code", "")))
+            for row in catalog if row.get("active", True) and row.get("radar_enabled")
+        }
+        symbols.add((BENCHMARK_MARKET, BENCHMARK_CODE))
+        rows: list[dict] = []
+        for market in ("SH", "SZ"):
+            codes = sorted(code for item_market, code in symbols if item_market == market)
+            for code_batch in chunks(codes, INDEX_QUERY_CODE_BATCH):
+                offset = 0
+                while True:
+                    response = self._request(
+                        "GET",
+                        "market_daily_bar",
+                        params={
+                            "select": "market,code,trade_date,close,pct_chg,trade_status,amount",
+                            "provider": f"eq.{PROVIDER}",
+                            "market": f"eq.{market}",
+                            "code": f"in.({','.join(code_batch)})",
+                            "trade_date": f"gte.{start_date}",
+                            "order": "trade_date.asc,code.asc",
+                            "limit": "1000",
+                            "offset": str(offset),
+                        },
+                        timeout=120,
+                    )
+                    page = response.json()
+                    rows.extend(page)
+                    if len(page) < 1000:
+                        break
+                    offset += len(page)
+        return rows
+
+    def get_etf_radar_snapshots(self, scope: str, limit: int = 30, before: str | None = None) -> list[dict]:
+        params = {
+            "select": "*",
+            "provider": f"eq.{PROVIDER}",
+            "scope": f"eq.{scope}",
+            "order": "trade_date.desc",
+            "limit": str(limit),
+        }
+        if before:
+            params["trade_date"] = f"lt.{before}"
+        response = self._request("GET", "market_etf_radar_snapshot", params=params)
+        return list(reversed(response.json()))
+
+    def delete_etf_radar_snapshot_dates(self, scope: str, trade_dates: list[str]) -> None:
+        for date_batch in chunks(sorted(set(trade_dates)), 100):
+            self._request(
+                "DELETE",
+                "market_etf_radar_snapshot",
+                params={
+                    "provider": f"eq.{PROVIDER}",
+                    "scope": f"eq.{scope}",
+                    "trade_date": f"in.({','.join(date_batch)})",
+                },
+                headers={**self.headers, "Prefer": "return=minimal"},
+            )
+
+    def prune_etf_radar_snapshots_before(self, scope: str, cutoff: str) -> None:
+        self._request(
+            "DELETE",
+            "market_etf_radar_snapshot",
+            params={"provider": f"eq.{PROVIDER}", "scope": f"eq.{scope}", "trade_date": f"lt.{cutoff}"},
+            headers={**self.headers, "Prefer": "return=minimal"},
+        )
+
+    def upsert_etf_radar_snapshots(self, rows: list[dict]) -> None:
+        if not rows:
+            return
+        headers = {**self.headers, "Prefer": "resolution=merge-duplicates,return=minimal"}
+        payload = [{**row, "computed_at": utc_now()} for row in rows]
+        for batch in chunks(payload, 100):
+            self._request(
+                "POST",
+                "market_etf_radar_snapshot?on_conflict=provider,scope,trade_date",
+                headers=headers,
+                data=json.dumps(batch, ensure_ascii=False, separators=(",", ":")),
+                timeout=120,
+            )
+
+    def prune_etf_before(self, cutoff: str, catalog: list[dict]) -> None:
+        """Delete old rows only for catalogued ETF codes.
+
+        This method must stay separate from ``prune_before``: a global
+        144-session cutoff would destroy the 400-session A-share/index store.
+        """
+        for market in ("SH", "SZ"):
+            codes = sorted({
+                str(row.get("code", "")) for row in catalog
+                if row.get("market") == market and len(str(row.get("code", ""))) == 6
+            })
+            for code_batch in chunks(codes, INDEX_QUERY_CODE_BATCH):
+                self._request(
+                    "DELETE",
+                    "market_daily_bar",
+                    params={
+                        "provider": f"eq.{PROVIDER}",
+                        "market": f"eq.{market}",
+                        "code": f"in.({','.join(code_batch)})",
+                        "trade_date": f"lt.{cutoff}",
+                    },
+                    headers={**self.headers, "Prefer": "return=minimal"},
+                    timeout=120,
+                )
+
 
 class BaoStockClient:
     def __init__(self, timeout_seconds: int = 45) -> None:
@@ -412,6 +610,12 @@ class BaoStockClient:
         return self.query(
             f"all A shares for {trade_date}",
             lambda: self.bs.query_daily_history_k_AStock(date=trade_date),
+        )
+
+    def daily_etfs(self, trade_date: str) -> list[dict]:
+        return self.query(
+            f"all ETFs for {trade_date}",
+            lambda: self.bs.query_daily_history_k_ETF(date=trade_date),
         )
 
     def all_securities(self, trade_date: str) -> list[dict]:
@@ -803,13 +1007,327 @@ def run_index_sync(args, client: BaoStockClient, db: SupabaseRest) -> None:
         raise
 
 
+def discover_etf_catalog(
+    client: BaoStockClient,
+    db: SupabaseRest | None,
+    trade_date: str,
+    raw_etf_rows: list[dict] | None = None,
+) -> tuple[list[dict], list[dict]]:
+    """Discover every ETF but enable Radar only for reviewed code seeds."""
+    raw_etf_rows = list(raw_etf_rows) if raw_etf_rows is not None else client.daily_etfs(trade_date)
+    if len(raw_etf_rows) < MIN_ETF_DAILY_ROWS:
+        raise RuntimeError(
+            f"ETF discovery returned only {len(raw_etf_rows):,} rows for {trade_date}; "
+            f"expected at least {MIN_ETF_DAILY_ROWS:,}."
+        )
+    names: dict[str, str] = {}
+    try:
+        for row in client.all_securities(trade_date):
+            raw = str(row.get("code", "")).strip().lower()
+            name = str(row.get("code_name", row.get("name", ""))).strip()
+            if raw and name:
+                names[raw] = name
+    except Exception as exc:
+        # Names are display metadata. A transient all-stock lookup must not
+        # prevent raw ETF synchronization when the code-keyed seed is enough.
+        print(f"[ETF NAME WARNING] Could not refresh official names: {exc}", flush=True)
+
+    discovered = normalize_etf_universe(raw_etf_rows, names)
+    enabled = sum(1 for row in discovered if row["radar_enabled"] and row["active"])
+    print(f"[ETF] discovered={len(discovered):,}, radar-enabled={enabled:,}", flush=True)
+    unseeded = [row for row in discovered if not is_seeded_etf(row["market"], row["code"])]
+    if unseeded:
+        sample = ", ".join(f"{row['market']}.{row['code']} {row['name']}" for row in unseeded[:8])
+        print(
+            f"[ETF CLASSIFICATION WARNING] {len(unseeded):,} code(s) are absent from ETF universe "
+            f"v{ETF_RADAR_UNIVERSE_VERSION}; raw rows remain stored but Radar-disabled. Sample: {sample}",
+            flush=True,
+        )
+    if db is None:
+        return discovered, raw_etf_rows
+
+    existing = {symbol_key(row["market"], row["code"]): row for row in db.get_etf_catalog()}
+    synced_at = utc_now()
+    merged: list[dict] = []
+    seen: set[str] = set()
+    for row in discovered:
+        key = symbol_key(row["market"], row["code"])
+        seen.add(key)
+        merged.append({**existing.get(key, {}), **row, "synced_at": synced_at})
+    for key, row in existing.items():
+        if key not in seen and row.get("active"):
+            merged.append({**row, "active": False, "synced_at": synced_at})
+    db.upsert_etf_catalog(merged)
+    return sorted(merged, key=lambda item: (item["market"], item["code"])), raw_etf_rows
+
+
+def run_etf_smoke(client: BaoStockClient, sessions: int) -> None:
+    cutoff = completed_market_date()
+    dates = recent_trading_dates(client, max(62, min(sessions, ETF_RETENTION_SESSIONS)), cutoff)
+    raw_rows: list[dict] = []
+    trade_date = dates[-1]
+    # BaoStock can publish the trade calendar shortly before the bulk ETF
+    # snapshot. Look back up to five official sessions for a diagnostic sample.
+    for candidate_date in reversed(dates[-5:]):
+        raw_rows = client.daily_etfs(candidate_date)
+        if len(raw_rows) >= MIN_ETF_DAILY_ROWS:
+            trade_date = candidate_date
+            break
+    catalog, _ = discover_etf_catalog(client, None, trade_date, raw_rows)
+    normalized, _ = normalize_etf_rows(raw_rows, utc_now())
+    if len(normalized) < MIN_ETF_DAILY_ROWS:
+        raise RuntimeError(f"ETF smoke returned only {len(normalized):,} valid rows.")
+    amount_count = sum(row.get("amount") is not None for row in normalized)
+    if amount_count / len(normalized) < MIN_RADAR_COVERAGE:
+        raise RuntimeError(f"ETF smoke amount coverage is only {amount_count}/{len(normalized)}.")
+    scopes = {row.get("radar_scope") for row in catalog if row.get("radar_enabled")}
+    if not set(ETF_SCOPES).issubset(scopes):
+        raise RuntimeError("Reviewed ETF catalog does not expose both EQUITY_ETF and CROSS_ASSET scopes.")
+    print(
+        f"PASS: BaoStock ETF endpoint returned {len(normalized):,} rows for {trade_date}; "
+        f"amount coverage={amount_count/len(normalized):.1%}. Supabase was not used.",
+        flush=True,
+    )
+
+
+def _etf_catalog_progress(catalog: list[dict], rows: list[dict]) -> list[dict]:
+    by_key: dict[str, list[str]] = defaultdict(list)
+    for row in rows:
+        by_key[symbol_key(row["market"], row["code"])].append(str(row["trade_date"]))
+    synced_at = utc_now()
+    updated: list[dict] = []
+    for item in catalog:
+        dates = sorted(by_key.get(symbol_key(item["market"], item["code"]), []))
+        if not dates:
+            continue
+        previous_from = str(item.get("history_from") or "")
+        previous_latest = str(item.get("latest_trade_date") or "")
+        row = {
+            **item,
+            "history_from": min(value for value in (previous_from, dates[0]) if value),
+            "latest_trade_date": max(value for value in (previous_latest, dates[-1]) if value),
+            "last_status": "ok",
+            "last_error": None,
+            "synced_at": synced_at,
+        }
+        item.update(row)
+        updated.append(row)
+    return updated
+
+
+def publish_etf_radar_snapshots(
+    db: SupabaseRest,
+    scope: str,
+    snapshots: list[dict],
+    target_dates: list[str],
+    retention_start: str,
+) -> None:
+    built_dates = {snapshot["trade_date"] for snapshot in snapshots}
+    if not snapshots:
+        raise RuntimeError(f"{scope} produced no Radar snapshots.")
+    first_built_index = target_dates.index(snapshots[0]["trade_date"])
+    missing = [value for value in target_dates[first_built_index:] if value not in built_dates]
+    if missing:
+        raise RuntimeError(f"{scope} snapshot sequence has {len(missing)} gap(s); first is {missing[0]}.")
+    db.upsert_etf_radar_snapshots(snapshots)
+    db.delete_etf_radar_snapshot_dates(scope, target_dates[:first_built_index])
+    db.prune_etf_radar_snapshots_before(scope, retention_start)
+
+
+def _etf_target_dates(args, client: BaoStockClient, retention_dates: list[str], cutoff: date, checkpoint: dict) -> list[str]:
+    if args.mode == "backfill":
+        cursor = str(checkpoint.get("backfill_cursor") or "")
+        return [value for value in retention_dates if not cursor or value > cursor]
+    if args.mode == "repair":
+        if not args.start or not args.end:
+            raise ValueError("repair mode requires --start and --end.")
+        start_date, end_date = date.fromisoformat(args.start), date.fromisoformat(args.end)
+        if start_date > end_date:
+            raise ValueError("--start must not be later than --end.")
+        return [
+            value for value in client.trading_dates(start_date, min(end_date, cutoff))
+            if value >= retention_dates[0]
+        ]
+    # Daily intentionally re-fetches five sessions so delayed amount/pctChg
+    # corrections are idempotently incorporated.
+    return retention_dates[-5:]
+
+
+def _run_etf_sync(args, client: BaoStockClient, db: SupabaseRest) -> None:
+    cutoff = completed_market_date()
+    retention_dates = recent_trading_dates(client, args.etf_sessions, cutoff)
+    latest_date = retention_dates[-1]
+    latest_raw = client.daily_etfs(latest_date)
+    if len(latest_raw) < MIN_ETF_DAILY_ROWS:
+        # A just-finished session may not have reached the bulk endpoint yet.
+        for candidate_date in reversed(retention_dates[-5:-1]):
+            candidate = client.daily_etfs(candidate_date)
+            if len(candidate) >= MIN_ETF_DAILY_ROWS:
+                latest_date, latest_raw = candidate_date, candidate
+                retention_dates = [value for value in retention_dates if value <= latest_date]
+                break
+    catalog, latest_raw = discover_etf_catalog(client, db, latest_date, latest_raw)
+    known_catalog_keys = {symbol_key(row["market"], row["code"]) for row in catalog}
+    checkpoint = db.get_checkpoint(ETF_SCOPE)
+    target_dates = _etf_target_dates(args, client, retention_dates, cutoff, checkpoint)
+    if not target_dates and args.mode != "backfill":
+        print(f"[ETF] No pending dates for {args.mode} mode.", flush=True)
+        db.save_checkpoint(
+            ETF_SCOPE, last_status="ok", last_error=None, last_mode=args.mode,
+            retention_sessions=args.etf_sessions,
+        )
+        return
+    if not target_dates:
+        print("[ETF] Raw backfill cursor is complete; validating and rebuilding both Radar scopes...", flush=True)
+
+    db.save_checkpoint(
+        ETF_SCOPE,
+        last_status="running",
+        last_error=None,
+        last_mode=args.mode,
+        retention_sessions=args.etf_sessions,
+        last_row_count=len(catalog),
+    )
+    latest_cache = {latest_date: latest_raw}
+    intraday_by_symbol: dict[str, dict[str, dict]] = {}
+    uploaded_rows = 0
+    try:
+        for position, trade_date in enumerate(target_dates, 1):
+            print(f"[ETF PROGRESS] {position}/{len(target_dates)} · {trade_date}", flush=True)
+            raw = latest_cache.get(trade_date) or client.daily_etfs(trade_date)
+            persistent, transient = normalize_etf_rows(raw, utc_now())
+            if len(persistent) < MIN_ETF_DAILY_ROWS:
+                raise RuntimeError(
+                    f"{trade_date} returned only {len(persistent):,} valid ETF rows; "
+                    "nothing was uploaded for that date and the checkpoint did not advance."
+                )
+            amount_count = sum(row.get("amount") is not None for row in persistent)
+            if amount_count / len(persistent) < MIN_RADAR_COVERAGE:
+                raise RuntimeError(
+                    f"{trade_date} ETF amount coverage is only {amount_count}/{len(persistent)}; upload aborted."
+                )
+            newly_seen = [
+                row for row in normalize_etf_universe(raw)
+                if symbol_key(row["market"], row["code"]) not in known_catalog_keys
+            ]
+            if trade_date != latest_date:
+                for row in newly_seen:
+                    row["active"] = False
+            if newly_seen:
+                db.upsert_etf_catalog(newly_seen)
+                catalog.extend(newly_seen)
+                known_catalog_keys.update(symbol_key(row["market"], row["code"]) for row in newly_seen)
+            db.upsert_daily_rows(persistent)
+            uploaded_rows += len(persistent)
+            for key, values in transient.items():
+                intraday_by_symbol.setdefault(key, {}).update(values)
+            progress = _etf_catalog_progress(catalog, persistent)
+            db.upsert_etf_catalog(progress)
+            values = {
+                "last_status": "running",
+                "last_error": None,
+                "last_mode": args.mode,
+                "last_row_count": len(persistent),
+                "oldest_trade_date": retention_dates[0],
+                "retention_sessions": args.etf_sessions,
+            }
+            if args.mode == "backfill":
+                values["backfill_cursor"] = trade_date
+            db.save_checkpoint(ETF_SCOPE, **values)
+            checkpoint.update(values)
+
+        catalog = db.get_etf_catalog()
+        full_rebuild = args.mode in ("backfill", "repair")
+        build_plan: dict[str, tuple[list[dict], list[str], list[dict]]] = {}
+        for scope in ETF_SCOPES:
+            latest_snapshots = db.get_etf_radar_snapshots(scope, limit=1)
+            latest_snapshot = latest_snapshots[-1] if latest_snapshots else None
+            version_changed = bool(latest_snapshot) and (
+                int(latest_snapshot.get("algorithm_version") or 0) != ETF_RADAR_ALGORITHM_VERSION
+                or int(latest_snapshot.get("universe_version") or 0) != ETF_RADAR_UNIVERSE_VERSION
+            )
+            rebuild_scope = full_rebuild or not latest_snapshot or version_changed
+            snapshot_dates = retention_dates if rebuild_scope else retention_dates[-5:]
+            priors = [] if rebuild_scope else db.get_etf_radar_snapshots(scope, limit=30, before=snapshot_dates[0])
+            build_plan[scope] = ([], snapshot_dates, priors)
+
+        print(f"[ETF RADAR] loading {args.etf_sessions} sessions from {retention_dates[0]}...", flush=True)
+        market_rows = db.load_etf_history(catalog, retention_dates[0])
+        print(f"      loaded {len(market_rows):,} ETF/benchmark rows; building both scopes...", flush=True)
+        for scope, (_, snapshot_dates, priors) in list(build_plan.items()):
+            snapshots = build_etf_historical_snapshots(
+                catalog,
+                market_rows,
+                snapshot_dates,
+                scope,
+                prior_snapshots=priors,
+                intraday_by_symbol=intraday_by_symbol,
+            )
+            if not snapshots or snapshots[-1]["trade_date"] != snapshot_dates[-1]:
+                raise RuntimeError(
+                    f"{scope} did not produce {snapshot_dates[-1]}; check CSI300, the 95% coverage gate, "
+                    f"and the RMB {MIN_AVERAGE_AMOUNT_20D:,.0f} 20D liquidity rule."
+                )
+            build_plan[scope] = (snapshots, snapshot_dates, priors)
+
+        # Build and validate both scopes before publishing either one.
+        for scope, (snapshots, snapshot_dates, _) in build_plan.items():
+            publish_etf_radar_snapshots(db, scope, snapshots, snapshot_dates, retention_dates[0])
+
+        print(
+            f"[ETF RETENTION] deleting only catalogued ETF rows before {retention_dates[0]}; "
+            "A-share/index rows are untouched...",
+            flush=True,
+        )
+        db.prune_etf_before(retention_dates[0], catalog)
+        db.save_checkpoint(
+            ETF_SCOPE,
+            last_status="ok",
+            last_error=None,
+            last_mode=args.mode,
+            latest_trade_date=max(str(checkpoint.get("latest_trade_date") or latest_date), latest_date),
+            oldest_trade_date=retention_dates[0],
+            retention_sessions=args.etf_sessions,
+            last_row_count=uploaded_rows,
+        )
+        print("[OK] ETF sync completed; Equity and Cross Asset Radar snapshots published.", flush=True)
+    except Exception as exc:
+        db.save_checkpoint(
+            ETF_SCOPE,
+            last_status="error",
+            last_error=str(exc)[:1000],
+            last_mode=args.mode,
+            retention_sessions=args.etf_sessions,
+        )
+        raise
+
+
+def run_etf_sync(args, client: BaoStockClient, db: SupabaseRest) -> None:
+    """Run ETF synchronization and always persist terminal failure on CN_ETF."""
+    try:
+        _run_etf_sync(args, client, db)
+    except Exception as exc:
+        try:
+            db.save_checkpoint(
+                ETF_SCOPE,
+                last_status="error",
+                last_error=str(exc)[:1000],
+                last_mode=args.mode,
+                retention_sessions=args.etf_sessions,
+            )
+        except Exception as checkpoint_error:
+            print(f"[ETF CHECKPOINT WARNING] Could not record failure: {checkpoint_error}", flush=True)
+        raise
+
+
 def parse_args(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(description="BaoStock full-market synchronization")
     parser.add_argument("--mode", choices=("smoke", "daily", "backfill", "repair"), default="daily")
-    parser.add_argument("--dataset", choices=("a-shares", "indices", "all"), default="all")
+    parser.add_argument("--dataset", choices=("a-shares", "indices", "etfs", "all"), default="all")
     parser.add_argument("--start", help="Repair start date (YYYY-MM-DD)")
     parser.add_argument("--end", help="Repair end date (YYYY-MM-DD)")
     parser.add_argument("--sessions", type=int, default=RETENTION_SESSIONS)
+    parser.add_argument("--etf-sessions", type=int, default=ETF_RETENTION_SESSIONS)
     return parser.parse_args(argv)
 
 
@@ -817,6 +1335,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if not 240 <= args.sessions <= RETENTION_SESSIONS:
         raise ValueError(f"--sessions must be between 240 and {RETENTION_SESSIONS}.")
+    if not 120 <= args.etf_sessions <= ETF_RETENTION_SESSIONS:
+        raise ValueError(f"--etf-sessions must be between 120 and {ETF_RETENTION_SESSIONS}.")
     client = BaoStockClient()
     client.connect()
     try:
@@ -825,12 +1345,16 @@ def main(argv: list[str] | None = None) -> int:
                 run_smoke(client, args.sessions)
             if args.dataset in ("indices", "all"):
                 run_index_smoke(client, args.sessions)
+            if args.dataset in ("etfs", "all"):
+                run_etf_smoke(client, args.etf_sessions)
         else:
             db = SupabaseRest()
             if args.dataset in ("a-shares", "all"):
                 run_sync(args, client, db)
             if args.dataset in ("indices", "all"):
                 run_index_sync(args, client, db)
+            if args.dataset in ("etfs", "all"):
+                run_etf_sync(args, client, db)
     finally:
         client.close()
     return 0

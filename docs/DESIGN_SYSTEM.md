@@ -42,6 +42,7 @@ The following families are shared primitives. Their reusable geometry, typograph
 | Mobile bottom navigation | shared mobile-nav primitive | Active destination only |
 | Marquee and Pro Tips | shared header/content services | Text and behavior supplied by the app controller |
 | Cloud Push feedback | `fibo-button--cloud-up` plus shared `is-cloud-saving/is-cloud-saved` states | Which page-specific save operation runs |
+| Segmented choices | `fibo-segmented-control` | Which choices, active value and page placement |
 
 If a reusable primitive is not yet present, extract it before building the new page. Do not implement a page-prefixed approximation first and normalize it later.
 
@@ -108,6 +109,10 @@ The page stylesheet must not contain selectors beginning with `.fibo-header` or 
 - Mobile uses separate horizontal Scroll Snap containers for current leaders and Leadership Memory, disables autoplay and preserves 44px controls. `prefers-reduced-motion` also disables card movement transitions.
 - A disabled/no-data Radar must remain a quiet independent section and may never block or resize the Look First table into horizontal page overflow.
 - Radar owns one `fibo-help-button` in its section header. Cards never duplicate the help icon; clicking a card opens detail using the shared `fibo-modal` geometry.
+- Market Radar uses one shared `fibo-segmented-control` for Sector Index, Equity ETF and Cross Asset. Sector Index is the non-persisted refresh default; scope selection lives only for the page session.
+- The same segmented geometry is consumed by Terminal MACD Official/Preview. Page CSS may arrange or proportion the control but may not restyle its buttons, radius, focus, active or mobile-touch states.
+- Scope changes reuse the exact Leader card, detail modal and four Leadership Memory cards. Cross Asset may add one quiet neutral category pill; category colors or large colored surfaces are prohibited.
+- A compact header may wrap the segmented control. On mobile only the control itself may scroll horizontally; it must retain 44px targets and must not create page-level horizontal overflow.
 
 ## Trend Tracker chart forecast
 

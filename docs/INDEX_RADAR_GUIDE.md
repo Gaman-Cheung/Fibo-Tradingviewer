@@ -1,5 +1,7 @@
 # Index Radar Indicator Guide
 
+This is the default `Sector Index` mode in the shared Market Radar header. `Equity ETF` and `Cross Asset` use separate 144-session scopes documented in `docs/ETF_RADAR_GUIDE.md`; selecting them never changes or mixes this 400-session Index Radar v1 history.
+
 Algorithm version: **1**  
 Universe version: **1**  
 Data provider: **BaoStock official SH/SZ index daily data**

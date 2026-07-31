@@ -7,6 +7,8 @@ import { LEADERSHIP_MEMORY_VERSION } from './radar-memory.js';
 
 export const INDEX_RADAR_ALGORITHM_VERSION = 1;
 export const INDEX_RADAR_UNIVERSE_VERSION = 1;
+export const ETF_RADAR_ALGORITHM_VERSION = 1;
+export const ETF_RADAR_UNIVERSE_VERSION = 1;
 
 export const RADAR_EVENT_GUIDE = Object.freeze([
   ['MA60 Reclaim Confirmed', '+9', 'A reclaim is followed by two consecutive official closes above the contemporaneous MA60.'],
@@ -32,6 +34,12 @@ const eventRows = RADAR_EVENT_GUIDE.map(([name, score, meaning]) => `
   <tr><th>${name}</th><td><code>${score}</code></td><td>${meaning}</td></tr>`).join('');
 const riskRows = RADAR_RISK_GUIDE.map(([name, score, meaning]) => `
   <tr><th>${name}</th><td><code>${score}</code></td><td>${meaning}</td></tr>`).join('');
+const etfEventRows = RADAR_EVENT_GUIDE.map(([name, score, meaning]) => `
+  <tr><th>${name}</th><td><code>${score}</code></td><td>${meaning
+    .replace('index-to-CSI300','ETF-to-CSI300')
+    .replace('strong index','strong ETF')}</td></tr>`).join('');
+const etfRiskRows = RADAR_RISK_GUIDE.map(([name, score, meaning]) => `
+  <tr><th>${name}</th><td><code>${score}</code></td><td>${meaning.replace('The index','The ETF')}</td></tr>`).join('');
 
 export const INDEX_RADAR_GUIDE_HTML = `
   <div class="fibo-help-content index-radar-guide" data-radar-guide-version="${INDEX_RADAR_ALGORITHM_VERSION}" data-leadership-memory-version="${LEADERSHIP_MEMORY_VERSION}">
@@ -84,3 +92,59 @@ export const INDEX_RADAR_GUIDE_HTML = `
     <h3>Boundary</h3>
     <p>Index Radar is a context and attention tool—not a probability, price target, buy signal or promise. It never changes Terminal Composite Signal, Fibonacci, Stop, R:R, MACD, Trend Tracker or Wave calculations.</p>
   </div>`;
+
+function etfScopeGuide(scope) {
+  const cross=scope==='CROSS_ASSET';
+  const scopeName=cross?'Cross Asset':'Equity ETF';
+  const universe=cross
+    ? 'overseas equity, commodity, bond and money-market ETFs'
+    : 'domestic broad-market, sector, theme and strategy ETFs';
+  const categoryRule=cross
+    ? '<li>After strict Theme Group deduplication, overseas, commodity, bond and money categories can supply at most two final cards each. The stability buffer cannot break this cap.</li>'
+    : '<li>Equity ETF has no category quota after strict Theme Group deduplication.</li>';
+  return `
+    <div class="fibo-help-content index-radar-guide" data-radar-guide-version="${ETF_RADAR_ALGORITHM_VERSION}" data-radar-scope="${scope}" data-leadership-memory-version="${LEADERSHIP_MEMORY_VERSION}">
+      <h3>${scopeName} scope and official data</h3>
+      <p>This scope ranks explicitly reviewed ${universe}. BaoStock official Close, pctChg, Trade Status and Amount are retained for 144 official sessions. High/Low is used only during synchronization for Retest context and is then discarded.</p>
+      <p>Price history is made continuous from official <code>pctChg</code> and anchored to the latest official Close so distributions or splits do not create false MA events. Amount remains unadjusted and is used only as a liquidity measure.</p>
+
+      <h3>Score and entry gate</h3>
+      <p class="formula"><code>Score = 25 × PctRank(RS5) + 30 × PctRank(RS20) + Trend(0–30) + min(Event, 15) − Risk</code></p>
+      <ul>
+        <li><code>RS5 / RS20</code> = ETF 5/20-session continuous return minus CSI300 over the same official sessions. Percentile ranks are calculated only among eligible Theme representatives in this scope.</li>
+        <li>Trend uses Close above MA60 (+5), rising MA60 (+10), and <code>Close &gt; MA20 &gt; MA60</code> with both averages rising (+15).</li>
+        <li>A candidate needs at least 62 official sessions, Score ≥ 60, Close above MA60, positive RS5 or RS20 and no MA60 Breakdown.</li>
+        <li>At most five qualified leaders are shown. The board is allowed to contain fewer.</li>
+      </ul>
+
+      <h3>Liquidity and Theme representative</h3>
+      <ul>
+        <li>Within each Theme Group, only the ETF with the highest 20-session average official Amount can enter scoring.</li>
+        <li>If that representative averages less than RMB 20 million, the entire Theme Group is excluded. The model never substitutes a less-liquid second ETF.</li>
+        <li>A representative may change over time as liquidity changes. Leadership Memory continues by Theme Group, not by ETF code.</li>
+        <li>Amount is transaction value, not fund flow, subscription/redemption flow, capital inflow or fund size.</li>
+        ${categoryRule}
+      </ul>
+
+      <h3>Events</h3>
+      <div class="index-radar-guide__table"><table><thead><tr><th>Indicator</th><th>Score</th><th>Actual condition</th></tr></thead><tbody>${etfEventRows}</tbody></table></div>
+      <p>Event points are capped at 15. Retest, Healthy Retest and Near MA60 are context-only indicators and add no points.</p>
+
+      <h3>Risks</h3>
+      <div class="index-radar-guide__table"><table><thead><tr><th>State</th><th>Effect</th><th>Meaning</th></tr></thead><tbody>${etfRiskRows}</tbody></table></div>
+
+      <h3>Leadership Memory v${LEADERSHIP_MEMORY_VERSION}</h3>
+      <p>Yesterday, 3D Fast, 13D Swing and 60D Regime reuse the same final-Top-5 history rules as Sector Index. Ranks earn 5 / 4 / 3 / 2 / 1 points, mini cards show the first three themes, partial history is labelled Building, and incompatible Algorithm/Universe/Scope versions are never mixed.</p>
+
+      <h3>How to read the detail</h3>
+      <p>The detail separates score, returns, MA structure, official events, risk and the current representative's 20D average Amount. For Cross Asset, the quiet category label identifies overseas, commodity, bond or money without implying that unlike assets share the same economics.</p>
+
+      <h3>Boundary</h3>
+      <p>ETF Radar studies exchange prices, returns and liquidity only. It does not know NAV premium/discount, ETF flows, bond yield, commodity spot price or currency hedge exposure. It is not a probability, recommendation or buy signal and never changes Terminal Composite Signal.</p>
+    </div>`;
+}
+
+export const ETF_RADAR_GUIDE_HTML = Object.freeze({
+  EQUITY_ETF:etfScopeGuide('EQUITY_ETF'),
+  CROSS_ASSET:etfScopeGuide('CROSS_ASSET'),
+});

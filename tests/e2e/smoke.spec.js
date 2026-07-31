@@ -27,12 +27,36 @@ window.supabase={createClient(){
    return {provider:'baostock',trade_date:date,algorithm_version:1,universe_version:1,benchmark_market:'SH',benchmark_code:'000300',universe_count:507,eligible_count:171,coverage:.9825,leaders,computed_at:date+'T11:30:00Z'};
  });
  const radarSnapshot=radarSnapshots[0];
+ const etfRadarSnapshots={};
+ for(const scope of ['EQUITY_ETF','CROSS_ASSET']){
+   etfRadarSnapshots[scope]=radarSnapshots.map(snapshot=>({
+     ...snapshot,scope,universe_count:1385,eligible_count:scope==='EQUITY_ETF'?34:18,
+     leaders:snapshot.leaders.map((leader,index)=>({
+       ...leader,
+       name:scope==='EQUITY_ETF'?['CSI 300 ETF','Semiconductor ETF','New Energy ETF','Bank ETF','Dividend ETF'][index]:['NASDAQ 100 ETF','Gold ETF','Treasury Bond ETF','Money Market ETF','Hang Seng Tech ETF'][index],
+       category:scope==='EQUITY_ETF'?['equity_broad','equity_theme','equity_theme','equity_sector','equity_strategy'][index]:['overseas','commodity','bond','money','overseas'][index],
+       assetCategory:scope==='EQUITY_ETF'?['equity_broad','equity_theme','equity_theme','equity_sector','equity_strategy'][index]:['overseas','commodity','bond','money','overseas'][index],
+       themeGroup:scope==='EQUITY_ETF'?['csi300','semiconductor','new_energy','banking','dividend'][index]:['nasdaq100','gold','treasury_bond','money_market','hang_seng_tech'][index],
+       themeLabel:scope==='EQUITY_ETF'?['CSI 300','Semiconductor','New Energy','Banking','Dividend'][index]:['NASDAQ 100','Gold','Treasury Bond','Money Market','Hang Seng Tech'][index],
+       radarScope:scope,averageAmount20D:25000000+index*10000000,
+     })),
+   }));
+ }
  function builder(table){
    const filters={};
    let requestedLimit=0;
    return {
      select(){return this},eq(column,value){filters[column]=value;return this},limit(value){requestedLimit=value;return this},
-     order(){if(table==='market_daily_bar')window.__marketDailyBarOrders=(window.__marketDailyBarOrders||0)+1;return Promise.resolve({data:table==='market_daily_bar'&&filters.code==='300657'?marketRows:table==='market_index_radar_snapshot'?(requestedLimit===1?[radarSnapshot]:radarSnapshots):[],error:null})},
+     order(){
+       if(table==='market_daily_bar')window.__marketDailyBarOrders=(window.__marketDailyBarOrders||0)+1;
+       if(table==='market_etf_radar_snapshot'){
+         window.__etfRadarOrders=window.__etfRadarOrders||{};
+         window.__etfRadarOrders[filters.scope]=(window.__etfRadarOrders[filters.scope]||0)+1;
+         const rows=etfRadarSnapshots[filters.scope]||[];
+         return Promise.resolve({data:requestedLimit===1?[rows[0]]:rows,error:null});
+       }
+       return Promise.resolve({data:table==='market_daily_bar'&&filters.code==='300657'?marketRows:table==='market_index_radar_snapshot'?(requestedLimit===1?[radarSnapshot]:radarSnapshots):[],error:null});
+     },
      single(){return Promise.resolve({data:null,error:{code:'PGRST116'}})},
      maybeSingle(){return Promise.resolve({data:table==='market_sync_checkpoint'?{last_status:'success'}:null,error:null})},
      upsert(){return Promise.resolve({data:null,error:null})}
@@ -242,6 +266,55 @@ test('Look First Index Radar renders current leaders and Leadership Memory', asy
   }
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test('Market Radar switches lazy ETF scopes without mixing cards or Memory', async ({ page }, testInfo) => {
+  await page.goto('/Terminal.html?tab=v6');
+  const radar=page.locator('#indexRadar');
+  const modes=radar.locator('#indexRadarMode');
+  const sector=modes.getByRole('tab',{name:'Sector Index'});
+  const equity=modes.getByRole('tab',{name:'Equity ETF'});
+  const cross=modes.getByRole('tab',{name:'Cross Asset'});
+  await expect(sector).toHaveAttribute('aria-selected','true');
+  await expect(radar.locator('#indexRadarTitle')).toHaveText('INDEX RADAR · SECTOR LEADERS');
+
+  await equity.click();
+  await expect(equity).toHaveAttribute('aria-selected','true');
+  await expect(radar.locator('#indexRadarTitle')).toHaveText('ETF RADAR · EQUITY LEADERS');
+  await expect(radar.locator('[data-index-radar-leader]')).toHaveCount(5);
+  await expect(radar.locator('[data-index-radar-leader]').first()).toContainText('CSI 300 ETF');
+  await expect(radar.locator('[data-index-radar-leader]').first()).toContainText('RS5');
+  await expect(radar.locator('[data-index-radar-leader]').first()).toContainText('RS20');
+  await expect(radar.locator('[data-index-radar-memory]')).toHaveCount(4);
+  expect(await page.evaluate(()=>window.__etfRadarOrders?.EQUITY_ETF)).toBe(2);
+
+  await radar.locator('#indexRadarHelpButton').click();
+  await expect(page.locator('#indexRadarHelpTitle')).toContainText('EQUITY ETF');
+  await expect(page.locator('#indexRadarHelpContent')).toContainText('RMB 20 million');
+  await expect(page.locator('#indexRadarHelpContent')).toContainText('not fund flow');
+  await page.locator('#indexRadarHelpClose').click();
+  await radar.locator('[data-index-radar-leader]').first().click();
+  await expect(page.locator('#indexRadarDetailContent')).toContainText('ETF representative');
+  await expect(page.locator('#indexRadarDetailContent')).toContainText('20D avg amount');
+  await page.locator('#indexRadarDetailClose').click();
+
+  await equity.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(cross).toHaveAttribute('aria-selected','true');
+  await expect(radar.locator('#indexRadarTitle')).toHaveText('ETF RADAR · CROSS-ASSET LEADERS');
+  await expect(radar.locator('.index-radar-category')).toHaveCount(5);
+  await expect(radar.locator('.index-radar-category').first()).toContainText('Overseas');
+  expect(await page.evaluate(()=>window.__etfRadarOrders?.CROSS_ASSET)).toBe(2);
+
+  await equity.click();
+  await expect(radar.locator('[data-index-radar-leader]').first()).toContainText('CSI 300 ETF');
+  expect(await page.evaluate(()=>window.__etfRadarOrders?.EQUITY_ETF)).toBe(2);
+  const geometry=await modes.evaluate(node=>({
+    height:[...node.querySelectorAll('button')].map(button=>button.getBoundingClientRect().height),
+    pageOverflow:document.documentElement.scrollWidth-window.innerWidth,
+  }));
+  if(testInfo.project.name==='iphone') expect(Math.min(...geometry.height)).toBeGreaterThanOrEqual(44);
+  expect(geometry.pageOverflow).toBeLessThanOrEqual(1);
 });
 
 test('Radar desktop breakpoints never require horizontal navigation', async ({ page }, testInfo) => {
