@@ -24,7 +24,7 @@ window.supabase={createClient(){
  const radarSnapshots=Array.from({length:60},(_,offset)=>{
    const date=new Date(Date.UTC(2026,6,28-offset)).toISOString().slice(0,10);
    const leaders=radarLeaders.map((leader,index)=>({...leader,rank:(index+offset)%5+1})).sort((a,b)=>a.rank-b.rank);
-   return {provider:'baostock',trade_date:date,algorithm_version:1,universe_version:1,benchmark_market:'SH',benchmark_code:'000300',universe_count:507,eligible_count:171,coverage:.9825,leaders,computed_at:date+'T11:30:00Z'};
+   return {provider:'baostock',trade_date:date,algorithm_version:1,universe_version:2,benchmark_market:'SH',benchmark_code:'000300',universe_count:507,eligible_count:171,coverage:.9825,leaders,computed_at:date+'T11:30:00Z'};
  });
  const radarSnapshot=radarSnapshots[0];
  const etfRadarSnapshots={};

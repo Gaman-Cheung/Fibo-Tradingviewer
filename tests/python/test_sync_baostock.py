@@ -8,6 +8,7 @@ import scripts.sync_baostock as sync_module
 from scripts.sync_baostock import (
     ETF_RETENTION_SESSIONS,
     SupabaseRest,
+    _is_skippable_etf_leading_gap,
     _etf_target_dates,
     chunks,
     completed_market_date,
@@ -45,6 +46,60 @@ class FakeDb:
     def upsert_daily_rows(self, rows):
         self.uploaded.extend(rows)
     def prune_before(self, cutoff):
+        self.pruned.append(cutoff)
+
+
+class FakeEtfClient:
+    def __init__(self, rows_by_date):
+        self.rows_by_date = rows_by_date
+        self.requested_dates = []
+
+    def daily_etfs(self, trade_date):
+        self.requested_dates.append(trade_date)
+        return list(self.rows_by_date.get(trade_date, []))
+
+
+class FakeEtfDb:
+    def __init__(self, catalog, checkpoint=None):
+        self.catalog = catalog
+        self.checkpoint = dict(checkpoint or {})
+        self.saved = []
+        self.uploaded = []
+        self.pruned = []
+        self.snapshots = []
+
+    def get_checkpoint(self, scope):
+        return dict(self.checkpoint)
+
+    def save_checkpoint(self, scope, **values):
+        self.saved.append((scope, values))
+        self.checkpoint.update(values)
+
+    def get_etf_catalog(self):
+        return self.catalog
+
+    def upsert_etf_catalog(self, rows):
+        return None
+
+    def upsert_daily_rows(self, rows):
+        self.uploaded.extend(rows)
+
+    def get_etf_radar_snapshots(self, scope, limit=30, before=None):
+        return []
+
+    def load_etf_history(self, catalog, start_date):
+        return []
+
+    def upsert_etf_radar_snapshots(self, rows):
+        self.snapshots.extend(rows)
+
+    def delete_etf_radar_snapshot_dates(self, scope, trade_dates):
+        return None
+
+    def prune_etf_radar_snapshots_before(self, scope, cutoff):
+        return None
+
+    def prune_etf_before(self, cutoff, catalog):
         self.pruned.append(cutoff)
 
 
@@ -128,6 +183,88 @@ class SyncBaoStockTests(unittest.TestCase):
             dates[6:],
         )
 
+    def test_etf_leading_gap_policy_never_hides_partial_or_mid_sequence_data(self):
+        self.assertTrue(_is_skippable_etf_leading_gap("backfill", "2025-12-24", [], None))
+        self.assertTrue(_is_skippable_etf_leading_gap("backfill", "2025-12-24", [], "2026-01-05"))
+        self.assertFalse(_is_skippable_etf_leading_gap("backfill", "2026-01-06", [], "2026-01-05"))
+        self.assertFalse(_is_skippable_etf_leading_gap("daily", "2025-12-24", [], None))
+        self.assertFalse(
+            _is_skippable_etf_leading_gap(
+                "backfill",
+                "2025-12-24",
+                [{"date":"2025-12-24","code":"broken"}],
+                None,
+            )
+        )
+
+    def test_etf_backfill_skips_only_empty_provider_prefix_and_records_real_start(self):
+        dates = ["2025-12-24", "2025-12-25", "2025-12-26"]
+
+        def row(trade_date):
+            return {
+                "date":trade_date, "code":"sh.510300", "high":"4.1", "low":"3.9",
+                "close":"4", "pctChg":"0", "tradestatus":"1", "amount":"30000000",
+            }
+
+        rows_by_date = {dates[0]: [], dates[1]: [row(dates[1])], dates[2]: [row(dates[2])]}
+        client = FakeEtfClient(rows_by_date)
+        catalog = [{
+            "provider":"baostock", "market":"SH", "code":"510300", "name":"CSI 300 ETF",
+            "category":"equity_broad", "radar_scope":"EQUITY_ETF", "theme_group":"csi300",
+            "short_label":"CSI 300", "radar_enabled":True, "active":True,
+            "universe_version":1, "history_from":None, "latest_trade_date":None,
+        }]
+        db = FakeEtfDb(catalog)
+        args = SimpleNamespace(mode="backfill", etf_sessions=144, start=None, end=None)
+
+        def snapshots(catalog_rows, market_rows, snapshot_dates, scope, **kwargs):
+            return [{"trade_date":snapshot_dates[-1], "scope":scope, "leaders":[]}]
+
+        with (
+            patch.object(sync_module, "recent_trading_dates", return_value=dates),
+            patch.object(sync_module, "discover_etf_catalog", return_value=(catalog, rows_by_date[dates[-1]])),
+            patch.object(sync_module, "MIN_ETF_DAILY_ROWS", 1),
+            patch.object(sync_module, "build_etf_historical_snapshots", side_effect=snapshots),
+        ):
+            sync_module._run_etf_sync(args, client, db)
+
+        cursors = [values.get("backfill_cursor") for _, values in db.saved if values.get("backfill_cursor")]
+        self.assertEqual(cursors, dates)
+        self.assertEqual(len(db.uploaded), 2)
+        self.assertEqual(db.checkpoint["oldest_trade_date"], dates[1])
+        self.assertEqual(db.checkpoint["retention_sessions"], 144)
+        self.assertEqual(db.pruned, [dates[0]])
+
+    def test_etf_backfill_still_fails_on_empty_date_after_coverage_begins(self):
+        dates = ["2026-01-05", "2026-01-06", "2026-01-07"]
+
+        def row(trade_date):
+            return {
+                "date":trade_date, "code":"sh.510300", "close":"4", "pctChg":"0",
+                "tradestatus":"1", "amount":"30000000",
+            }
+
+        rows_by_date = {dates[0]: [row(dates[0])], dates[1]: [], dates[2]: [row(dates[2])]}
+        client = FakeEtfClient(rows_by_date)
+        catalog = [{
+            "provider":"baostock", "market":"SH", "code":"510300", "history_from":None,
+            "latest_trade_date":None, "radar_enabled":True, "active":True,
+        }]
+        db = FakeEtfDb(catalog)
+        args = SimpleNamespace(mode="backfill", etf_sessions=144, start=None, end=None)
+
+        with (
+            patch.object(sync_module, "recent_trading_dates", return_value=dates),
+            patch.object(sync_module, "discover_etf_catalog", return_value=(catalog, rows_by_date[dates[-1]])),
+            patch.object(sync_module, "MIN_ETF_DAILY_ROWS", 1),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "returned only 0 valid ETF rows"):
+                sync_module._run_etf_sync(args, client, db)
+
+        self.assertEqual(db.checkpoint["backfill_cursor"], dates[0])
+        self.assertEqual(len(db.uploaded), 1)
+        self.assertEqual(db.pruned, [])
+
     def test_etf_retention_delete_is_scoped_to_catalog_codes(self):
         db = SupabaseRest.__new__(SupabaseRest)
         db.headers = {}
@@ -143,6 +280,94 @@ class SyncBaoStockTests(unittest.TestCase):
         self.assertTrue(all(call[1] == "market_daily_bar" for call in calls))
         self.assertTrue(all(call[2]["params"]["trade_date"] == "lt.2026-01-01" for call in calls))
         self.assertTrue(all("code" in call[2]["params"] and "market" in call[2]["params"] for call in calls))
+
+    def test_etf_catalog_read_paginates_beyond_supabase_default_limit(self):
+        class Response:
+            def __init__(self, rows):
+                self.rows = rows
+
+            def json(self):
+                return self.rows
+
+        db = SupabaseRest.__new__(SupabaseRest)
+        db.headers = {}
+        pages = [
+            [{"market":"SH","code":f"{index:06d}"} for index in range(1000)],
+            [{"market":"SZ","code":f"{index:06d}"} for index in range(615)],
+        ]
+        calls = []
+
+        def request(method, path, **kwargs):
+            calls.append((method, path, kwargs["params"]))
+            return Response(pages[len(calls) - 1])
+
+        db._request = request
+        rows = db.get_etf_catalog()
+        self.assertEqual(len(rows), 1615)
+        self.assertEqual([call[2]["offset"] for call in calls], ["0", "1000"])
+        self.assertTrue(all(call[2]["limit"] == "1000" for call in calls))
+
+    def test_universe_publication_upgrades_inactive_catalog_rows_missing_from_daily_discovery(self):
+        class IndexClient:
+            def all_securities(self, trade_date):
+                return [{"code":"sh.000300", "code_name":"沪深300", "tradeStatus":"1"}]
+
+        class IndexDb:
+            def __init__(self):
+                self.rows = [{
+                    "provider":"baostock", "market":"SH", "code":"000039",
+                    "name":"上证信息", "category":"other", "theme_group":"",
+                    "theme_label":"", "radar_enabled":False, "active":False,
+                    "universe_version":1,
+                }]
+                self.upserted = []
+
+            def get_index_catalog(self):
+                return list(self.rows)
+
+            def upsert_index_catalog(self, rows):
+                self.upserted = list(rows)
+
+        index_db = IndexDb()
+        with patch.object(sync_module, "MIN_INDEX_COUNT", 1):
+            sync_module.discover_index_catalog(IndexClient(), index_db, "2026-07-30")
+        inactive_index = next(row for row in index_db.upserted if row["code"] == "000039")
+        self.assertFalse(inactive_index["active"])
+        self.assertEqual(inactive_index["universe_version"], 2)
+        self.assertEqual((inactive_index["category"], inactive_index["theme_group"]),
+                         ("sector", "information_technology"))
+
+        class EtfClient:
+            def all_securities(self, trade_date):
+                return []
+
+        class EtfDb:
+            def __init__(self):
+                self.rows = [{
+                    "provider":"baostock", "market":"SH", "code":"518600",
+                    "name":"黄金ETF", "category":"other", "radar_scope":None,
+                    "theme_group":"", "theme_label":"", "radar_enabled":False,
+                    "active":False, "universe_version":1,
+                }]
+                self.upserted = []
+
+            def get_etf_catalog(self):
+                return list(self.rows)
+
+            def upsert_etf_catalog(self, rows):
+                self.upserted = list(rows)
+
+        etf_db = EtfDb()
+        raw = [{"code":"sh.510300", "close":"4", "amount":"30000000", "tradestatus":"1"}]
+        with patch.object(sync_module, "MIN_ETF_DAILY_ROWS", 1):
+            sync_module.discover_etf_catalog(EtfClient(), etf_db, "2026-07-30", raw)
+        inactive_etf = next(row for row in etf_db.upserted if row["code"] == "518600")
+        self.assertFalse(inactive_etf["active"])
+        self.assertEqual(inactive_etf["universe_version"], 2)
+        self.assertEqual(
+            (inactive_etf["category"], inactive_etf["radar_scope"], inactive_etf["theme_group"]),
+            ("commodity", "CROSS_ASSET", "gold"),
+        )
 
     def test_etf_snapshot_upload_failure_never_deletes_prior_scope_history(self):
         class FailingDb:

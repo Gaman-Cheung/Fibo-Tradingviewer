@@ -1,9 +1,9 @@
 # Index Radar Indicator Guide
 
-This is the default `Sector Index` mode in the shared Market Radar header. `Equity ETF` and `Cross Asset` use separate 144-session scopes documented in `docs/ETF_RADAR_GUIDE.md`; selecting them never changes or mixes this 400-session Index Radar v1 history.
+This is the default `Sector Index` mode in the shared Market Radar header. `Equity ETF` and `Cross Asset` use separate 144-session scopes documented in `docs/ETF_RADAR_GUIDE.md`; selecting them never changes or mixes this 400-session Index Radar history.
 
 Algorithm version: **1**  
-Universe version: **1**  
+Universe version: **2**  
 Data provider: **BaoStock official SH/SZ index daily data**
 
 ## 1. 这个模块解决什么问题
@@ -12,7 +12,7 @@ Index Radar 是 Look First 之前的市场背景筛选器。它每天从已明�
 
 系统滚动保留最近 400 个正式交易日。页面只读取预先计算好的最新快照，不会让浏览器下载 507 个指数的历史。卡片上的 `Official Close · YYYY-MM-DD` 是榜单使用的正式收盘日期。
 
-沪深300（`SH.000300`）只作为统一相对强弱基准，不能进入 Leader 榜。宽基、风格、策略、基金、债券和未审阅的指数同样不能入榜。v1 分类种子逐代码覆盖 2026-07-29 BaoStock 返回的 507 个 `SH.000* / SZ.399*` 指数；未来新增代码默认归为 `other`、关闭 Radar，并在同步日志中产生分类警告，直至新的 Universe 版本明确分类。
+沪深300（`SH.000300`）只作为统一相对强弱基准，不能进入 Leader 榜。宽基、风格、策略、基金和债券指数同样不能入榜。Universe v2在版本化CSV中逐条复核507个`SH.000* / SZ.399*`代码，241个明确的行业/主题代码被启用，实际候选再受上市状态和62日历史门槛约束。运行时只读取生成的Market+Code Seed，不依据名称猜测；未来新增代码默认归为`other`并关闭Radar，直至新的Universe审核。
 
 ## 2. 主分数
 
@@ -108,6 +108,8 @@ Consecutive 4D · 13D 7× · 60D 12×
 - 失败不会覆盖最后一份有效榜单，不推进 `CN_INDEX` 成功检查点，也不触发历史清理。
 - 首次 Backfill 按日期顺序重建历史榜单；Repair 或算法/分类版本升级会重算受影响日期之后的快照。
 - Radar 页面读取失败不会阻止 Look First 表格使用。
+- `python scripts/radar_universe_v2.py validate`校验507条审计记录、证据、唯一键与生成Seed；`dry-run`只读Supabase并在内存重建v2快照，不写Catalog、行情、快照或检查点。
+- Universe v2只覆盖Catalog分类与既有快照，不能新增`market_daily_bar`行情行；容量变化保守上限为2MB。
 
 ## 10. 明确边界
 

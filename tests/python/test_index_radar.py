@@ -15,7 +15,7 @@ from scripts.index_radar import (
     select_leaders,
     symbol_key,
 )
-from scripts.index_catalog_seed_v1 import INDEX_CATALOG_SEED_V1
+from scripts.index_catalog_seed_v2 import INDEX_CATALOG_SEED_V2
 from scripts.sync_baostock import INDEX_SCOPE, normalize_index_rows, publish_radar_snapshots, run_index_sync
 
 
@@ -50,7 +50,7 @@ def candidate_item(code, score, group, *, rs20=1.0, qualifies=True):
 
 class IndexRadarAlgorithmTests(unittest.TestCase):
     def test_classification_is_explicit_and_benchmark_never_enters_radar(self):
-        self.assertEqual(len(INDEX_CATALOG_SEED_V1), 507)
+        self.assertEqual(len(INDEX_CATALOG_SEED_V2), 507)
         self.assertEqual(classify_index("SH", "000300", "沪深300")["category"], "broad")
         self.assertFalse(classify_index("SH", "000300", "沪深300")["radar_enabled"])
         computing = classify_index("SZ", "399363", "国证算力基础设施主题指数")

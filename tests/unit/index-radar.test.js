@@ -205,11 +205,11 @@ test('Radar algorithm, in-product guide and indicator manual share one vocabular
   assert.match(python,/rs20_score\s*=\s*30\s*\*/);
   assert.match(python,/MIN_LEADER_SCORE\s*=\s*60/);
   assert.equal(INDEX_RADAR_ALGORITHM_VERSION,1);
-  assert.equal(INDEX_RADAR_UNIVERSE_VERSION,1);
+  assert.equal(INDEX_RADAR_UNIVERSE_VERSION,2);
   assert.match(python,/ALGORITHM_VERSION\s*=\s*1/);
-  assert.match(python,/UNIVERSE_VERSION\s*=\s*1/);
+  assert.match(python,/UNIVERSE_VERSION\s*=\s*2/);
   assert.match(manual,/Algorithm version:\s*\*\*1\*\*/);
-  assert.match(manual,/Universe version:\s*\*\*1\*\*/);
+  assert.match(manual,/Universe version:\s*\*\*2\*\*/);
   for(const source of [manual,algorithms,INDEX_RADAR_GUIDE_HTML]){
     assert.match(source,/Leadership Memory/i);
     assert.match(source,/5\s*\/\s*4\s*\/\s*3\s*\/\s*2\s*\/\s*1/);
@@ -273,7 +273,7 @@ test('Radar schema and both sync launchers preserve the independent CN_INDEX con
 
 test('ETF Radar help, algorithm and shared segmented control preserve the locked contract',()=>{
   const algorithm=fs.readFileSync(path.join(root,'scripts/etf_radar.py'),'utf8');
-  const seed=fs.readFileSync(path.join(root,'scripts/etf_catalog_seed_v1.py'),'utf8');
+  const seed=fs.readFileSync(path.join(root,'scripts/etf_catalog_seed_v2.py'),'utf8');
   const manual=fs.readFileSync(path.join(root,'docs/ETF_RADAR_GUIDE.md'),'utf8');
   const components=fs.readFileSync(path.join(root,'assets/css/components.css'),'utf8');
   const terminalCss=fs.readFileSync(path.join(root,'assets/css/terminal.css'),'utf8');
@@ -282,7 +282,7 @@ test('ETF Radar help, algorithm and shared segmented control preserve the locked
   assert.match(algorithm,/CROSS_ASSET_CATEGORY_LIMIT\s*=\s*2/);
   assert.match(algorithm,/score_candidates\(candidates\)/);
   assert.match(algorithm,/calculate_candidate\(/);
-  assert.match(seed,/ETF_CATALOG_SEED_V1/);
+  assert.match(seed,/ETF_CATALOG_SEED_V2/);
   for(const guide of Object.values(ETF_RADAR_GUIDE_HTML)){
     assert.match(guide,/RS5\s*\/\s*RS20/);
     assert.match(guide,/RMB 20 million/);
@@ -294,9 +294,9 @@ test('ETF Radar help, algorithm and shared segmented control preserve the locked
   }
   for(const [label] of [...RADAR_EVENT_GUIDE,...RADAR_RISK_GUIDE]) assert.ok(manual.includes(label),label+' in ETF manual');
   assert.match(manual,/ETF Radar Algorithm version:\s*\*\*1\*\*/);
-  assert.match(manual,/ETF Universe version:\s*\*\*1\*\*/);
+  assert.match(manual,/ETF Universe version:\s*\*\*2\*\*/);
   assert.equal(ETF_RADAR_ALGORITHM_VERSION,1);
-  assert.equal(ETF_RADAR_UNIVERSE_VERSION,1);
+  assert.equal(ETF_RADAR_UNIVERSE_VERSION,2);
   assert.match(components,/\.fibo-segmented-control\s*\{/);
   assert.doesNotMatch(terminalCss,/\.macd-basis-toggle\s+button\s*\{[^}]*border-radius/s);
   assert.equal((terminalHtml.match(/data-market-radar-scope=/g)||[]).length,3);

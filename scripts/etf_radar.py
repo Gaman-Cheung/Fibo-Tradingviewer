@@ -10,7 +10,7 @@ from collections import defaultdict
 from typing import Iterable
 
 try:
-    from .etf_catalog_seed_v1 import ETF_CATALOG_SEED_V1
+    from .etf_catalog_seed_v2 import ETF_CATALOG_SEED_V2
     from .index_radar import (
         BENCHMARK_CODE,
         BENCHMARK_MARKET,
@@ -23,7 +23,7 @@ try:
         symbol_key,
     )
 except ImportError:  # Direct import when scripts/ is on sys.path.
-    from etf_catalog_seed_v1 import ETF_CATALOG_SEED_V1
+    from etf_catalog_seed_v2 import ETF_CATALOG_SEED_V2
     from index_radar import (
         BENCHMARK_CODE,
         BENCHMARK_MARKET,
@@ -38,7 +38,7 @@ except ImportError:  # Direct import when scripts/ is on sys.path.
 
 
 ALGORITHM_VERSION = 1
-UNIVERSE_VERSION = 1
+UNIVERSE_VERSION = 2
 EQUITY_SCOPE = "EQUITY_ETF"
 CROSS_ASSET_SCOPE = "CROSS_ASSET"
 ETF_SCOPES = (EQUITY_SCOPE, CROSS_ASSET_SCOPE)
@@ -47,12 +47,12 @@ CROSS_ASSET_CATEGORY_LIMIT = 2
 
 
 def is_seeded_etf(market: str, code: str) -> bool:
-    return symbol_key(market, code) in ETF_CATALOG_SEED_V1
+    return symbol_key(market, code) in ETF_CATALOG_SEED_V2
 
 
 def classify_etf(market: str, code: str, name: str = "") -> dict:
     """Classify only reviewed Market+Code pairs; never infer from a name."""
-    seeded = ETF_CATALOG_SEED_V1.get(symbol_key(market, code))
+    seeded = ETF_CATALOG_SEED_V2.get(symbol_key(market, code))
     if not seeded:
         return {
             "category": "other",
@@ -88,7 +88,7 @@ def normalize_etf_universe(rows: Iterable[dict], names: dict[str, str] | None = 
             or row.get("name")
             or names.get(raw)
             or names.get(key)
-            or ETF_CATALOG_SEED_V1.get(key, (raw,))[0]
+            or ETF_CATALOG_SEED_V2.get(key, (raw,))[0]
         ).strip() or raw
         classification = classify_etf(market, code, name)
         by_symbol[key] = {

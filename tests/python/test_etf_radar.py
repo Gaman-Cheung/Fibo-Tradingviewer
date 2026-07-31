@@ -1,7 +1,7 @@
 import unittest
 from datetime import date, timedelta
 
-from scripts.etf_catalog_seed_v1 import ETF_CATALOG_SEED_V1
+from scripts.etf_catalog_seed_v2 import ETF_CATALOG_SEED_V2
 from scripts.etf_radar import (
     CROSS_ASSET_SCOPE,
     EQUITY_SCOPE,
@@ -52,7 +52,7 @@ def scored_item(code, score, theme, category="overseas"):
 
 class EtfRadarTests(unittest.TestCase):
     def test_seed_is_code_keyed_and_unknown_names_are_never_guessed(self):
-        self.assertGreater(len(ETF_CATALOG_SEED_V1), 50)
+        self.assertEqual(len(ETF_CATALOG_SEED_V2), 1615)
         known = classify_etf("SH", "510300", "anything")
         self.assertEqual((known["radar_scope"], known["theme_group"]), (EQUITY_SCOPE, "csi300"))
         unknown = classify_etf("SH", "599999", "Gold Semiconductor ETF")

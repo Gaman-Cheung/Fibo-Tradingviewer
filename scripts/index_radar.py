@@ -11,13 +11,13 @@ from collections import defaultdict
 from typing import Iterable
 
 try:
-    from .index_catalog_seed_v1 import INDEX_CATALOG_SEED_V1
+    from .index_catalog_seed_v2 import INDEX_CATALOG_SEED_V2
 except ImportError:  # Direct import when scripts/ is on sys.path.
-    from index_catalog_seed_v1 import INDEX_CATALOG_SEED_V1
+    from index_catalog_seed_v2 import INDEX_CATALOG_SEED_V2
 
 
 ALGORITHM_VERSION = 1
-UNIVERSE_VERSION = 1
+UNIVERSE_VERSION = 2
 BENCHMARK_MARKET = "SH"
 BENCHMARK_CODE = "000300"
 MIN_HISTORY_POINTS = 62
@@ -60,7 +60,7 @@ RISK_LABELS = {
 
 
 # These vocabularies document how the reviewed v1 seed was prepared. Runtime
-# classification is code-keyed by INDEX_CATALOG_SEED_V1; future codes are not
+# classification is code-keyed by INDEX_CATALOG_SEED_V2; future codes are not
 # guessed from their names and remain explicitly disabled as OTHER.
 BOND_WORDS = ("债", "国债", "企债", "公司债", "信用债", "转债", "票据")
 FUND_WORDS = ("基金指数",)
@@ -131,7 +131,7 @@ def symbol_key(market: str, code: str) -> str:
 
 
 def is_seeded_index(market: str, code: str) -> bool:
-    return symbol_key(market, code) in INDEX_CATALOG_SEED_V1
+    return symbol_key(market, code) in INDEX_CATALOG_SEED_V2
 
 
 def classify_index(market: str, code: str, name: str) -> dict:
@@ -139,7 +139,7 @@ def classify_index(market: str, code: str, name: str) -> dict:
     market = str(market).upper()
     code = str(code).strip()
     key = symbol_key(market, code)
-    seeded = INDEX_CATALOG_SEED_V1.get(key)
+    seeded = INDEX_CATALOG_SEED_V2.get(key)
     if seeded:
         _, category, theme_group, theme_label, radar_enabled = seeded
         return {

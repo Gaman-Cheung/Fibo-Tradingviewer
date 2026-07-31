@@ -47,9 +47,11 @@ This document records current behavior; it is not investment advice. Changes req
 - Tracker calculations never feed Terminal Composite Signal automatically; only an explicit Apply action writes Bullish/Bearish/Neutral, while divergence always remains manual.
 - Then Leap retains an instrument with a valid High/Low structure when Current is blank, but pauses every Current-dependent derived calculation and displays an input-required state. Missing Current never reuses a stale Composite Signal.
 
-## Look First Index Radar · Algorithm v1 / Universe v1
+## Look First Index Radar · Algorithm v1 / Universe v2
 
 Index Radar is independent market context computed from BaoStock official index closes. Only explicitly seeded `sector` and `theme` indices with at least 62 formal closes are candidates; `SH.000300` is the benchmark and can never rank.
+
+Universe v2 classifies all 507 reviewed codes from a versioned evidence manifest and generates a permanent Market+Code seed. This changes candidate membership only; the Algorithm v1 score, events, risks and gates below are unchanged.
 
 ```text
 RS5  = index 5-session return  − CSI300 5-session return
@@ -82,9 +84,11 @@ Leadership Memory is a browser-side persistence view over final Top 5 snapshots;
 - Main cards derive Theme Group `Consecutive`, `13D` and `60D` counts from the same snapshots. Python's legacy 30-session exact-score tie-break and stability buffer remain intact and do not receive Leadership Memory points.
 - Different Algorithm/Universe versions never mix. Partial history uses only available sessions and must display `N / target · Building`.
 
-## ETF Radar · Algorithm v1 / Universe v1
+## ETF Radar · Algorithm v1 / Universe v2
 
 ETF Radar reuses the unchanged Index Radar v1 candidate, event, risk, score and 60-point gate. Sector Index remains RS5/RS20 with 400 sessions and is not revised by this addition. ETF uses 144 official sessions and two independent scopes: `EQUITY_ETF` and `CROSS_ASSET`.
+
+Universe v2 reviews all 1,615 catalog records. A fund with partial retained history is classified but deferred from ranking until a later Universe review; this is a classification publication rule and does not alter the 62-session Algorithm gate.
 
 ```text
 RS5  = ETF 5-session continuous return  − CSI300 5-session return
@@ -105,6 +109,7 @@ Score = 25 × PctRank_scope(RS5)
 - The final board has at most five cards and is never padded with weak candidates.
 - Stability uses prior final Theme Groups, not ETF codes. A more-liquid ETF can replace yesterday's representative without resetting Theme Group Consecutive or Memory counts.
 - Coverage below 95%, missing CSI300, abnormal ETF rows, incomplete upload or either-scope build failure prevents checkpoint completion and retention cleanup.
+- BaoStock's bulk ETF endpoint may begin later than the requested 144-session window. Backfill may skip only a completely empty contiguous prefix before the first valid provider session, records that real session as the coverage start and keeps 144 as the retention target. After coverage begins, an empty or partial date remains a hard sequence failure. The synchronizer never fabricates rows and does not issue thousands of per-code requests merely to fill an unavailable prefix.
 - ETF Leadership Memory uses the same Yesterday/3D/13D/60D, 5/4/3/2/1 and partial-version rules, while additionally requiring equal Scope.
 - Amount means exchange transaction value only. The model has no fund-flow, NAV premium/discount, yield, spot-price or currency-hedge input.
 

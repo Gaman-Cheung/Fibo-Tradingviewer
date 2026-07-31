@@ -1,7 +1,7 @@
 # Market Radar · ETF Indicator Guide
 
 - ETF Radar Algorithm version: **1**
-- ETF Universe version: **1**
+- ETF Universe version: **2**
 - Leadership Memory version: **1**
 - Retention: **144 official trading sessions**
 - Scopes: **EQUITY_ETF / CROSS_ASSET**
@@ -12,8 +12,9 @@ ETF Radar is market context in Look First. It does not read Pool, Ticker, user i
 
 - **Equity ETF**: reviewed domestic broad-market, sector, theme and strategy ETFs.
 - **Cross Asset**: reviewed overseas equity, commodity, bond and money-market ETFs.
-- Classification is keyed only by permanent `Market + Code` in `scripts/etf_catalog_seed_v1.py`. A name is never used to guess a category.
-- Universe v1 reviews 80 liquid representative/competitor codes across 52 Theme Groups. BaoStock may return many more ETFs; those raw rows remain available for a future reviewed seed expansion.
+- Classification is keyed only by permanent `Market + Code` in the generated `scripts/etf_catalog_seed_v2.py`. Runtime names never guess a category.
+- Universe v2 reviews all 1,615 catalog records in `scripts/universe/etf_universe_v2.csv`: 1,229 Equity ETF, 382 Cross Asset and four inactive raw-only records whose official names are unavailable. The manifest records official-source evidence, review status and every exclusion reason.
+- The first v2 publication enables 1,381 funds with complete retained provider history. Another 230 products keep their category, Scope and Theme but are deferred because they began part-way through the current 144-session window; this preserves at least 60 compatible Leadership Memory snapshots during the version rebuild.
 - A newly discovered unknown ETF is still synchronized for 144 sessions, but remains `other`, has no Radar scope and cannot rank until a reviewed Universe update.
 
 Sector Index remains a separate Radar v1 universe with RS5/RS20 and 400 sessions. ETF support does not alter its candidates, scores or snapshots.
@@ -25,6 +26,16 @@ ETF synchronization stores Provider, Market, Code, trade date, official Close, p
 The price series is reconstructed backward from the latest official Close using official pctChg. This produces a continuous-return series so distributions or splits do not manufacture MA events. Amount stays unadjusted.
 
 Amount is exchange transaction value. It is **not fund flow**, subscription/redemption flow, capital inflow, ETF size or NAV premium/discount.
+
+## Retention and provider coverage
+
+The ETF retention target is 144 official trading sessions. BaoStock's bulk daily ETF endpoint can have a later historical start than the exchange calendar. On the first chronological Backfill, the synchronizer may pass over only a completely empty contiguous prefix before the first valid bulk ETF session. It records the first date that actually uploaded rows as the real coverage start and never manufactures missing prices.
+
+After the first valid ETF session, an empty, partial, malformed or low-coverage date is treated as a true gap: publication stops, the failed date does not advance the checkpoint and retention cleanup does not run. A provider-limited initial history is reported with its actual coverage and grows toward 144 through later Daily updates; the system does not launch thousands of per-code fallback requests merely to fill the unavailable prefix.
+
+Universe review is separate from daily synchronization. `python scripts/radar_universe_v2.py validate` checks the committed manifests and generated seeds without network access. `python scripts/radar_universe_v2.py dry-run` reads existing histories, rebuilds all three Radar scopes in memory, reports gate failures and v1/v2 snapshot differences, and never invokes a write method.
+
+At the v2 review baseline, `market_daily_bar` contains 2,474,005 rows, including 206,184 ETF rows. ETF storage is estimated at 35.1–57.7MB with a 65MB planning ceiling. Universe v2 adds no market rows and is expected to add less than 2MB through Catalog/snapshot replacement; the Supabase dashboard remains the authoritative physical-size measurement.
 
 ## Theme representative and liquidity
 

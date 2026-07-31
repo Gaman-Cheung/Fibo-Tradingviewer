@@ -6,9 +6,9 @@
 import { LEADERSHIP_MEMORY_VERSION } from './radar-memory.js';
 
 export const INDEX_RADAR_ALGORITHM_VERSION = 1;
-export const INDEX_RADAR_UNIVERSE_VERSION = 1;
+export const INDEX_RADAR_UNIVERSE_VERSION = 2;
 export const ETF_RADAR_ALGORITHM_VERSION = 1;
-export const ETF_RADAR_UNIVERSE_VERSION = 1;
+export const ETF_RADAR_UNIVERSE_VERSION = 2;
 
 export const RADAR_EVENT_GUIDE = Object.freeze([
   ['MA60 Reclaim Confirmed', '+9', 'A reclaim is followed by two consecutive official closes above the contemporaneous MA60.'],
@@ -42,9 +42,10 @@ const etfRiskRows = RADAR_RISK_GUIDE.map(([name, score, meaning]) => `
   <tr><th>${name}</th><td><code>${score}</code></td><td>${meaning.replace('The index','The ETF')}</td></tr>`).join('');
 
 export const INDEX_RADAR_GUIDE_HTML = `
-  <div class="fibo-help-content index-radar-guide" data-radar-guide-version="${INDEX_RADAR_ALGORITHM_VERSION}" data-leadership-memory-version="${LEADERSHIP_MEMORY_VERSION}">
+  <div class="fibo-help-content index-radar-guide" data-radar-guide-version="${INDEX_RADAR_ALGORITHM_VERSION}" data-radar-universe-version="${INDEX_RADAR_UNIVERSE_VERSION}" data-leadership-memory-version="${LEADERSHIP_MEMORY_VERSION}">
     <h3>Purpose and official data</h3>
     <p>Index Radar reads BaoStock official daily index closes. It stores a rolling 400-session history, ranks only explicitly classified sector and theme indices, and uses <code>SH.000300</code> CSI300 only as the relative-strength benchmark. Broad, style, fund and bond indices cannot occupy the leader rail.</p>
+    <p>Universe v${INDEX_RADAR_UNIVERSE_VERSION} reviews all 507 catalog codes in a versioned evidence manifest. The runtime uses only the generated Market + Code seed; a security name can never promote an unknown code into Radar.</p>
     <p><span class="fibo-analysis-source fibo-analysis-source--official">Official Close</span> means a completed exchange session. Manual Current, Pool, Ticker and permanent IDs never enter this module.</p>
 
     <h3>Score</h3>
@@ -103,9 +104,10 @@ function etfScopeGuide(scope) {
     ? '<li>After strict Theme Group deduplication, overseas, commodity, bond and money categories can supply at most two final cards each. The stability buffer cannot break this cap.</li>'
     : '<li>Equity ETF has no category quota after strict Theme Group deduplication.</li>';
   return `
-    <div class="fibo-help-content index-radar-guide" data-radar-guide-version="${ETF_RADAR_ALGORITHM_VERSION}" data-radar-scope="${scope}" data-leadership-memory-version="${LEADERSHIP_MEMORY_VERSION}">
+    <div class="fibo-help-content index-radar-guide" data-radar-guide-version="${ETF_RADAR_ALGORITHM_VERSION}" data-radar-universe-version="${ETF_RADAR_UNIVERSE_VERSION}" data-radar-scope="${scope}" data-leadership-memory-version="${LEADERSHIP_MEMORY_VERSION}">
       <h3>${scopeName} scope and official data</h3>
       <p>This scope ranks explicitly reviewed ${universe}. BaoStock official Close, pctChg, Trade Status and Amount are retained for 144 official sessions. High/Low is used only during synchronization for Retest context and is then discarded.</p>
+      <p>Universe v${ETF_RADAR_UNIVERSE_VERSION} reviews all 1,615 catalog records. Funds with only partial history inside the retained window keep their reviewed category, Scope and Theme but remain disabled until a later Universe review, preserving compatible 60-session Leadership Memory.</p>
       <p>Price history is made continuous from official <code>pctChg</code> and anchored to the latest official Close so distributions or splits do not create false MA events. Amount remains unadjusted and is used only as a liquidity measure.</p>
 
       <h3>Score and entry gate</h3>

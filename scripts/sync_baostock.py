@@ -31,6 +31,7 @@ try:
         MIN_AVERAGE_AMOUNT_20D,
         UNIVERSE_VERSION as ETF_RADAR_UNIVERSE_VERSION,
         build_etf_historical_snapshots,
+        classify_etf,
         is_seeded_etf,
         normalize_etf_universe,
     )
@@ -41,6 +42,7 @@ try:
         MIN_RADAR_COVERAGE,
         UNIVERSE_VERSION as RADAR_UNIVERSE_VERSION,
         build_historical_snapshots,
+        classify_index,
         is_seeded_index,
         normalize_index_universe,
         symbol_key,
@@ -52,6 +54,7 @@ except ImportError:  # Direct `python scripts/sync_baostock.py` execution.
         MIN_AVERAGE_AMOUNT_20D,
         UNIVERSE_VERSION as ETF_RADAR_UNIVERSE_VERSION,
         build_etf_historical_snapshots,
+        classify_etf,
         is_seeded_etf,
         normalize_etf_universe,
     )
@@ -62,6 +65,7 @@ except ImportError:  # Direct `python scripts/sync_baostock.py` execution.
         MIN_RADAR_COVERAGE,
         UNIVERSE_VERSION as RADAR_UNIVERSE_VERSION,
         build_historical_snapshots,
+        classify_index,
         is_seeded_index,
         normalize_index_universe,
         symbol_key,
@@ -417,12 +421,25 @@ class SupabaseRest:
             )
 
     def get_etf_catalog(self) -> list[dict]:
-        response = self._request(
-            "GET",
-            "market_etf_catalog",
-            params={"select": "*", "provider": f"eq.{PROVIDER}", "order": "market.asc,code.asc"},
-        )
-        return response.json()
+        rows: list[dict] = []
+        offset = 0
+        while True:
+            response = self._request(
+                "GET",
+                "market_etf_catalog",
+                params={
+                    "select": "*",
+                    "provider": f"eq.{PROVIDER}",
+                    "order": "market.asc,code.asc",
+                    "limit": "1000",
+                    "offset": str(offset),
+                },
+            )
+            page = response.json()
+            rows.extend(page)
+            if len(page) < 1000:
+                return rows
+            offset += len(page)
 
     def upsert_etf_catalog(self, rows: list[dict]) -> None:
         if not rows:
@@ -800,8 +817,20 @@ def discover_index_catalog(client: BaoStockClient, db: SupabaseRest | None, trad
         seen.add(key)
         merged.append({**existing.get(key, {}), **row, "synced_at": synced_at})
     for key, row in existing.items():
-        if key not in seen and row.get("active"):
-            merged.append({**row, "active": False, "synced_at": synced_at})
+        if key in seen:
+            continue
+        # A delisted/already-inactive code is absent from today's provider
+        # universe, but it is still part of the reviewed catalog contract.
+        # Re-apply the code-keyed seed so every retained row is upgraded when
+        # Universe changes instead of leaving old inactive rows on v1.
+        classification = classify_index(row["market"], row["code"], row.get("name", ""))
+        merged.append({
+            **row,
+            **classification,
+            "active": False,
+            "universe_version": RADAR_UNIVERSE_VERSION,
+            "synced_at": synced_at,
+        })
     db.upsert_index_catalog(merged)
     return sorted(merged, key=lambda item: (item["market"], item["code"]))
 
@@ -1055,8 +1084,20 @@ def discover_etf_catalog(
         seen.add(key)
         merged.append({**existing.get(key, {}), **row, "synced_at": synced_at})
     for key, row in existing.items():
-        if key not in seen and row.get("active"):
-            merged.append({**row, "active": False, "synced_at": synced_at})
+        if key in seen:
+            continue
+        # Preserve inactive/delisted records and still apply the reviewed v2
+        # classification. Otherwise an already-inactive row that is no longer
+        # returned by BaoStock would never be included in the publication
+        # upsert and could remain on the previous Universe indefinitely.
+        classification = classify_etf(row["market"], row["code"], row.get("name", ""))
+        merged.append({
+            **row,
+            **classification,
+            "active": False,
+            "universe_version": ETF_RADAR_UNIVERSE_VERSION,
+            "synced_at": synced_at,
+        })
     db.upsert_etf_catalog(merged)
     return sorted(merged, key=lambda item: (item["market"], item["code"])), raw_etf_rows
 
