@@ -13,10 +13,10 @@ on:
         options: [smoke, daily, backfill, repair]
         default: smoke
       dataset:
-        description: 'Data set (use indices for first Radar backfill)'
+        description: 'Data set (use etfs for first ETF Radar backfill)'
         required: true
         type: choice
-        options: [indices, a-shares, all]
+        options: [indices, etfs, a-shares, all]
         default: indices
       start_date:
         description: 'Repair start date (YYYY-MM-DD)'
@@ -57,7 +57,7 @@ jobs:
         run: |
           MODE="${REQUESTED_MODE:-daily}"
           DATASET="${REQUESTED_DATASET:-all}"
-          ARGS=(--mode "$MODE" --dataset "$DATASET" --sessions 400)
+          ARGS=(--mode "$MODE" --dataset "$DATASET" --sessions 400 --etf-sessions 144)
           if [[ "$MODE" == "repair" ]]; then
             [[ -n "$REPAIR_START" && -n "$REPAIR_END" ]] || { echo "repair requires start_date and end_date"; exit 2; }
             ARGS+=(--start "$REPAIR_START" --end "$REPAIR_END")
