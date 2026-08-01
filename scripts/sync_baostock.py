@@ -85,6 +85,12 @@ UPLOAD_BATCH_SIZE = 1000
 MAX_DAILY_CATCHUP = 5
 INDEX_QUERY_CODE_BATCH = 80
 SHANGHAI = ZoneInfo("Asia/Shanghai")
+CATALOG_PROGRESS_DEFAULTS = {
+    "history_from": None,
+    "latest_trade_date": None,
+    "last_status": "pending",
+    "last_error": None,
+}
 
 
 def utc_now() -> str:
@@ -264,7 +270,7 @@ class SupabaseRest:
         }
 
     def _request(self, method: str, path: str, **kwargs) -> requests.Response:
-        last_error: Exception | None = None
+        last_error: str | None = None
         headers = kwargs.pop("headers", self.headers)
         timeout = kwargs.pop("timeout", 60)
         for attempt in range(1, 4):
@@ -279,10 +285,24 @@ class SupabaseRest:
                 response.raise_for_status()
                 return response
             except (requests.RequestException, OSError) as exc:
-                last_error = exc
+                last_error = str(exc)
+                response = getattr(exc, "response", None)
+                if response is not None:
+                    try:
+                        detail = response.text.strip()
+                    except Exception:
+                        detail = ""
+                    if detail:
+                        # PostgREST returns the violated column/constraint in
+                        # the response body. Keep it bounded so checkpoints and
+                        # Action logs remain useful without becoming noisy.
+                        last_error += f" | response: {detail[:1500]}"
                 if attempt < 3:
                     delay = 2 ** (attempt - 1)
-                    print(f"      Supabase attempt {attempt}/3 failed; retrying in {delay}s: {exc}", flush=True)
+                    print(
+                        f"      Supabase attempt {attempt}/3 failed; retrying in {delay}s: {last_error}",
+                        flush=True,
+                    )
                     time_module.sleep(delay)
         raise RuntimeError(f"Supabase request failed after 3 attempts: {last_error}")
 
@@ -338,8 +358,12 @@ class SupabaseRest:
     def upsert_index_catalog(self, rows: list[dict]) -> None:
         if not rows:
             return
-        headers = {**self.headers, "Prefer": "resolution=merge-duplicates,return=minimal"}
-        for batch in chunks(rows):
+        headers = {
+            **self.headers,
+            "Prefer": "resolution=merge-duplicates,missing=default,return=minimal",
+        }
+        payload = [{**CATALOG_PROGRESS_DEFAULTS, **row} for row in rows]
+        for batch in chunks(payload):
             self._request(
                 "POST",
                 "market_index_catalog?on_conflict=provider,market,code",
@@ -444,8 +468,12 @@ class SupabaseRest:
     def upsert_etf_catalog(self, rows: list[dict]) -> None:
         if not rows:
             return
-        headers = {**self.headers, "Prefer": "resolution=merge-duplicates,return=minimal"}
-        for batch in chunks(rows):
+        headers = {
+            **self.headers,
+            "Prefer": "resolution=merge-duplicates,missing=default,return=minimal",
+        }
+        payload = [{**CATALOG_PROGRESS_DEFAULTS, **row} for row in rows]
+        for batch in chunks(payload):
             self._request(
                 "POST",
                 "market_etf_catalog?on_conflict=provider,market,code",
@@ -815,7 +843,12 @@ def discover_index_catalog(client: BaoStockClient, db: SupabaseRest | None, trad
     for row in discovered:
         key = symbol_key(row["market"], row["code"])
         seen.add(key)
-        merged.append({**existing.get(key, {}), **row, "synced_at": synced_at})
+        merged.append({
+            **CATALOG_PROGRESS_DEFAULTS,
+            **existing.get(key, {}),
+            **row,
+            "synced_at": synced_at,
+        })
     for key, row in existing.items():
         if key in seen:
             continue
@@ -825,6 +858,7 @@ def discover_index_catalog(client: BaoStockClient, db: SupabaseRest | None, trad
         # Universe changes instead of leaving old inactive rows on v1.
         classification = classify_index(row["market"], row["code"], row.get("name", ""))
         merged.append({
+            **CATALOG_PROGRESS_DEFAULTS,
             **row,
             **classification,
             "active": False,
@@ -1082,7 +1116,12 @@ def discover_etf_catalog(
     for row in discovered:
         key = symbol_key(row["market"], row["code"])
         seen.add(key)
-        merged.append({**existing.get(key, {}), **row, "synced_at": synced_at})
+        merged.append({
+            **CATALOG_PROGRESS_DEFAULTS,
+            **existing.get(key, {}),
+            **row,
+            "synced_at": synced_at,
+        })
     for key, row in existing.items():
         if key in seen:
             continue
@@ -1092,6 +1131,7 @@ def discover_etf_catalog(
         # upsert and could remain on the previous Universe indefinitely.
         classification = classify_etf(row["market"], row["code"], row.get("name", ""))
         merged.append({
+            **CATALOG_PROGRESS_DEFAULTS,
             **row,
             **classification,
             "active": False,
