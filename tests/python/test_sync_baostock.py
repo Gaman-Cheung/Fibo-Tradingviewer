@@ -1,3 +1,4 @@
+import json
 import unittest
 from datetime import datetime
 from types import SimpleNamespace
@@ -306,6 +307,84 @@ class SyncBaoStockTests(unittest.TestCase):
         self.assertEqual(len(rows), 1615)
         self.assertEqual([call[2]["offset"] for call in calls], ["0", "1000"])
         self.assertTrue(all(call[2]["limit"] == "1000" for call in calls))
+
+    def test_future_unknown_catalog_codes_are_complete_pending_and_radar_disabled(self):
+        class IndexClient:
+            def all_securities(self, trade_date):
+                return [{"code":"sh.000777", "code_name":"Future Index", "tradeStatus":"1"}]
+
+        class CatalogDb:
+            def __init__(self, kind):
+                self.kind = kind
+                self.upserted = []
+
+            def get_index_catalog(self):
+                return []
+
+            def get_etf_catalog(self):
+                return []
+
+            def upsert_index_catalog(self, rows):
+                self.upserted = list(rows)
+
+            def upsert_etf_catalog(self, rows):
+                self.upserted = list(rows)
+
+        index_db = CatalogDb("index")
+        with patch.object(sync_module, "MIN_INDEX_COUNT", 1):
+            index_rows = sync_module.discover_index_catalog(IndexClient(), index_db, "2026-07-31")
+        self.assertEqual(index_rows[0]["category"], "other")
+        self.assertFalse(index_rows[0]["radar_enabled"])
+        self.assertEqual(index_rows[0]["last_status"], "pending")
+        self.assertIsNone(index_rows[0]["history_from"])
+
+        class EtfClient:
+            def all_securities(self, trade_date):
+                return [{"code":"sh.561490", "code_name":"财通资管中证全指红利质量ETF"}]
+
+        etf_db = CatalogDb("etf")
+        raw = [{"code":"sh.561490", "close":"1", "amount":"30000000", "tradestatus":"1"}]
+        with patch.object(sync_module, "MIN_ETF_DAILY_ROWS", 1):
+            etf_rows, _ = sync_module.discover_etf_catalog(
+                EtfClient(), etf_db, "2026-07-31", raw
+            )
+        self.assertEqual(etf_rows[0]["category"], "other")
+        self.assertIsNone(etf_rows[0]["radar_scope"])
+        self.assertFalse(etf_rows[0]["radar_enabled"])
+        self.assertEqual(etf_rows[0]["last_status"], "pending")
+        self.assertIsNone(etf_rows[0]["latest_trade_date"])
+
+    def test_catalog_upserts_use_database_defaults_and_http_errors_include_response_body(self):
+        db = SupabaseRest.__new__(SupabaseRest)
+        db.url = "https://example.supabase.co"
+        db.headers = {}
+        calls = []
+
+        def capture(method, path, **kwargs):
+            calls.append((method, path, kwargs))
+
+        db._request = capture
+        db.upsert_etf_catalog([{
+            "provider":"baostock", "market":"SH", "code":"561490",
+            "name":"Future ETF", "category":"other", "radar_scope":None,
+            "theme_group":"", "theme_label":"", "radar_enabled":False,
+            "active":True, "universe_version":2,
+        }])
+        sent = json.loads(calls[0][2]["data"])[0]
+        self.assertEqual(sent["last_status"], "pending")
+        self.assertIn("missing=default", calls[0][2]["headers"]["Prefer"])
+
+        response = sync_module.requests.Response()
+        response.status_code = 400
+        response.url = "https://example.supabase.co/rest/v1/market_etf_catalog"
+        response._content = b'{"code":"23502","message":"null value in column last_status"}'
+        db._request = SupabaseRest._request.__get__(db, SupabaseRest)
+        with (
+            patch.object(sync_module.requests, "request", return_value=response),
+            patch.object(sync_module.time_module, "sleep"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "last_status"):
+                db._request("POST", "market_etf_catalog")
 
     def test_universe_publication_upgrades_inactive_catalog_rows_missing_from_daily_discovery(self):
         class IndexClient:
