@@ -144,6 +144,23 @@ test('official and preview MACD results use one shared source-label contract', (
   }
 });
 
+test('Terminal MACD help and algorithm guide share the complete manual interpretation contract', () => {
+  const terminal=fs.readFileSync(path.join(root,'src/apps/terminal-app.js'),'utf8');
+  const algorithms=fs.readFileSync(path.join(root,'docs/ALGORITHMS.md'),'utf8');
+  const html=fs.readFileSync(path.join(root,'Terminal.html'),'utf8');
+  const required=[
+    'Bullish Divergence +2','Bullish +1','Wait/Flat 0','Bearish -1','neutral',
+    'DIF','DEA','Histogram = 2 × (DIF − DEA)','Golden Cross','Death Cross','零轴','至少两项一致',
+    '双线缠绕或走平','反复交叉','柱体接近零轴','刚交叉','负柱缩短','正柱缩短',
+    '数据不足','Official Close','Current Preview','Apply Suggestion',
+    '更低低点','更高低点','60','五点拐点','顶背离','Bearish','Wait/Flat'
+  ];
+  for(const source of [terminal,algorithms]){
+    for(const text of required)assert.ok(source.includes(text),`MACD contract missing ${text}`);
+  }
+  assert.match(html,/Algorithm Guide v2\.1 · 2026-08/);
+});
+
 test('local BaoStock launcher keeps credentials and its environment out of Git', () => {
   const ignore=fs.readFileSync(path.join(root,'.gitignore'),'utf8');
   const launcher=fs.readFileSync(path.join(root,'SyncBaoStock.cmd'),'utf8');

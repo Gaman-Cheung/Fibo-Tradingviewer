@@ -818,13 +818,45 @@ test('tracker MA Status and Scenario Lab share the read-only help modal', async 
   await expect(page.locator('#trackerHelpBackdrop')).not.toHaveClass(/open/);
 });
 
-test('terminal keeps its established help control', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== 'desktop-chromium','Terminal table help controls are desktop-only.');
-  await page.goto('/Terminal.html?tab=v6');
-  const help=page.locator('.help-icon').first();
-  await expect(help).toBeVisible();
-  const geometry=await help.evaluate(node=>({width:node.getBoundingClientRect().width,height:node.getBoundingClientRect().height,borderRadius:getComputedStyle(node).borderRadius}));
-  expect(geometry).toEqual({width:18,height:18,borderRadius:'50%'});
+test('Terminal MACD help explains manual confirmation and remains accessible', async ({ page }, testInfo) => {
+  await page.goto('/Terminal.html?tab=v7');
+  const help=page.locator(`[data-fibo-click="openHelp('macd')"]`);
+  await expect(help).toHaveCount(1);
+  if(testInfo.project.name==='desktop-chromium'){
+    await expect(help).toBeVisible();
+    const geometry=await help.evaluate(node=>({width:node.getBoundingClientRect().width,height:node.getBoundingClientRect().height,borderRadius:getComputedStyle(node).borderRadius}));
+    expect(geometry).toEqual({width:18,height:18,borderRadius:'50%'});
+    await help.click();
+  }else await help.evaluate(node=>node.click());
+
+  const backdrop=page.locator('#helpModalBackdrop');
+  const body=backdrop.locator('.note-modal-body');
+  const content=page.locator('#helpModalContent');
+  await expect(backdrop).toHaveClass(/open/);
+  await expect(page.locator('#helpModalTitle')).toHaveText('MACD Trend · 动量状态');
+  for(const text of [
+    'DIF','DEA','Histogram','Bullish Divergence +2','Bullish +1','Wait/Flat 0','Bearish -1',
+    '至少两项一致','双线缠绕或走平','反复交叉','负柱缩短','正柱缩短',
+    'Apply Suggestion','Official Close','Current Preview','五点拐点','顶背离'
+  ])await expect(content).toContainText(text);
+  await expect(backdrop.locator('.note-modal-footer')).toContainText('Algorithm Guide v2.1 · 2026-08');
+  const scroll=await body.evaluate(node=>({clientHeight:node.clientHeight,scrollHeight:node.scrollHeight,clientWidth:node.clientWidth,scrollWidth:node.scrollWidth}));
+  expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
+  expect(scroll.scrollWidth-scroll.clientWidth).toBeLessThanOrEqual(1);
+  await body.evaluate(node=>{node.scrollTop=node.scrollHeight;});
+  await expect.poll(()=>body.evaluate(node=>node.scrollTop)).toBeGreaterThan(0);
+
+  await page.keyboard.press('Escape');
+  await expect(backdrop).not.toHaveClass(/open/);
+  if(testInfo.project.name==='desktop-chromium')await expect(help).toBeFocused();
+
+  if(testInfo.project.name==='desktop-chromium')await help.click();
+  else await help.evaluate(node=>node.click());
+  await expect(backdrop).toHaveClass(/open/);
+  await backdrop.locator('.note-modal-close').click();
+  await expect(backdrop).not.toHaveClass(/open/);
+  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
 });
 
 test('wave controller loads the shared Pool instrument and opens Pro Tips', async ({ page }, testInfo) => {

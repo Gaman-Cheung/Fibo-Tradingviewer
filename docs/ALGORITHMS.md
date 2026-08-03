@@ -17,10 +17,22 @@ This document records current behavior; it is not investment advice. Changes req
 
 - F: Breakout 0, Pullback 0, Correction +1, Golden Dip +4, Danger Zone +3, Harmonic +2, Structure Broken −5.
 - T: Uptrend +2, Sideways 0, Downtrend −3.
-- RSI: ≤30 +2, 30–45 +1, ≥70 −2. MACD: Bullish Divergence +2, Bullish +1, Neutral 0, Bearish −1. The stored compatibility value for Bullish Divergence remains `divergence`. Combined M is capped at +3.
+- RSI: ≤30 +2, 30–45 +1, ≥70 −2. MACD: Bullish Divergence +2, Bullish +1, Wait/Flat 0, Bearish -1. The compatible stored values remain `divergence` for Bullish Divergence and `neutral` for Wait/Flat. Combined Momentum is capped at +3.
 - VR uses the existing five-day thresholds: ≤0.8 contraction, 1.2–1.5 mild expansion, ≥1.5 clear expansion, ≥2.5 abnormal-volume classification.
 - Good Setup requires valid Entry/Stop/targets, T1 ≥1R and T2 ≥2R. Sniper Buy additionally requires total ≥6, non-downtrend, structural stop alignment and no tight first barrier.
 - Missing Entry cannot be promoted by a preview R:R.
+
+### Terminal MACD manual interpretation
+
+- MACD uses 12/26/9. DIF is the fast line, DEA is its smoothed signal line, and the current implementation uses `Histogram = 2 × (DIF − DEA)`. A Golden Cross（金叉）means DIF crosses above DEA; a Death Cross（死叉）means it crosses below. The zero axis distinguishes positive and negative medium-term momentum.
+- Broker software may reverse red/green histogram colors. Read the Histogram sign, direction and expansion/contraction instead of relying on color.
+- Manual Bullish requires at least two aligned conditions（至少两项一致）: DIF above DEA, both lines rising, positive Histogram expanding, or a Golden Cross that remains confirmed. A price breakout is secondary evidence only.
+- Manual Bearish likewise requires at least two aligned conditions（至少两项一致）: DIF below DEA, both lines falling, negative Histogram expanding, or a Death Cross that remains confirmed. A price breakdown is secondary evidence only.
+- Choose Wait/Flat for 双线缠绕或走平, 反复交叉, 柱体接近零轴, a 刚交叉 one-bar signal, 负柱缩短但 DIF 仍低于 DEA, 正柱缩短但 DIF 仍高于 DEA, 疑似但未确认的背离, or 数据不足或无法判断. A fresh cross with short bars and attached lines is not confirmed.
+- Decision order: first check for a manually confirmed bottom divergence; otherwise choose Bullish or Bearish only when at least two conditions align; everything else remains Wait/Flat.
+- The automatic suggestion algorithm is intentionally unchanged: Golden Cross, or DIF above DEA and above the zero axis, suggests Bullish; Death Cross, or DIF below DEA and below the zero axis, suggests Bearish; mixed or insufficient states suggest Wait/Flat. This is a candidate only. Only Apply Suggestion writes the dropdown, and stricter manual review may keep Wait/Flat.
+- Official Close is the confirmed objective basis. Current Preview appends the entered Current as a provisional condition only; switching the basis does not itself change the dropdown or Composite Signal.
+- Bullish Divergence is reserved for a manually confirmed bottom divergence where price forms a 更低低点 and DIF forms a 更高低点. The scanner examines the latest 60 official sessions with five-point pivots（五点拐点）and excludes Current Preview. A 顶背离 must never use the +2 option: choose Bearish when weakness is confirmed, otherwise Wait/Flat.
 
 ## Elliott Wave
 
