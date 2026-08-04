@@ -13,10 +13,10 @@ on:
         options: [smoke, daily, backfill, repair]
         default: smoke
       dataset:
-        description: 'Data set (use etfs for first ETF Radar backfill)'
+        description: 'Data set (Pulse reads stored A-share/index history)'
         required: true
         type: choice
-        options: [indices, etfs, a-shares, all]
+        options: [indices, pulse, etfs, a-shares, all]
         default: indices
       start_date:
         description: 'Repair start date (YYYY-MM-DD)'
