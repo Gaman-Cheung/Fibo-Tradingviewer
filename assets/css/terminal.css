@@ -281,11 +281,11 @@
         .input-rsi { width: 45px; }
         .input-risk { width: 66px; }
         select { width: 105px; cursor: pointer; }
-        .previous-shell { position:relative; width:84px; margin:auto; }
-        .previous-shell .previous { box-sizing:border-box; width:84px; padding-right:30px; }
+        .previous-shell { width:100px; margin:auto; display:grid; grid-template-columns:72px 25px; gap:3px; align-items:center; }
+        .previous-shell .previous { box-sizing:border-box; width:72px; padding-right:4px; }
         .previous-shell .previous[readonly] { background:var(--color-surface-muted); color:var(--color-text); }
         .previous-mode-button {
-            position:absolute; top:50%; right:3px; width:25px; height:25px; min-height:25px; padding:0; transform:translateY(-50%);
+            width:25px; height:25px; min-height:25px; padding:0;
             display:grid; place-items:center; border:1px solid var(--color-border); border-radius:4px; background:var(--color-surface); color:var(--color-text-secondary); cursor:pointer;
         }
         .previous-mode-button .material-icons { font-size:15px; }
@@ -295,6 +295,11 @@
         .previous-mode-button.state-error { border-color:var(--color-danger); background:var(--color-danger-soft); color:var(--color-danger-text); }
         .previous-mode-button.state-loading .material-icons { animation:previousCloseSpin 1s linear infinite; }
         @keyframes previousCloseSpin { to { transform:rotate(360deg); } }
+
+        @media (min-width:769px) {
+            #tab-v6 .col-previous, #tab-v6 .col-baseline { padding-left:4px; padding-right:4px; }
+            #tab-v6 .baseline { box-sizing:border-box; width:82px; }
+        }
 
         .calc-result { font-family: 'Roboto Mono', monospace; font-weight: 500; position: relative;}
         .profit-pct { color: var(--g-red); font-weight: 900; font-size: 13px;}

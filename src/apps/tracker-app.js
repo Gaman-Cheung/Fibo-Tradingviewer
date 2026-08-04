@@ -13,7 +13,7 @@ import { getAuthenticatedUser, loadCloudRow, upsertCloudRow } from '../core/clou
 import { buildCloudPayload, unpackCloudPayload } from '../core/cloud-payload.js';
 import { loadDailyCloses, loadMarketSyncState, loadTrackerState, saveTrackerState, syncMarketBindings } from '../core/market-repository.js';
 import { DEFAULT_TRACKER_MA_PROJECTION_SCENARIO, normalizeTrackerMaProjectionScenario } from '../core/tracker-state.js';
-import { MA_PERIODS, DEFAULT_VISIBLE_MAS, analyzeTrend, appendProvisionalCurrent, sma } from '../tracker/trend-engine.js';
+import { MA_PERIODS, DEFAULT_VISIBLE_MAS, analyzeTrend, appendProvisionalCurrent, maDirectionThresholds, sma } from '../tracker/trend-engine.js';
 import { buildTrackerChartModel, buildTrackerChartXModel, buildTrackerChartYModel, trackerChartEdge } from '../tracker/chart-model.js';
 import { buildScenarioComparison } from '../tracker/scenario-comparison.js';
 import { projectMovingAverageSeries } from '../tracker/ma-projection.js';
@@ -41,6 +41,7 @@ const TRACKER_HELP_TOPICS = {
   }
 };
 TRACKER_HELP_TOPICS['ma-status'].html += `<h3>Official Close 与 Current Preview</h3><p><strong>Official Close</strong> 只使用 BaoStock 最新正式收盘序列，代表已经确认的客观 MACD；<strong>Current Preview</strong> 会在正式历史后追加手动 Current，用于盘中条件预演。两者同时展示便于比较，但 Preview 的金叉、死叉、零轴和动能状态都不等于正式收盘确认。Current 为空时只保留 Official，Preview 显示待输入提示。</p>`;
+TRACKER_HELP_TOPICS['ma-status'].html += `<h3>Reverse Price · 反向价格</h3><p>Reverse Price 使用最新正式收盘历史，计算 Current／下一正式收盘需要到达哪一侧，才会让本次 MA Direction 进入相反方向：</p><div class="formula"><code>Up above = C_leave + N × MA_previous × 0.01%</code><br><code>Down below = C_leave − N × MA_previous × 0.01%</code></div><p><code>C_leave</code> 是追加 Current 或下一收盘后移出 N 日窗口的正式收盘价。当前 Direction 为 up 时显示 <strong>Down &lt; X</strong>；为 down 时显示 <strong>Up &gt; X</strong>；flat 没有单一反向，因此同时显示两个边界。显示价格保留三位小数，系统仍以未舍入值和严格的大于／小于关系判断。</p><p>填写 Current 时，阈值对应同一个 Current Preview；Current 为空时，它对应下一正式收盘。Reverse Price 只能描述单次 Direction 和可能的 Turn Alert，不能直接产生 Up Confirmed 或 Down Confirmed；方向确认仍要求连续三个计算点。</p>`;
 TRACKER_HELP_TOPICS.scenario.html += `<h3>Projected moving averages</h3><p>点击 Flat、Trend continuation 或 Custom target 结果行，会选择该情景用于未来均线预演；三条价格路径仍会同时保留。系统把所选情景的逐日收盘价依次追加到历史序列，并用现有 SMA 公式延长当前勾选的 MA。填写 Current 时，Current Preview 也会进入这组条件计算。</p><p>历史均线为实线，未来均线为同色短虚线。它们表示“如果该价格路径成立，均线可能如何演化”，不是独立价格预测、发生概率或交易信号。Custom Target 被清空或 Reset 时，均线预演会自动回到 Trend continuation。</p>`;
 let pool = loadInstrumentPool();
 let history = [];
@@ -193,7 +194,9 @@ function renderTracker(forceLiveInputs=false) {
   document.getElementById('maTableBody').innerHTML=MA_PERIODS.map(period=>{
     const item=preview.ma[period], turn=preview.turns[`ma${period}`];
     const turnText=formatTurnLabel(turn,item.direction,live.current !== '');
-    return `<tr><td>MA${period}</td><td>${Number.isFinite(item.value)?item.value.toFixed(3):'--'}</td><td>${Number.isFinite(item.delta)?item.delta.toFixed(4):'--'}</td><td class="status-${item.direction}">${item.direction}</td><td>${turnText}</td></tr>`;
+    const thresholds=maDirectionThresholds(history,period);
+    const reversePrice=reversePriceHtml(thresholds,item.direction);
+    return `<tr data-ma-period="${period}"><td>MA${period}</td><td>${Number.isFinite(item.value)?item.value.toFixed(3):'--'}</td><td>${Number.isFinite(item.delta)?item.delta.toFixed(4):'--'}</td><td class="status-${item.direction}" data-ma-direction>${item.direction}</td><td class="reverse-price-cell" data-reverse-price>${reversePrice}</td><td>${turnText}</td></tr>`;
   }).join('');
   const hasCurrent=Number.isFinite(Number(live.current))&&Number(live.current)>0;
   document.getElementById('macdSummary').innerHTML=`<strong class="macd-summary__title">MACD 12/26/9</strong><div class="macd-comparison">${macdBasisCardHtml({basis:'official',label:`Official Close · ${historyDates.at(-1)||'--'}`,analysis:official.macd})}${hasCurrent?macdBasisCardHtml({basis:'preview',label:`Current Preview · ${Number(live.current).toFixed(3)}`,analysis:preview.macd}):macdPreviewPlaceholderHtml()}</div>`;
@@ -211,6 +214,15 @@ function renderTracker(forceLiveInputs=false) {
   drawChart(previewValues,historyDates,live.current !== '',scenarios,{
     horizon,targetDate,maProjectionScenario:selectedKey,maProjectionLabel:selectedScenario?.label || 'Trend continuation',maProjectionSeries
   });
+}
+
+function reversePriceHtml(thresholds,direction) {
+  if (!thresholds) return '<span class="reverse-price-empty">—</span>';
+  const up=`<span class="reverse-price-value status-up" title="Up when Current / next close is strictly above ${thresholds.upAbove.toFixed(6)}">Up &gt; ${thresholds.upAbove.toFixed(3)}</span>`;
+  const down=`<span class="reverse-price-value status-down" title="Down when Current / next close is strictly below ${thresholds.downBelow.toFixed(6)}">Down &lt; ${thresholds.downBelow.toFixed(3)}</span>`;
+  if(direction==='up')return down;
+  if(direction==='down')return up;
+  return `${up}${down}`;
 }
 
 function renderScenarioResults(scenarios,targetDate,selectedKey) {

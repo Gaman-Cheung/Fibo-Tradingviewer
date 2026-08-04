@@ -24,13 +24,16 @@ This document records current behavior; it is not investment advice. Changes req
 
 ### Terminal MACD manual interpretation
 
+Suggestion classification contract: `Algorithm Guide v2.2 · 2026-08`.
+
 - MACD uses 12/26/9. DIF is the fast line, DEA is its smoothed signal line, and the current implementation uses `Histogram = 2 × (DIF − DEA)`. A Golden Cross（金叉）means DIF crosses above DEA; a Death Cross（死叉）means it crosses below. The zero axis distinguishes positive and negative medium-term momentum.
 - Broker software may reverse red/green histogram colors. Read the Histogram sign, direction and expansion/contraction instead of relying on color.
 - Manual Bullish requires at least two aligned conditions（至少两项一致）: DIF above DEA, both lines rising, positive Histogram expanding, or a Golden Cross that remains confirmed. A price breakout is secondary evidence only.
 - Manual Bearish likewise requires at least two aligned conditions（至少两项一致）: DIF below DEA, both lines falling, negative Histogram expanding, or a Death Cross that remains confirmed. A price breakdown is secondary evidence only.
 - Choose Wait/Flat for 双线缠绕或走平, 反复交叉, 柱体接近零轴, a 刚交叉 one-bar signal, 负柱缩短但 DIF 仍低于 DEA, 正柱缩短但 DIF 仍高于 DEA, 疑似但未确认的背离, or 数据不足或无法判断. A fresh cross with short bars and attached lines is not confirmed.
 - Decision order: first check for a manually confirmed bottom divergence; otherwise choose Bullish or Bearish only when at least two conditions align; everything else remains Wait/Flat.
-- The automatic suggestion algorithm is intentionally unchanged: Golden Cross, or DIF above DEA and above the zero axis, suggests Bullish; Death Cross, or DIF below DEA and below the zero axis, suggests Bearish; mixed or insufficient states suggest Wait/Flat. This is a candidate only. Only Apply Suggestion writes the dropdown, and stricter manual review may keep Wait/Flat.
+- The automatic suggestion keeps a fresh Golden Cross as Bullish and a fresh Death Cross as Bearish. Without a fresh cross, DIF above DEA at/above zero remains Bullish and DIF below DEA below zero remains Bearish. Below zero（零轴下方）, a Bullish continuation additionally requires DIF above DEA, both DIF and DEA rising（双线上行）from the immediately preceding point, and a positive Histogram that continues expanding（正柱继续扩张）. Above zero（零轴上方）, Bearish continuation uses the exact mirror: DIF below DEA, both lines falling（双线下行）, and an increasingly negative Histogram（负柱继续扩张）. Conflicting, shrinking or incomplete states remain Wait/Flat. This is a candidate only. Only Apply Suggestion writes the dropdown, and stricter manual review may keep Wait/Flat.
+- Official Close compares with the preceding official session. Current Preview compares with the latest official close. Current percentage change is not a separate MACD input and cannot force a Bullish or Bearish label by itself.
 - Official Close is the confirmed objective basis. Current Preview appends the entered Current as a provisional condition only; switching the basis does not itself change the dropdown or Composite Signal.
 - Bullish Divergence is reserved for a manually confirmed bottom divergence where price forms a 更低低点 and DIF forms a 更高低点. The scanner examines the latest 60 official sessions with five-point pivots（五点拐点）and excludes Current Preview. A 顶背离 must never use the +2 option: choose Bearish when weakness is confirmed, otherwise Wait/Flat.
 
@@ -46,6 +49,8 @@ This document records current behavior; it is not investment advice. Changes req
 
 - Always calculate MA5/10/13/20/30/60/120/144/240 from BaoStock front-adjusted closes. The full-market source reconstructs that series backwards from official raw Close and `pctChg`, anchored to the latest official raw Close; live smoke validation against `adjustflag=2` must remain within `1e-4` relative error.
 - Exact slope recurrence: `ΔMA_N = (C_t - C_{t-N}) / N`; near-flat means `|ΔMA / MA_prev| <= 0.01%`.
+- MA Status Reverse Price is a display-only inversion of that same Direction rule. From the latest official history, the next Current/close is `up` only above `C_leave + N × MA_previous × 0.01%`, `down` only below `C_leave − N × MA_previous × 0.01%`, and `flat` between the inclusive boundaries. An up row displays only its down boundary, a down row only its up boundary, while flat displays both.
+- Reverse Price uses full precision internally and three decimals in the UI. It can describe one Direction change and a possible Turn Alert, but it never substitutes for the three consecutive calculation points required by Up Confirmed or Down Confirmed.
 - First slope sign change is Turn Alert; three consecutive up slopes display Up Confirmed and three consecutive down slopes display Down Confirmed. These labels confirm direction continuity and do not imply that a new turn just occurred.
 - First official close crossing a critical MA is Watch; two official closes on the same side are Confirmed.
 - Manual Current appends a provisional close for preview only. Primary conclusions remain based on official closes.

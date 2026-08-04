@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { inferMainlandMarket, migrateLegacyMarket, toBaoStockCode } from '../../src/core/market-code.js';
 import { buildFrontAdjustedSeries } from '../../src/core/front-adjusted-series.js';
 import { runMigrations, CURRENT_SCHEMA_VERSION } from '../../src/core/migrations.js';
-import { analyzeTrend, appendProvisionalCurrent, maSnapshot, macd, projectScenario, sma, turnState } from '../../src/tracker/trend-engine.js';
+import { MA_PERIODS, analyzeTrend, appendProvisionalCurrent, directionOf, maDirectionThresholds, maSnapshot, macd, projectScenario, sma, turnState } from '../../src/tracker/trend-engine.js';
 import { buildTrackerChartModel, buildTrackerChartXModel, buildTrackerChartYModel, trackerChartEdge, trackerForecastRatio, TRACKER_CHART_WINDOW, TRACKER_FORECAST_DAY_SCALE, TRACKER_FORECAST_MAX_RATIO } from '../../src/tracker/chart-model.js';
 import { buildScenarioComparison } from '../../src/tracker/scenario-comparison.js';
 import { projectMovingAverageSeries } from '../../src/tracker/ma-projection.js';
@@ -134,6 +134,29 @@ test('MA recurrence, MACD and scenario outputs are deterministic', () => {
   assert.equal(scenario.analyses.at(-1).structure,'Uptrend');
   assert.equal(scenario.analyses.at(-1).event,'趋势延续');
   assert.equal(scenario.probabilityClaim,false);
+});
+
+test('MA reverse prices reuse the existing flat band for every supported period', () => {
+  const closes=Array.from({length:300},(_,index)=>80+index*.17+Math.sin(index/9));
+  const original=[...closes];
+  for(const period of MA_PERIODS){
+    const thresholds=maDirectionThresholds(closes,period);
+    assert.ok(thresholds,`MA${period} thresholds`);
+    const previousMa=sma(closes,period);
+    const leavingClose=closes.at(-period);
+    assert.ok(Math.abs(thresholds.upAbove-(leavingClose+period*previousMa*.0001))<1e-12);
+    assert.ok(Math.abs(thresholds.downBelow-(leavingClose-period*previousMa*.0001))<1e-12);
+    const epsilon=Math.max(1,Math.abs(thresholds.upAbove))*1e-8;
+    assert.equal(maSnapshot([...closes,thresholds.upAbove+epsilon],[period])[period].direction,'up');
+    assert.equal(maSnapshot([...closes,thresholds.downBelow-epsilon],[period])[period].direction,'down');
+    assert.equal(maSnapshot([...closes,(thresholds.upAbove+thresholds.downBelow)/2],[period])[period].direction,'flat');
+    assert.equal(directionOf(.0001),'flat');
+    assert.equal(directionOf(-.0001),'flat');
+  }
+  assert.equal(maDirectionThresholds(closes.slice(0,4),5),null);
+  assert.equal(maDirectionThresholds(closes,0),null);
+  assert.equal(maDirectionThresholds(closes,5.5),null);
+  assert.deepEqual(closes,original);
 });
 
 test('Scenario comparison preserves all three formulas and ignores the legacy selected mode', () => {

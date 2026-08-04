@@ -35,6 +35,20 @@ export function directionOf(ratio, flatRatio = FLAT_RATIO) {
   return Number(ratio) > 0 ? 'up' : 'down';
 }
 
+export function maDirectionThresholds(values, period) {
+  const closes = cleanCloses(values);
+  const normalizedPeriod = Number(period);
+  if (!Number.isInteger(normalizedPeriod) || normalizedPeriod <= 0 || closes.length < normalizedPeriod) return null;
+  const previousMa = sma(closes, normalizedPeriod);
+  const leavingClose = closes.at(-normalizedPeriod);
+  if (!finite(previousMa) || !finite(leavingClose)) return null;
+  const flatBand = normalizedPeriod * previousMa * FLAT_RATIO;
+  return {
+    upAbove:leavingClose + flatBand,
+    downBelow:leavingClose - flatBand
+  };
+}
+
 export function maDirectionHistory(values, period, count = 4) {
   const closes = cleanCloses(values);
   const result = [];

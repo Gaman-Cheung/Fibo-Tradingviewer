@@ -396,6 +396,58 @@ test('terminal Auto Prev Close is deduplicated by symbol and remains overridable
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
+test('Look First keeps compact desktop columns and full-size mobile Prev Close controls', async ({ page },testInfo) => {
+  await page.goto('/Terminal.html?tab=v6');
+  const row=page.locator('#tableBodyV6 tr[data-instrument-id="e2e-a"]');
+  const previous=row.locator('.previous');
+  const mode=row.locator('.previous-mode-button');
+  const baseline=row.locator('.baseline');
+  await expect(page.locator('#tab-v6 thead .col-baseline')).toContainText('% Base');
+  await mode.click();
+  await expect(previous).toHaveJSProperty('readOnly',false);
+  await previous.fill('3809.66');
+  await baseline.selectOption('previous');
+  await expect(baseline.locator('option:checked')).toHaveText('Prev');
+  await expect.poll(()=>page.evaluate(()=>{
+    const saved=JSON.parse(localStorage.getItem('tv_lookfirst_data_v3')).find(item=>item.id==='e2e-a');
+    return [saved.p,saved.b];
+  })).toEqual(['3809.66','previous']);
+
+  const geometry=await row.evaluate(node=>{
+    const shell=node.querySelector('.previous-shell');
+    const input=node.querySelector('.previous');
+    const button=node.querySelector('.previous-mode-button');
+    const select=node.querySelector('.baseline');
+    const shellBox=shell.getBoundingClientRect(),inputBox=input.getBoundingClientRect(),buttonBox=button.getBoundingClientRect(),selectBox=select.getBoundingClientRect();
+    const inputStyle=getComputedStyle(input);
+    const canvas=document.createElement('canvas');
+    const context=canvas.getContext('2d');
+    context.font=`${inputStyle.fontWeight} ${inputStyle.fontSize} ${inputStyle.fontFamily}`;
+    const horizontalPadding=parseFloat(inputStyle.paddingLeft)+parseFloat(inputStyle.paddingRight);
+    return {
+      shellWidth:shellBox.width,inputWidth:inputBox.width,buttonWidth:buttonBox.width,buttonHeight:buttonBox.height,
+      baselineWidth:selectBox.width,gap:buttonBox.left-inputBox.right,noOverlap:inputBox.right<=buttonBox.left,
+      textWidth:context.measureText('3809.66').width,availableTextWidth:input.clientWidth-horizontalPadding,
+      pageOverflow:document.documentElement.scrollWidth-window.innerWidth
+    };
+  });
+  expect(geometry.noOverlap).toBe(true);
+  expect(geometry.textWidth).toBeLessThanOrEqual(geometry.availableTextWidth);
+  expect(geometry.pageOverflow).toBeLessThanOrEqual(1);
+  if(testInfo.project.name==='desktop-chromium'){
+    expect(geometry.shellWidth).toBeCloseTo(100,0);
+    expect(geometry.inputWidth).toBeCloseTo(72,0);
+    expect(geometry.buttonWidth).toBeCloseTo(25,0);
+    expect(geometry.gap).toBeCloseTo(3,0);
+    expect(geometry.baselineWidth).toBeCloseTo(82,0);
+  }else{
+    expect(geometry.shellWidth).toBeGreaterThan(100);
+    expect(geometry.inputWidth).toBeGreaterThan(72);
+    expect(geometry.buttonWidth).toBeGreaterThanOrEqual(44);
+    expect(geometry.buttonHeight).toBeGreaterThanOrEqual(44);
+  }
+});
+
 test('terminal Auto Prev Close preserves a cached value when no market row is available', async ({ page }) => {
   await page.goto('/Terminal.html?tab=v6');
   await page.evaluate(()=>{
@@ -556,6 +608,48 @@ test('tracker chart exposes official markers, dates and separate Current preview
   await expect(previewMacd).toContainText('Set Current to preview');
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test('Tracker MA Status shows official-history Reverse Price thresholds', async ({ page },testInfo) => {
+  await page.goto('/TrendTracker.html');
+  const rows=page.locator('#maTableBody tr');
+  await expect(rows).toHaveCount(9);
+  const ma5=page.locator('#maTableBody tr[data-ma-period="5"]');
+  const direction=ma5.locator('[data-ma-direction]');
+  const reverse=ma5.locator('[data-reverse-price]');
+  await expect(direction).toHaveText('down');
+  await expect(reverse).toContainText('Up >');
+  const upperTitle=await reverse.locator('.status-up').getAttribute('title');
+  const upper=Number(upperTitle.match(/above ([\d.]+)/)?.[1]);
+  expect(Number.isFinite(upper)).toBe(true);
+
+  await page.locator('#trackerCurrent').fill(String(upper+1));
+  await expect(direction).toHaveText('up');
+  await expect(reverse).toContainText('Down <');
+  const lowerTitle=await reverse.locator('.status-down').getAttribute('title');
+  const lower=Number(lowerTitle.match(/below ([\d.]+)/)?.[1]);
+  expect(Number.isFinite(lower)).toBe(true);
+
+  await page.locator('#trackerCurrent').fill(String((upper+lower)/2));
+  await expect(direction).toHaveText('flat');
+  await expect(reverse.locator('.reverse-price-value')).toHaveCount(2);
+  await expect(reverse).toContainText('Up >');
+  await expect(reverse).toContainText('Down <');
+  await expect(reverse.locator('.status-up')).toHaveAttribute('title',upperTitle);
+  await expect(page.locator('#maTableBody tr[data-ma-period="120"] [data-reverse-price]')).not.toHaveText('—');
+  await expect(page.locator('#maTableBody tr[data-ma-period="144"] [data-reverse-price]')).toHaveText('—');
+  await expect(page.locator('#maTableBody tr[data-ma-period="240"] [data-reverse-price]')).toHaveText('—');
+
+  const overflow=await page.evaluate(()=>({
+    page:document.documentElement.scrollWidth-window.innerWidth,
+    table:document.querySelector('#maTableBody').closest('.table-wrap').scrollWidth-document.querySelector('#maTableBody').closest('.table-wrap').clientWidth,
+    overflowX:getComputedStyle(document.querySelector('#maTableBody').closest('.table-wrap')).overflowX
+  }));
+  expect(overflow.page).toBeLessThanOrEqual(1);
+  if(testInfo.project.name==='iphone'){
+    expect(overflow.table).toBeGreaterThan(0);
+    expect(['auto','scroll']).toContain(overflow.overflowX);
+  }
 });
 
 test('Tracker compares all Scenario paths and extends MAs for one persisted Scenario', async ({ page },testInfo) => {
@@ -799,6 +893,11 @@ test('tracker MA Status and Scenario Lab share the read-only help modal', async 
   await expect(page.locator('#trackerHelpContent')).toContainText('(preview)');
   await expect(page.locator('#trackerHelpContent')).toContainText('Official Close');
   await expect(page.locator('#trackerHelpContent')).toContainText('Current Preview');
+  await expect(page.locator('#trackerHelpContent')).toContainText('Reverse Price');
+  await expect(page.locator('#trackerHelpContent')).toContainText('C_leave');
+  await expect(page.locator('#trackerHelpContent')).toContainText('Up above');
+  await expect(page.locator('#trackerHelpContent')).toContainText('Down below');
+  await expect(page.locator('#trackerHelpContent')).toContainText('连续三个计算点');
   await page.locator('#trackerHelpBackdrop [data-fibo-click="closeTrackerHelp()"]' ).last().click();
   await expect(page.locator('#trackerHelpBackdrop')).not.toHaveClass(/open/);
 
@@ -837,9 +936,9 @@ test('Terminal MACD help explains manual confirmation and remains accessible', a
   for(const text of [
     'DIF','DEA','Histogram','Bullish Divergence +2','Bullish +1','Wait/Flat 0','Bearish -1',
     '至少两项一致','双线缠绕或走平','反复交叉','负柱缩短','正柱缩短',
-    'Apply Suggestion','Official Close','Current Preview','五点拐点','顶背离'
+    'Apply Suggestion','Official Close','Current Preview','零轴下方','双线上行','正柱继续扩张','零轴上方','双线下行','负柱继续扩张','五点拐点','顶背离'
   ])await expect(content).toContainText(text);
-  await expect(backdrop.locator('.note-modal-footer')).toContainText('Algorithm Guide v2.1 · 2026-08');
+  await expect(backdrop.locator('.note-modal-footer')).toContainText('Algorithm Guide v2.2 · 2026-08');
   const scroll=await body.evaluate(node=>({clientHeight:node.clientHeight,scrollHeight:node.scrollHeight,clientWidth:node.clientWidth,scrollWidth:node.scrollWidth}));
   expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
   expect(scroll.scrollWidth-scroll.clientWidth).toBeLessThanOrEqual(1);

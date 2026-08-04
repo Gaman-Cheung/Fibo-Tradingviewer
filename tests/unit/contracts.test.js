@@ -152,13 +152,28 @@ test('Terminal MACD help and algorithm guide share the complete manual interpret
     'Bullish Divergence +2','Bullish +1','Wait/Flat 0','Bearish -1','neutral',
     'DIF','DEA','Histogram = 2 × (DIF − DEA)','Golden Cross','Death Cross','零轴','至少两项一致',
     '双线缠绕或走平','反复交叉','柱体接近零轴','刚交叉','负柱缩短','正柱缩短',
-    '数据不足','Official Close','Current Preview','Apply Suggestion',
+    '数据不足','Official Close','Current Preview','Apply Suggestion','零轴下方','双线上行','正柱继续扩张','零轴上方','双线下行','负柱继续扩张',
     '更低低点','更高低点','60','五点拐点','顶背离','Bearish','Wait/Flat'
   ];
   for(const source of [terminal,algorithms]){
     for(const text of required)assert.ok(source.includes(text),`MACD contract missing ${text}`);
   }
-  assert.match(html,/Algorithm Guide v2\.1 · 2026-08/);
+  assert.match(html,/Algorithm Guide v2\.2 · 2026-08/);
+});
+
+test('Tracker MA Reverse Price engine, help and algorithm guide share one derived threshold contract', () => {
+  const engine=fs.readFileSync(path.join(root,'src/tracker/trend-engine.js'),'utf8');
+  const tracker=fs.readFileSync(path.join(root,'src/apps/tracker-app.js'),'utf8');
+  const algorithms=fs.readFileSync(path.join(root,'docs/ALGORITHMS.md'),'utf8');
+  const html=fs.readFileSync(path.join(root,'TrendTracker.html'),'utf8');
+  assert.match(engine,/export function maDirectionThresholds/);
+  assert.match(engine,/normalizedPeriod \* previousMa \* FLAT_RATIO/);
+  assert.match(html,/Direction<\/th><th>Reverse Price<\/th><th>Turn/);
+  for(const source of [tracker,algorithms]){
+    for(const text of ['Reverse Price','C_leave','MA_previous','0.01%','Up','Down','flat','Current','official','Turn Alert','Up Confirmed','Down Confirmed']){
+      assert.ok(source.includes(text),`MA Reverse Price contract missing ${text}`);
+    }
+  }
 });
 
 test('local BaoStock launcher keeps credentials and its environment out of Git', () => {

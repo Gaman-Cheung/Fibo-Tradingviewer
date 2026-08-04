@@ -8,7 +8,7 @@ import { macd, macdSeries } from './trend-engine.js';
 
 function finite(value) { return value !== null && value !== '' && Number.isFinite(Number(value)); }
 
-export function classifyTerminalMacd(snapshot = {}) {
+export function classifyTerminalMacd(snapshot = {}, previousPoint = null) {
   if (!finite(snapshot.dif) || !finite(snapshot.dea)) {
     return { value:'neutral', label:'Wait / Flat', reason:'Insufficient MACD history' };
   }
@@ -23,6 +23,29 @@ export function classifyTerminalMacd(snapshot = {}) {
   }
   if (Number(snapshot.dif) < Number(snapshot.dea) && snapshot.zeroAxis === 'below') {
     return { value:'bearish', label:'Bearish', reason:'DIF is below DEA and below the zero axis' };
+  }
+  const hasPrevious = finite(previousPoint?.dif) && finite(previousPoint?.dea) && finite(previousPoint?.histogram);
+  const bullishContinuation = hasPrevious
+    && snapshot.zeroAxis === 'below'
+    && finite(snapshot.histogram)
+    && Number(snapshot.dif) > Number(snapshot.dea)
+    && Number(snapshot.dif) > Number(previousPoint.dif)
+    && Number(snapshot.dea) > Number(previousPoint.dea)
+    && Number(snapshot.histogram) > 0
+    && Number(snapshot.histogram) > Number(previousPoint.histogram);
+  if (bullishContinuation) {
+    return { value:'bullish', label:'Bullish', reason:'DIF and DEA are rising with an expanding positive Histogram below zero' };
+  }
+  const bearishContinuation = hasPrevious
+    && snapshot.zeroAxis === 'above'
+    && finite(snapshot.histogram)
+    && Number(snapshot.dif) < Number(snapshot.dea)
+    && Number(snapshot.dif) < Number(previousPoint.dif)
+    && Number(snapshot.dea) < Number(previousPoint.dea)
+    && Number(snapshot.histogram) < 0
+    && Number(snapshot.histogram) < Number(previousPoint.histogram);
+  if (bearishContinuation) {
+    return { value:'bearish', label:'Bearish', reason:'DIF and DEA are falling with an expanding negative Histogram above zero' };
   }
   return { value:'neutral', label:'Wait / Flat', reason:'MACD is in a mixed or transitional state' };
 }
@@ -72,8 +95,9 @@ export function detectCloseMacdDivergence(values,dates = [], { lookback=60, pivo
 export function buildTerminalMacdSuggestion(values) {
   const closes = (Array.isArray(values) ? values : []).map(Number).filter(Number.isFinite);
   const snapshot = macd(closes);
+  const previousPoint = macdSeries(closes).at(-2) || null;
   const suggestion = closes.length < 35
     ? { value:'neutral', label:'Wait / Flat', reason:'At least 35 closes are required for a stable suggestion' }
-    : classifyTerminalMacd(snapshot);
+    : classifyTerminalMacd(snapshot,previousPoint);
   return { snapshot, suggestion };
 }

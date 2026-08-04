@@ -57,6 +57,10 @@ table { width:100%; border-collapse:collapse; font-size:var(--font-size-sm); }
 th,td { padding:var(--space-2); border-bottom:1px solid var(--color-border-subtle); text-align:right; white-space:nowrap; }
 th:first-child,td:first-child { text-align:left; }
 .status-up { color:var(--color-success-text); }.status-down { color:var(--color-danger-text); }.status-flat { color:var(--color-text-secondary); }
+.reverse-price-cell { min-width:112px; }
+.reverse-price-value { display:block; font-weight:var(--font-weight-semibold); }
+.reverse-price-value + .reverse-price-value { margin-top:2px; }
+.reverse-price-empty { color:var(--color-text-secondary); }
 .scenario-controls { grid-template-columns:minmax(120px,.7fr) minmax(150px,.9fr) minmax(230px,1.25fr); align-items:end; }
 .scenario-date-actions { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:var(--space-2); min-width:0; }
 .scenario-date-actions label { min-width:0; }
