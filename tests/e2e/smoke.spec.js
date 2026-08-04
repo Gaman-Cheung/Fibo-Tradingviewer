@@ -42,13 +42,56 @@ window.supabase={createClient(){
      })),
    }));
  }
+ const pulseSnapshots=Array.from({length:60},(_,offset)=>{
+   const date=new Date(Date.UTC(2026,6,28-offset)).toISOString().slice(0,10);
+   const score=68+Math.sin(offset/5)*8;
+   return {
+     provider:'baostock',trade_date:date,algorithm_version:1,index_universe_version:2,
+     calculation_id:'pulse-calc-'+date,pulse_score:score,pulse_state:score>=80?'Broad Strength':score>=60?'Healthy Strength':'Mixed',
+     stock_eligible_count:4288,index_eligible_count:171,stock_coverage:.991,index_coverage:.982,
+     participation:{score:72,eligible:4288,up_1d_count:2670,up_1d_pct:62.3,up_5d_count:2810,up_5d_pct:65.5,median_return_1d_pct:.62,strong_up_count:75,strong_down_count:19,strong_balance:63.1},
+     trend_breadth:{score:66,eligible:4288,above_ma20_count:2780,above_ma20_pct:64.8,above_ma60_count:2640,above_ma60_pct:61.6,ma20_rising_count:2910,ma20_rising_pct:67.9,ma60_rising_count:2990,ma60_rising_pct:69.7},
+     expansion:{score:59,eligible:4288,new_high_20_count:328,new_low_20_count:94,high_low_balance:77.7,ma60_breakout_count:183,ma60_breakdown_count:112,bo_bd_balance:62},
+     leadership:{score:75,eligible_index_count:171,expected_index_count:174,theme_count:28,theme_above_ma60_pct:71.2,theme_ma60_rising_pct:74.6,theme_new_high_weight:8.5,theme_new_low_weight:2.5,theme_high_low_balance:71.4,broad_confirmation_pct:82.5,broad_confirmed_count:3},
+     computed_at:date+'T11:45:00Z',
+   };
+ });
+ const pulseMembers=[
+   ...Array.from({length:120},(_,index)=>({
+     provider:'baostock',trade_date:'2026-07-28',calculation_id:'pulse-calc-2026-07-28',member_type:'stock',
+     market:index%2?'SZ':'SH',code:String(600000+index).slice(-6),name:'Market Stock '+String(index+1).padStart(3,'0'),theme_group:'',close:10+index/10,
+     return_1d:index<75?5.2+index/100:index<95?1.1:-(index-94)/10,return_5d:index<90?3.2:-2.1,
+     direction_1d:index<95?1:-1,direction_5d:index<90?1:-1,strong_up:index<75,strong_down:index>=115,
+     above_ma20:index<82,above_ma60:index<78,ma20_rising:index<88,ma60_rising:index<84,
+     new_high_20:index<55,new_low_20:index>=110,ma60_breakout:index<40,ma60_breakdown:index>=112,
+     distance_ma20_pct:4-index/30,distance_ma60_pct:6-index/25,ma20_slope_pct:.12-index/2000,ma60_slope_pct:.08-index/2500,
+   })),
+   ...Array.from({length:10},(_,index)=>({
+     provider:'baostock',trade_date:'2026-07-28',calculation_id:'pulse-calc-2026-07-28',member_type:'sector_index',
+     market:index%2?'SZ':'SH',code:String(399000+index).slice(-6),name:'Sector Index '+String(index+1).padStart(2,'0'),theme_group:'theme_'+index,close:1000+index,
+     return_1d:1+index/10,return_5d:4+index/10,direction_1d:1,direction_5d:1,strong_up:false,strong_down:false,
+     above_ma20:true,above_ma60:index<8,ma20_rising:true,ma60_rising:index<7,new_high_20:index<6,new_low_20:index===9,
+     ma60_breakout:false,ma60_breakdown:false,distance_ma20_pct:2,distance_ma60_pct:3-index/4,ma20_slope_pct:.12,ma60_slope_pct:.08,
+   })),
+   ...['CSI 300','CSI 500','CSI 1000','CNI 2000'].map((name,index)=>({
+     provider:'baostock',trade_date:'2026-07-28',calculation_id:'pulse-calc-2026-07-28',member_type:'broad_index',
+     market:index===3?'SZ':'SH',code:['000300','000905','000852','399303'][index],name,theme_group:'',close:3000+index,
+     return_1d:.5,return_5d:2,direction_1d:1,direction_5d:1,strong_up:false,strong_down:false,
+     above_ma20:true,above_ma60:index<3,ma20_rising:true,ma60_rising:index!==2,new_high_20:false,new_low_20:false,
+     ma60_breakout:false,ma60_breakdown:false,distance_ma20_pct:1,distance_ma60_pct:2,ma20_slope_pct:.05,ma60_slope_pct:.03,
+   })),
+ ];
  function builder(table){
    const filters={};
    let requestedLimit=0;
+   let searchTerm='';
    return {
-     select(){return this},eq(column,value){filters[column]=value;return this},limit(value){requestedLimit=value;return this},
+     select(){return this},eq(column,value){filters[column]=value;return this},gt(column,value){filters[column]={op:'gt',value};return this},lt(column,value){filters[column]={op:'lt',value};return this},
+     or(value){searchTerm=String(value).match(/name\.ilike\.%(.*?)%/)?.[1]||'';return this},limit(value){requestedLimit=value;return this},
      order(){
        if(table==='market_daily_bar')window.__marketDailyBarOrders=(window.__marketDailyBarOrders||0)+1;
+       if(table==='market_pulse_member_snapshot')return this;
+       if(table==='market_pulse_snapshot')return Promise.resolve({data:requestedLimit===1?[pulseSnapshots[0]]:pulseSnapshots,error:null});
        if(table==='market_etf_radar_snapshot'){
          window.__etfRadarOrders=window.__etfRadarOrders||{};
          window.__etfRadarOrders[filters.scope]=(window.__etfRadarOrders[filters.scope]||0)+1;
@@ -57,8 +100,17 @@ window.supabase={createClient(){
        }
        return Promise.resolve({data:table==='market_daily_bar'&&filters.code==='300657'?marketRows:table==='market_index_radar_snapshot'?(requestedLimit===1?[radarSnapshot]:radarSnapshots):[],error:null});
      },
+     range(from,to){
+       let rows=pulseMembers.filter(row=>Object.entries(filters).every(([column,expected])=>{
+         if(column==='provider')return row.provider===expected;
+         if(expected&&typeof expected==='object')return expected.op==='gt'?Number(row[column])>expected.value:Number(row[column])<expected.value;
+         return row[column]===expected;
+       }));
+       if(searchTerm){const term=searchTerm.toLowerCase();rows=rows.filter(row=>row.name.toLowerCase().includes(term)||row.code.includes(term));}
+       return Promise.resolve({data:rows.slice(from,to+1),count:rows.length,error:null});
+     },
      single(){return Promise.resolve({data:null,error:{code:'PGRST116'}})},
-     maybeSingle(){return Promise.resolve({data:table==='market_sync_checkpoint'?{last_status:'success'}:null,error:null})},
+     maybeSingle(){return Promise.resolve({data:table==='market_sync_checkpoint'?{last_status:'ok',latest_trade_date:'2026-07-28'}:null,error:null})},
      upsert(){return Promise.resolve({data:null,error:null})}
    };
  }
@@ -181,9 +233,154 @@ test('terminal controller switches tabs and persists shared Pro Tips', async ({ 
   await expect.poll(() => page.evaluate(() => localStorage.getItem('tv_header_tips_v1'))).toBe('E2E discipline');
 });
 
+test('Market Pulse is the default official-close context with chart, guide and paged members', async ({ page }, testInfo) => {
+  await page.goto('/Terminal.html?tab=v6');
+  const context=page.locator('#indexRadar');
+  const mode=context.locator('[data-market-radar-scope="MARKET_PULSE"]');
+  await expect(mode).toHaveAttribute('aria-selected','true');
+  await expect(context.locator('#indexRadarTitle')).toHaveText('FIBO MARKET PULSE · MARKET BREADTH');
+  await expect(context.locator('#indexRadarStatus')).toContainText('Official Close');
+  await expect(context.locator('#indexRadarStatus')).toContainText('2026-07-28');
+  const cards=context.locator('[data-market-pulse-group]');
+  await expect(cards).toHaveCount(4);
+  await expect(cards.nth(0)).toContainText('Participation');
+  await expect(cards.nth(1)).toContainText('Trend Breadth');
+  await expect(cards.nth(2)).toContainText('MA60 BO');
+  await expect(cards.nth(3)).toContainText('Broad Confirm');
+  await expect(context.locator('#marketPulseChart')).toBeVisible();
+  await expect(context.locator('#marketPulseChart')).toHaveAttribute('aria-label',/60 official sessions/);
+  await expect(context.locator('.market-pulse-chart__meta')).toContainText('History 60/60');
+  const pulseChart=context.locator('#marketPulseChart');
+  await pulseChart.focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect(pulseChart).toHaveAttribute('aria-label',/Participation 72\.0.*Leadership 75\.0/);
+  if(testInfo.project.name==='iphone'){
+    await pulseChart.tap({position:{x:120,y:80}});
+    await expect(pulseChart).toHaveAttribute('aria-label',/Pulse .*Participation 72\.0/);
+  }else{
+    const chartBox=await pulseChart.boundingBox();
+    await page.mouse.move(chartBox.x+chartBox.width/2,chartBox.y+chartBox.height/2);
+    await expect(context.locator('#marketPulseChartTooltip')).toBeVisible();
+    await expect(context.locator('#marketPulseChartTooltip')).toContainText('P 72.0');
+    await expect(context.locator('#marketPulseChartTooltip')).toContainText('L 75.0');
+  }
+
+  const pulseGeometry=await context.evaluate(node=>{
+    const viewport=node.querySelector('.market-pulse-cards-viewport');
+    const grid=node.querySelector('.market-pulse-card-grid');
+    const chart=node.querySelector('.market-pulse-chart-card');
+    const cardRects=[...node.querySelectorAll('[data-market-pulse-group]')].map(card=>card.getBoundingClientRect());
+    return {
+      snap:getComputedStyle(viewport).scrollSnapType,
+      overflow:viewport.scrollWidth-viewport.clientWidth,
+      rows:new Set(cardRects.map(rect=>Math.round(rect.top))).size,
+      gridHeight:grid.getBoundingClientRect().height,
+      chartHeight:chart.getBoundingClientRect().height,
+      chartOverflow:chart.scrollHeight-chart.clientHeight,
+      pageOverflow:document.documentElement.scrollWidth-window.innerWidth,
+    };
+  });
+  if(testInfo.project.name==='iphone'){
+    expect(pulseGeometry.snap).toContain('x');
+    expect(pulseGeometry.overflow).toBeGreaterThan(0);
+    expect(pulseGeometry.rows).toBe(1);
+  }else{
+    expect(pulseGeometry.overflow).toBeLessThanOrEqual(1);
+    expect(pulseGeometry.rows).toBe(2);
+    expect(Math.abs(pulseGeometry.gridHeight-236)).toBeLessThanOrEqual(1);
+    expect(Math.abs(pulseGeometry.chartHeight-236)).toBeLessThanOrEqual(1);
+    expect(pulseGeometry.chartOverflow).toBeLessThanOrEqual(1);
+  }
+  expect(pulseGeometry.pageOverflow).toBeLessThanOrEqual(1);
+
+  const help=context.locator('#indexRadarHelpButton');
+  await help.click();
+  await expect(page.locator('#indexRadarHelpTitle')).toContainText('FIBO MARKET PULSE');
+  await expect(page.locator('#indexRadarHelpContent')).toContainText('Balance(P,N,E)');
+  await expect(page.locator('#indexRadarHelpContent')).toContainText('Theme Group');
+  await expect(page.locator('#indexRadarHelpContent')).toContainText('not a probability');
+  if(testInfo.project.name==='iphone'){
+    const helpOverflow=await page.locator('#indexRadarHelpBackdrop .fibo-modal').evaluate(modal=>({
+      modal:modal.scrollWidth-modal.clientWidth,page:document.documentElement.scrollWidth-window.innerWidth,
+    }));
+    expect(helpOverflow.modal).toBeLessThanOrEqual(1);
+    expect(helpOverflow.page).toBeLessThanOrEqual(1);
+  }
+  await page.keyboard.press('Escape');
+  await expect(help).toBeFocused();
+
+  const participation=cards.first();
+  await participation.click();
+  await expect(page.locator('#indexRadarDetailTitle')).toContainText('Participation');
+  await expect(page.locator('#marketPulseMemberStatus')).toContainText('75 members');
+  await expect(page.locator('#marketPulseMemberList .market-pulse-member-row')).toHaveCount(50);
+  await expect(page.locator('#marketPulsePagination')).toContainText('Page 1 / 2');
+  if(testInfo.project.name==='iphone'){
+    const detailGeometry=await page.locator('#indexRadarDetailBackdrop .fibo-modal').evaluate(modal=>({
+      modalOverflow:modal.scrollWidth-modal.clientWidth,
+      pageOverflow:document.documentElement.scrollWidth-window.innerWidth,
+      filterHeights:[...modal.querySelectorAll('[data-pulse-filter]')].map(button=>button.getBoundingClientRect().height),
+    }));
+    expect(detailGeometry.modalOverflow).toBeLessThanOrEqual(1);
+    expect(detailGeometry.pageOverflow).toBeLessThanOrEqual(1);
+    expect(Math.min(...detailGeometry.filterHeights)).toBeGreaterThanOrEqual(44);
+  }
+  await page.locator('[data-pulse-page="1"]').click();
+  await expect(page.locator('#marketPulseMemberList .market-pulse-member-row')).toHaveCount(25);
+  await page.locator('#marketPulseMemberSearch').fill('Stock 075');
+  await page.locator('[data-pulse-search-form]').evaluate(form=>form.requestSubmit());
+  await expect(page.locator('#marketPulseMemberStatus')).toContainText('1 members');
+  await expect(page.locator('#marketPulseMemberList')).toContainText('Market Stock 075');
+  await page.keyboard.press('Escape');
+  await expect(participation).toBeFocused();
+
+  const leadership=cards.nth(3);
+  await leadership.click();
+  await page.locator('[data-pulse-filter="broad"]').click();
+  await expect(page.locator('#marketPulseMemberStatus')).toContainText('4 members');
+  await expect(page.locator('#marketPulseMemberList')).toContainText('CSI 300');
+  await expect(page.locator('#marketPulseMemberList')).toContainText('CNI 2000');
+  await page.locator('#indexRadarDetailClose').click();
+});
+
+test('Market Pulse keeps its 2x2 cards and chart composition at desktop breakpoints', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name==='iphone','Desktop-only Pulse composition');
+  await page.setViewportSize({width:1024,height:900});
+  await page.goto('/Terminal.html?tab=v6');
+  const context=page.locator('#indexRadar');
+  await expect(context.locator('[data-market-pulse-group]')).toHaveCount(4);
+  for(const width of [1024,1280,2048]){
+    await page.setViewportSize({width,height:900});
+    const geometry=await context.evaluate(node=>{
+      const dashboard=node.querySelector('.market-pulse-dashboard').getBoundingClientRect();
+      const grid=node.querySelector('.market-pulse-card-grid').getBoundingClientRect();
+      const chart=node.querySelector('.market-pulse-chart-card');
+      const chartRect=chart.getBoundingClientRect();
+      const cards=[...node.querySelectorAll('[data-market-pulse-group]')].map(card=>card.getBoundingClientRect());
+      return {
+        dashboardOverflow:node.querySelector('.market-pulse-dashboard').scrollWidth-dashboard.width,
+        rows:new Set(cards.map(rect=>Math.round(rect.top))).size,
+        gridRight:grid.right,gridBottom:grid.bottom,chartLeft:chartRect.left,chartTop:chartRect.top,
+        chartHeight:chartRect.height,chartOverflow:chart.scrollHeight-chart.clientHeight,
+        pageOverflow:document.documentElement.scrollWidth-window.innerWidth,
+      };
+    });
+    expect(geometry.rows).toBe(2);
+    expect(geometry.dashboardOverflow).toBeLessThanOrEqual(1);
+    expect(geometry.pageOverflow).toBeLessThanOrEqual(1);
+    expect(geometry.chartOverflow).toBeLessThanOrEqual(1);
+    if(width<=1100) expect(geometry.chartTop).toBeGreaterThanOrEqual(geometry.gridBottom);
+    else{
+      expect(geometry.chartLeft).toBeGreaterThanOrEqual(geometry.gridRight);
+      expect(Math.abs(geometry.chartHeight-236)).toBeLessThanOrEqual(1);
+    }
+  }
+});
+
 test('Look First Index Radar renders current leaders and Leadership Memory', async ({ page }, testInfo) => {
   await page.goto('/Terminal.html?tab=v6');
   const radar=page.locator('#indexRadar');
+  await radar.locator('[data-market-radar-scope="SECTOR_INDEX"]').click();
   await expect(radar).toBeVisible();
   await expect(radar.locator('#indexRadarHelpButton')).toHaveCount(1);
   await expect(radar.locator('#indexRadarStatus')).toContainText('Official Close');
@@ -275,7 +472,14 @@ test('Market Radar switches lazy ETF scopes without mixing cards or Memory', asy
   const sector=modes.getByRole('tab',{name:'Sector Index'});
   const equity=modes.getByRole('tab',{name:'Equity ETF'});
   const cross=modes.getByRole('tab',{name:'Cross Asset'});
+  await expect(modes.getByRole('tab',{name:'Market Pulse'})).toHaveAttribute('aria-selected','true');
+  await expect(radar.locator('#indexRadarTitle')).toHaveText('FIBO MARKET PULSE · MARKET BREADTH');
+  await sector.click();
   await expect(sector).toHaveAttribute('aria-selected','true');
+  await expect(radar.locator('[data-index-radar-leader]')).toHaveCount(5);
+  const sectorCardGeometry=await radar.locator('[data-index-radar-leader]').first().evaluate(card=>({
+    height:card.getBoundingClientRect().height,minHeight:getComputedStyle(card).minHeight,
+  }));
   await expect(radar.locator('#indexRadarTitle')).toHaveText('INDEX RADAR · SECTOR LEADERS');
 
   await equity.click();
@@ -309,6 +513,14 @@ test('Market Radar switches lazy ETF scopes without mixing cards or Memory', asy
   await equity.click();
   await expect(radar.locator('[data-index-radar-leader]').first()).toContainText('CSI 300 ETF');
   expect(await page.evaluate(()=>window.__etfRadarOrders?.EQUITY_ETF)).toBe(2);
+  await sector.click();
+  await expect(radar.locator('[data-index-radar-leader]')).toHaveCount(5);
+  const restoredSectorGeometry=await radar.locator('[data-index-radar-leader]').first().evaluate(card=>({
+    height:card.getBoundingClientRect().height,minHeight:getComputedStyle(card).minHeight,
+  }));
+  expect(Math.abs(restoredSectorGeometry.height-sectorCardGeometry.height)).toBeLessThanOrEqual(1);
+  expect(restoredSectorGeometry.minHeight).toBe(sectorCardGeometry.minHeight);
+  await expect(radar.locator('.market-pulse-dashboard')).toHaveCount(0);
   const geometry=await modes.evaluate(node=>({
     height:[...node.querySelectorAll('button')].map(button=>button.getBoundingClientRect().height),
     pageOverflow:document.documentElement.scrollWidth-window.innerWidth,
@@ -322,6 +534,7 @@ test('Radar desktop breakpoints never require horizontal navigation', async ({ p
   await page.setViewportSize({width:1024,height:900});
   await page.goto('/Terminal.html?tab=v6');
   const radar=page.locator('#indexRadar');
+  await radar.locator('[data-market-radar-scope="SECTOR_INDEX"]').click();
   await expect(radar.locator('[data-index-radar-leader]')).toHaveCount(5);
   for(const width of [1024,1280,2048]){
     await page.setViewportSize({width,height:900});

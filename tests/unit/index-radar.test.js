@@ -260,14 +260,14 @@ test('Radar schema and both sync launchers preserve the independent CN_INDEX con
   }
   assert.match(etfMigration,/add column if not exists amount numeric/i);
   assert.doesNotMatch(etfMigration,/instrument_id|user_id/i);
-  assert.match(workflow,/options:\s*\[indices, etfs, a-shares, all\]/);
+  assert.match(workflow,/options:\s*\[indices, pulse, etfs, a-shares, all\]/);
   assert.match(workflow,/--sessions 400 --etf-sessions 144/);
   assert.match(workflow,/MODE="\$\{REQUESTED_MODE:-daily\}"/);
   assert.match(workflow,/DATASET="\$\{REQUESTED_DATASET:-all\}"/);
   assert.match(launcher,/SYNC_DATASET/);
   assert.match(sync,/INDEX_SCOPE\s*=\s*"CN_INDEX"/);
   assert.match(sync,/ETF_SCOPE\s*=\s*"CN_ETF"/);
-  assert.match(sync,/choices=\("a-shares", "indices", "etfs", "all"\)/);
+  assert.match(sync,/choices=\("a-shares", "indices", "pulse", "etfs", "all"\)/);
   assert.match(sync,/prune_etf_before/);
 });
 
@@ -299,6 +299,6 @@ test('ETF Radar help, algorithm and shared segmented control preserve the locked
   assert.equal(ETF_RADAR_UNIVERSE_VERSION,2);
   assert.match(components,/\.fibo-segmented-control\s*\{/);
   assert.doesNotMatch(terminalCss,/\.macd-basis-toggle\s+button\s*\{[^}]*border-radius/s);
-  assert.equal((terminalHtml.match(/data-market-radar-scope=/g)||[]).length,3);
-  for(const label of ['Sector Index','Equity ETF','Cross Asset']) assert.ok(terminalHtml.includes(label));
+  assert.equal((terminalHtml.match(/data-market-radar-scope=/g)||[]).length,4);
+  for(const label of ['Market Pulse','Sector Index','Equity ETF','Cross Asset']) assert.ok(terminalHtml.includes(label));
 });

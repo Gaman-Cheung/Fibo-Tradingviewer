@@ -23,7 +23,7 @@ test('cloud payload keeps legacy columns and metadata carriers round-trippable',
 });
 
 test('pure algorithm modules cannot depend on DOM, storage or Supabase', () => {
-  const dirs = ['src/terminal','src/wave','src/tracker','src/radar'];
+  const dirs = ['src/terminal','src/wave','src/tracker','src/radar','src/pulse'];
   for (const dir of dirs) {
     for (const name of fs.readdirSync(path.join(root,dir))) {
       if (!name.endsWith('.js')) continue;
@@ -202,6 +202,29 @@ test('full-market schema is additive and does not bind prices to permanent IDs',
   assert.match(migration,/create table if not exists public\.market_sync_checkpoint/i);
   assert.doesNotMatch(migration,/instrument_id/i);
   assert.doesNotMatch(migration,/drop table/i);
+});
+
+test('Market Pulse schema is additive, independently keyed and authenticated-read-only', () => {
+  const migration=fs.readFileSync(path.join(root,'supabase/migrations/20260804_market_pulse.sql'),'utf8');
+  const repository=fs.readFileSync(path.join(root,'src/core/market-pulse-repository.js'),'utf8');
+  const contracts=fs.readFileSync(path.join(root,'docs/DATA_CONTRACTS.md'),'utf8');
+  const readme=fs.readFileSync(path.join(root,'README.md'),'utf8');
+  assert.match(migration,/create table if not exists public\.market_pulse_snapshot/i);
+  assert.match(migration,/primary key \(provider, trade_date\)/i);
+  assert.match(migration,/create table if not exists public\.market_pulse_member_snapshot/i);
+  assert.match(migration,/primary key \(provider, trade_date, calculation_id, member_type, market, code\)/i);
+  assert.match(migration,/to authenticated using \(true\)/i);
+  assert.match(migration,/check \(retention_sessions between 60 and 400\)/i);
+  assert.doesNotMatch(migration,/\b(?:user_id|instrument_id)\b/i);
+  assert.doesNotMatch(migration,/drop table/i);
+  assert.match(repository,/market_pulse_snapshot/);
+  assert.match(repository,/market_pulse_member_snapshot/);
+  assert.match(repository,/Math\.min\(50/);
+  assert.doesNotMatch(repository,/market_daily_bar|localStorage|instrument_id|Composite Signal/);
+  for(const source of [contracts,readme]){
+    assert.match(source,/20MB/);
+    assert.match(source,/75MB/);
+  }
 });
 
 test('authentication entry exposes one unified, accessible form', () => {
