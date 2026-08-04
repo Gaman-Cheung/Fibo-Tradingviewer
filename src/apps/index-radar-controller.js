@@ -5,6 +5,8 @@
  */
 import { loadMarketRadar, MARKET_RADAR_SCOPES } from '../core/index-radar-repository.js';
 import { ETF_RADAR_GUIDE_HTML, INDEX_RADAR_GUIDE_HTML } from '../radar/radar-help.js';
+import { MARKET_PULSE_GUIDE_HTML,MARKET_PULSE_GUIDE_VERSION } from '../pulse/market-pulse-help.js';
+import { createMarketPulseController } from './market-pulse-controller.js';
 import {
   buildLeadershipMemory,
   findLeadershipPeriod,
@@ -19,6 +21,18 @@ import {
 } from '../radar/radar-view-model.js';
 
 const SCOPE_CONFIG = Object.freeze({
+  [MARKET_RADAR_SCOPES.MARKET_PULSE]:Object.freeze({
+    title:'FIBO MARKET PULSE · MARKET BREADTH',
+    shortName:'Market Pulse',
+    loadingTitle:'Loading Market Pulse',
+    waitingTitle:'Market Pulse is not ready',
+    waitingMessage:'Apply the Pulse migration, then run smoke / pulse and backfill / pulse.',
+    emptyTitle:'Market Pulse is not ready',
+    emptyMessage:'No official-close Pulse snapshot has been published.',
+    guideTitle:'FIBO MARKET PULSE INDICATOR GUIDE',
+    guideVersion:MARKET_PULSE_GUIDE_VERSION,
+    guideHtml:MARKET_PULSE_GUIDE_HTML,
+  }),
   [MARKET_RADAR_SCOPES.SECTOR_INDEX]:Object.freeze({
     title:'INDEX RADAR · SECTOR LEADERS',
     shortName:'Sector Index',
@@ -59,7 +73,7 @@ const SCOPE_CONFIG = Object.freeze({
 
 const state = {
   client:null,
-  activeScope:MARKET_RADAR_SCOPES.SECTOR_INDEX,
+  activeScope:MARKET_RADAR_SCOPES.MARKET_PULSE,
   cache:new Map(),
   snapshot:null,
   memory:null,
@@ -69,6 +83,7 @@ const state = {
   loadingScopes:new Set(),
   bound:false,
   returnFocus:null,
+  pulseController:null,
 };
 
 const byId = id => document.getElementById(id);
@@ -413,6 +428,10 @@ function applyCachedScope(entry) {
 }
 
 async function load(scope=state.activeScope,{ force=false }={}) {
+  if (scope===MARKET_RADAR_SCOPES.MARKET_PULSE) {
+    await state.pulseController?.activate({ force });
+    return;
+  }
   if (!state.client || state.loadingScopes.has(scope)) return;
   if (!force && state.cache.has(scope)) {
     if (scope===state.activeScope) applyCachedScope(state.cache.get(scope));
@@ -458,13 +477,18 @@ async function load(scope=state.activeScope,{ force=false }={}) {
 
 function selectScope(scope,{ focus=false }={}) {
   if (!SCOPE_CONFIG[scope]) return;
+  const previousScope=state.activeScope;
+  if (previousScope===MARKET_RADAR_SCOPES.MARKET_PULSE && scope!==previousScope) {
+    state.pulseController?.deactivate();
+  }
   state.activeScope=scope;
   state.activeMemoryPeriod=null;
   state.expandedMemoryPeriod=null;
   renderScopeChrome();
   const button=byId('indexRadarMode')?.querySelector('[data-market-radar-scope="'+scope+'"]');
   if (focus) button?.focus();
-  if (state.cache.has(scope)) applyCachedScope(state.cache.get(scope));
+  if (scope===MARKET_RADAR_SCOPES.MARKET_PULSE) state.pulseController?.activate();
+  else if (state.cache.has(scope)) applyCachedScope(state.cache.get(scope));
   else load(scope);
 }
 
@@ -490,6 +514,8 @@ function bindEvents() {
   });
   byId('indexRadarMode')?.addEventListener('keydown',handleScopeKeydown);
   byId('indexRadarViewport')?.addEventListener('click',event => {
+    if (state.activeScope===MARKET_RADAR_SCOPES.MARKET_PULSE
+      && state.pulseController?.handleViewportClick(event)) return;
     const retry = event.target.closest('[data-index-radar-retry]');
     if (retry) { load(state.activeScope,{ force:true }); return; }
     const memoryCard = event.target.closest('[data-index-radar-memory]');
@@ -499,6 +525,12 @@ function bindEvents() {
   });
   byId('indexRadarMemoryContent')?.addEventListener('click',event => {
     if (event.target.closest('[data-index-radar-memory-expand]')) expandMemoryHistory();
+  });
+  byId('indexRadarDetailContent')?.addEventListener('click',event => {
+    state.pulseController?.handleDetailClick(event);
+  });
+  byId('indexRadarDetailContent')?.addEventListener('submit',event => {
+    state.pulseController?.handleDetailSubmit(event);
   });
   for (const [backdropId,closeId] of [
     ['indexRadarHelpBackdrop','indexRadarHelpClose'],
@@ -519,6 +551,7 @@ function bindEvents() {
 export function initializeIndexRadar({ client }) {
   if (!byId('indexRadar')) return;
   state.client = client;
+  state.pulseController=createMarketPulseController({ client,setStatus,openModal });
   bindEvents();
   renderScopeChrome();
   load(state.activeScope);

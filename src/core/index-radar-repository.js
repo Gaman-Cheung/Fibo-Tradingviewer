@@ -1,6 +1,7 @@
 /** Shared Supabase read boundary for precomputed Market Radar snapshots. */
 
 export const MARKET_RADAR_SCOPES = Object.freeze({
+  MARKET_PULSE:'MARKET_PULSE',
   SECTOR_INDEX:'SECTOR_INDEX',
   EQUITY_ETF:'EQUITY_ETF',
   CROSS_ASSET:'CROSS_ASSET',

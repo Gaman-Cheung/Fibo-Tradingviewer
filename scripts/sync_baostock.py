@@ -20,6 +20,7 @@ import socket
 import sys
 import time as time_module
 from typing import Callable, Iterable
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import requests
@@ -47,6 +48,13 @@ try:
         normalize_index_universe,
         symbol_key,
     )
+    from .market_pulse import (
+        ALGORITHM_VERSION as PULSE_ALGORITHM_VERSION,
+        HISTORY_SESSIONS as PULSE_HISTORY_SESSIONS,
+        INDEX_UNIVERSE_VERSION as PULSE_INDEX_UNIVERSE_VERSION,
+        MIN_VALID_CLOSES as PULSE_MIN_VALID_CLOSES,
+        build_market_pulse_history,
+    )
 except ImportError:  # Direct `python scripts/sync_baostock.py` execution.
     from etf_radar import (
         ALGORITHM_VERSION as ETF_RADAR_ALGORITHM_VERSION,
@@ -70,14 +78,23 @@ except ImportError:  # Direct `python scripts/sync_baostock.py` execution.
         normalize_index_universe,
         symbol_key,
     )
+    from market_pulse import (
+        ALGORITHM_VERSION as PULSE_ALGORITHM_VERSION,
+        HISTORY_SESSIONS as PULSE_HISTORY_SESSIONS,
+        INDEX_UNIVERSE_VERSION as PULSE_INDEX_UNIVERSE_VERSION,
+        MIN_VALID_CLOSES as PULSE_MIN_VALID_CLOSES,
+        build_market_pulse_history,
+    )
 
 
 PROVIDER = "baostock"
 SCOPE = "CN_A"
 INDEX_SCOPE = "CN_INDEX"
 ETF_SCOPE = "CN_ETF"
+PULSE_SCOPE = "CN_PULSE"
 RETENTION_SESSIONS = 400
 ETF_RETENTION_SESSIONS = 144
+PULSE_RETENTION_SESSIONS = 60
 MIN_DAILY_ROWS = 4000
 MIN_INDEX_COUNT = 450
 MIN_ETF_DAILY_ROWS = 300
@@ -589,6 +606,140 @@ class SupabaseRest:
                     timeout=120,
                 )
 
+    def load_pulse_market_rows(self, start_date: str, end_date: str) -> list[dict]:
+        """Load official non-ETF candidates for Pulse; catalogs split stocks/indices."""
+        rows: list[dict] = []
+        offset = 0
+        while True:
+            response = self._request(
+                "GET",
+                "market_daily_bar",
+                params={
+                    "select": "market,code,trade_date,close,pct_chg,trade_status",
+                    "provider": f"eq.{PROVIDER}",
+                    "amount": "is.null",
+                    "and": f"(trade_date.gte.{start_date},trade_date.lte.{end_date})",
+                    "order": "trade_date.asc,market.asc,code.asc",
+                    "limit": "1000",
+                    "offset": str(offset),
+                },
+                timeout=120,
+            )
+            page = response.json()
+            rows.extend(page)
+            if len(page) < 1000:
+                return rows
+            offset += len(page)
+
+    def get_pulse_snapshots(self, limit: int = PULSE_HISTORY_SESSIONS) -> list[dict]:
+        response = self._request(
+            "GET",
+            "market_pulse_snapshot",
+            params={
+                "select": "*",
+                "provider": f"eq.{PROVIDER}",
+                "order": "trade_date.desc",
+                "limit": str(limit),
+            },
+        )
+        return list(reversed(response.json()))
+
+    def get_pulse_snapshots_for_dates(self, trade_dates: list[str]) -> list[dict]:
+        requested = sorted({str(value)[:10] for value in trade_dates if value})
+        if not requested:
+            return []
+        response = self._request(
+            "GET",
+            "market_pulse_snapshot",
+            params={
+                "select": "provider,trade_date,calculation_id,algorithm_version,index_universe_version",
+                "provider": f"eq.{PROVIDER}",
+                "trade_date": f"in.({','.join(requested)})",
+                "order": "trade_date.asc",
+            },
+        )
+        return response.json()
+
+    def upsert_pulse_members(self, rows: list[dict]) -> None:
+        if not rows:
+            return
+        headers = {**self.headers, "Prefer": "resolution=merge-duplicates,return=minimal"}
+        payload = [{**row, "computed_at": utc_now()} for row in rows]
+        for batch_number, batch in enumerate(chunks(payload), 1):
+            self._request(
+                "POST",
+                "market_pulse_member_snapshot?on_conflict=provider,trade_date,calculation_id,member_type,market,code",
+                headers=headers,
+                data=json.dumps(batch, ensure_ascii=False, separators=(",", ":")),
+                timeout=120,
+            )
+            print(f"      uploaded Pulse member batch {batch_number} ({len(batch):,} rows)", flush=True)
+
+    def count_pulse_members(self, trade_date: str, calculation_id: str) -> int:
+        response = self._request(
+            "GET",
+            "market_pulse_member_snapshot",
+            params={
+                "select": "code",
+                "provider": f"eq.{PROVIDER}",
+                "trade_date": f"eq.{trade_date}",
+                "calculation_id": f"eq.{calculation_id}",
+                "limit": "1",
+            },
+            headers={**self.headers, "Prefer": "count=exact"},
+        )
+        content_range = response.headers.get("Content-Range", "")
+        try:
+            return int(content_range.rsplit("/", 1)[1])
+        except (IndexError, ValueError):
+            return len(response.json())
+
+    def upsert_pulse_snapshots(self, rows: list[dict]) -> None:
+        if not rows:
+            return
+        headers = {**self.headers, "Prefer": "resolution=merge-duplicates,return=minimal"}
+        payload = [{**row, "computed_at": utc_now()} for row in rows]
+        for batch in chunks(payload, 100):
+            self._request(
+                "POST",
+                "market_pulse_snapshot?on_conflict=provider,trade_date",
+                headers=headers,
+                data=json.dumps(batch, ensure_ascii=False, separators=(",", ":")),
+                timeout=120,
+            )
+
+    def prune_pulse_snapshots_before(self, cutoff: str) -> None:
+        self._request(
+            "DELETE",
+            "market_pulse_snapshot",
+            params={"provider": f"eq.{PROVIDER}", "trade_date": f"lt.{cutoff}"},
+            headers={**self.headers, "Prefer": "return=minimal"},
+        )
+
+    def prune_pulse_members(self, retained_snapshots: list[dict]) -> None:
+        """Keep two published dates and only the calculation each snapshot references."""
+        retained = sorted(retained_snapshots, key=lambda row: str(row.get("trade_date", "")))[-2:]
+        if not retained:
+            return
+        cutoff = str(retained[0]["trade_date"])
+        self._request(
+            "DELETE",
+            "market_pulse_member_snapshot",
+            params={"provider": f"eq.{PROVIDER}", "trade_date": f"lt.{cutoff}"},
+            headers={**self.headers, "Prefer": "return=minimal"},
+        )
+        for snapshot in retained:
+            self._request(
+                "DELETE",
+                "market_pulse_member_snapshot",
+                params={
+                    "provider": f"eq.{PROVIDER}",
+                    "trade_date": f"eq.{snapshot['trade_date']}",
+                    "calculation_id": f"neq.{snapshot['calculation_id']}",
+                },
+                headers={**self.headers, "Prefer": "return=minimal"},
+            )
+
 
 class BaoStockClient:
     def __init__(self, timeout_seconds: int = 45) -> None:
@@ -598,6 +749,7 @@ class BaoStockClient:
         self.timeout_seconds = timeout_seconds
         socket.setdefaulttimeout(timeout_seconds)
         self.connected = False
+        self._security_cache: dict[str, list[dict]] = {}
 
     def connect(self) -> None:
         last_error: Exception | None = None
@@ -664,10 +816,12 @@ class BaoStockClient:
         )
 
     def all_securities(self, trade_date: str) -> list[dict]:
-        return self.query(
-            f"all securities for {trade_date}",
-            lambda: self.bs.query_all_stock(day=trade_date),
-        )
+        if trade_date not in self._security_cache:
+            self._security_cache[trade_date] = self.query(
+                f"all securities for {trade_date}",
+                lambda: self.bs.query_all_stock(day=trade_date),
+            )
+        return [dict(row) for row in self._security_cache[trade_date]]
 
     def index_history(self, symbol: str, start: str, end: str) -> list[dict]:
         return self.query(
@@ -1466,10 +1620,246 @@ def run_etf_sync(args, client: BaoStockClient, db: SupabaseRest) -> None:
         raise
 
 
+def _pulse_market_date(db: SupabaseRest) -> tuple[str, dict, dict]:
+    stock_checkpoint = db.get_checkpoint(SCOPE)
+    index_checkpoint = db.get_checkpoint(INDEX_SCOPE)
+    stock_date = str(stock_checkpoint.get("latest_trade_date") or "")
+    index_date = str(index_checkpoint.get("latest_trade_date") or "")
+    if stock_checkpoint.get("last_status") != "ok" or index_checkpoint.get("last_status") != "ok":
+        raise RuntimeError("Pulse requires successful CN_A and CN_INDEX checkpoints.")
+    if not stock_date or stock_date != index_date:
+        raise RuntimeError(f"Pulse source dates differ: CN_A={stock_date or 'missing'}, CN_INDEX={index_date or 'missing'}.")
+    return stock_date, stock_checkpoint, index_checkpoint
+
+
+def _pulse_dates(args, client: BaoStockClient, latest_date: str) -> tuple[list[str], str]:
+    latest = date.fromisoformat(latest_date)
+    if args.mode == "backfill":
+        calendar = recent_trading_dates(
+            client, PULSE_HISTORY_SESSIONS + PULSE_MIN_VALID_CLOSES - 1, latest
+        )
+        return calendar[-PULSE_HISTORY_SESSIONS:], calendar[0]
+    if args.mode == "repair":
+        if not args.start or not args.end:
+            raise ValueError("repair mode requires --start and --end.")
+        requested_start = date.fromisoformat(args.start)
+        requested_end = min(date.fromisoformat(args.end), latest)
+        if requested_start > requested_end:
+            raise ValueError("Pulse repair start must not be later than its completed end date.")
+        calendar = client.trading_dates(requested_start - timedelta(days=220), requested_end)
+        targets = [value for value in calendar if args.start <= value <= requested_end.isoformat()]
+        if not targets:
+            return [], ""
+        first = calendar.index(targets[0])
+        if first < PULSE_MIN_VALID_CLOSES - 1:
+            raise RuntimeError("Pulse repair could not load 61 prior official sessions.")
+        return targets, calendar[first - (PULSE_MIN_VALID_CLOSES - 1)]
+    calendar = recent_trading_dates(client, PULSE_MIN_VALID_CLOSES, latest)
+    if calendar[-1] != latest_date:
+        raise RuntimeError(f"Pulse calendar ended at {calendar[-1]}, expected {latest_date}.")
+    return [latest_date], calendar[0]
+
+
+def _pulse_name_map(client: BaoStockClient, trade_date: str) -> dict[str, str]:
+    names: dict[str, str] = {}
+    for row in client.all_securities(trade_date):
+        raw = str(row.get("code", "")).strip().lower()
+        if not (raw.startswith("sh.") or raw.startswith("sz.")):
+            continue
+        market, code = raw.split(".", 1)
+        name = str(row.get("code_name", row.get("name", ""))).strip()
+        if len(code) == 6 and name:
+            names[symbol_key(market, code)] = name
+    return names
+
+
+def _split_pulse_rows(rows: list[dict], index_catalog: list[dict], etf_catalog: list[dict]
+                      ) -> tuple[list[dict], list[dict]]:
+    index_symbols = {symbol_key(row.get("market"), row.get("code")) for row in index_catalog}
+    etf_symbols = {symbol_key(row.get("market"), row.get("code")) for row in etf_catalog}
+    stock_rows: list[dict] = []
+    index_rows: list[dict] = []
+    for row in rows:
+        symbol = symbol_key(row.get("market"), row.get("code"))
+        if symbol in index_symbols:
+            index_rows.append(row)
+        elif symbol not in etf_symbols:
+            stock_rows.append(row)
+    return stock_rows, index_rows
+
+
+def _validate_pulse_index_catalog(index_catalog: list[dict]) -> None:
+    enabled = [
+        row for row in index_catalog
+        if row.get("active", True) and row.get("radar_enabled")
+        and str(row.get("category", "")) in {"sector", "theme"}
+    ]
+    invalid = [
+        symbol_key(row.get("market"), row.get("code"))
+        for row in enabled
+        if int(row.get("universe_version") or 0) != PULSE_INDEX_UNIVERSE_VERSION
+    ]
+    if invalid:
+        sample = ", ".join(invalid[:8])
+        raise RuntimeError(
+            f"Pulse requires Index Universe v{PULSE_INDEX_UNIVERSE_VERSION}; "
+            f"{len(invalid):,} enabled catalog row(s) have another or missing version: {sample}."
+        )
+
+
+def _validate_pulse_daily_counts(stock_rows: list[dict], target_dates: list[str]) -> None:
+    by_date: dict[str, set[str]] = defaultdict(set)
+    for row in stock_rows:
+        trade_date = str(row.get("trade_date", ""))[:10]
+        by_date[trade_date].add(symbol_key(row.get("market"), row.get("code")))
+    for trade_date in target_dates:
+        count = len(by_date.get(trade_date, set()))
+        if count < MIN_DAILY_ROWS:
+            raise RuntimeError(
+                f"Pulse source {trade_date} has only {count:,} A-share rows; expected at least {MIN_DAILY_ROWS:,}."
+            )
+
+
+def _run_pulse(args, client: BaoStockClient, db: SupabaseRest, *, publish: bool) -> list[dict]:
+    latest_date, _, _ = _pulse_market_date(db)
+    pulse_checkpoint = db.get_checkpoint(PULSE_SCOPE)
+    target_dates, history_start = _pulse_dates(args, client, latest_date)
+    if not target_dates:
+        print("[PULSE] No official dates fall inside the requested range.", flush=True)
+        return []
+    print(
+        f"[PULSE] loading stored bars {history_start}..{target_dates[-1]} for {len(target_dates)} snapshot(s)...",
+        flush=True,
+    )
+    index_catalog = db.get_index_catalog()
+    _validate_pulse_index_catalog(index_catalog)
+    etf_catalog = db.get_etf_catalog()
+    retained_before = db.get_pulse_snapshots(2)
+    market_rows = db.load_pulse_market_rows(history_start, target_dates[-1])
+    stock_rows, index_rows = _split_pulse_rows(market_rows, index_catalog, etf_catalog)
+    _validate_pulse_daily_counts(stock_rows, target_dates)
+    retained_member_dates = {latest_date}
+    retained_member_dates.update(str(row.get("trade_date", "")) for row in retained_before[-2:])
+    member_dates = target_dates[-2:] if args.mode == "backfill" else [
+        trade_date for trade_date in target_dates if trade_date in retained_member_dates
+    ]
+    names = _pulse_name_map(client, target_dates[-1]) if member_dates else {}
+    snapshots, members_by_date = build_market_pulse_history(
+        stock_rows,
+        index_rows,
+        index_catalog,
+        target_dates,
+        names=names,
+        member_dates=member_dates,
+        enforce_coverage=True,
+    )
+    for snapshot in snapshots:
+        calculation_id = (
+            f"pulse-v{PULSE_ALGORITHM_VERSION}-{snapshot['trade_date']}-{uuid4().hex[:12]}"
+            if snapshot["trade_date"] in members_by_date
+            else f"pulse-v{PULSE_ALGORITHM_VERSION}-{snapshot['trade_date']}-aggregate"
+        )
+        snapshot["calculation_id"] = calculation_id
+        for member in members_by_date.get(snapshot["trade_date"], []):
+            member["calculation_id"] = calculation_id
+
+    if not publish:
+        latest = snapshots[-1]
+        print(
+            f"PASS: Pulse {latest['trade_date']} score={latest['pulse_score']:.1f} "
+            f"state={latest['pulse_state']} stocks={latest['stock_eligible_count']:,} "
+            f"indices={latest['index_eligible_count']:,}; Supabase was not modified.",
+            flush=True,
+        )
+        return snapshots
+
+    for trade_date, members in members_by_date.items():
+        print(f"[PULSE MEMBERS] staging {trade_date}: {len(members):,} rows...", flush=True)
+        db.upsert_pulse_members(members)
+        calculation_id = members[0]["calculation_id"] if members else ""
+        actual = db.count_pulse_members(trade_date, calculation_id)
+        if actual != len(members):
+            raise RuntimeError(
+                f"Pulse member verification failed for {trade_date}: expected {len(members):,}, found {actual:,}."
+            )
+    db.upsert_pulse_snapshots(snapshots)
+    verified = db.get_pulse_snapshots_for_dates(target_dates)
+    expected_calculations = {
+        str(snapshot["trade_date"]): str(snapshot["calculation_id"])
+        for snapshot in snapshots
+    }
+    verified_calculations = {
+        str(snapshot.get("trade_date")): str(snapshot.get("calculation_id"))
+        for snapshot in verified
+    }
+    missing_or_stale = [
+        trade_date for trade_date, calculation_id in expected_calculations.items()
+        if verified_calculations.get(trade_date) != calculation_id
+    ]
+    if missing_or_stale:
+        raise RuntimeError(
+            "Pulse aggregate publication did not expose the requested calculation(s): "
+            + ", ".join(missing_or_stale)
+        )
+    published = db.get_pulse_snapshots(PULSE_HISTORY_SESSIONS)
+    if not published:
+        raise RuntimeError("Pulse aggregate publication returned no retained snapshots.")
+    latest_members = members_by_date.get(target_dates[-1], [])
+    checkpoint_latest = str(pulse_checkpoint.get("latest_trade_date") or "")
+    targets_include_latest = not checkpoint_latest or target_dates[-1] >= checkpoint_latest
+    published_row_count = len(latest_members) or snapshots[-1]["stock_eligible_count"]
+    preserved_row_count = pulse_checkpoint.get("last_row_count")
+    if preserved_row_count is None:
+        preserved_row_count = published[-1].get("stock_eligible_count", published_row_count)
+    db.save_checkpoint(
+        PULSE_SCOPE,
+        last_status="ok",
+        last_error=None,
+        last_mode=args.mode,
+        backfill_cursor=target_dates[-1] if args.mode == "backfill" else pulse_checkpoint.get("backfill_cursor"),
+        latest_trade_date=max(str(pulse_checkpoint.get("latest_trade_date") or target_dates[-1]), target_dates[-1]),
+        oldest_trade_date=str(published[0]["trade_date"]),
+        retention_sessions=PULSE_RETENTION_SESSIONS,
+        last_row_count=(
+            published_row_count if targets_include_latest
+            else preserved_row_count
+        ),
+    )
+    db.prune_pulse_snapshots_before(str(published[0]["trade_date"]))
+    db.prune_pulse_members(published[-2:])
+    print(
+        f"[OK] Market Pulse {target_dates[-1]} published at {snapshots[-1]['pulse_score']:.1f} "
+        f"({snapshots[-1]['pulse_state']}).",
+        flush=True,
+    )
+    return snapshots
+
+
+def run_pulse_sync(args, client: BaoStockClient, db: SupabaseRest) -> list[dict]:
+    try:
+        return _run_pulse(args, client, db, publish=True)
+    except Exception as exc:
+        try:
+            db.save_checkpoint(
+                PULSE_SCOPE,
+                last_status="error",
+                last_error=str(exc)[:1000],
+                last_mode=args.mode,
+                retention_sessions=PULSE_RETENTION_SESSIONS,
+            )
+        except Exception as checkpoint_error:
+            print(f"[PULSE CHECKPOINT WARNING] Could not record failure: {checkpoint_error}", flush=True)
+        raise
+
+
+def run_pulse_smoke(args, client: BaoStockClient, db: SupabaseRest) -> list[dict]:
+    return _run_pulse(args, client, db, publish=False)
+
+
 def parse_args(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(description="BaoStock full-market synchronization")
     parser.add_argument("--mode", choices=("smoke", "daily", "backfill", "repair"), default="daily")
-    parser.add_argument("--dataset", choices=("a-shares", "indices", "etfs", "all"), default="all")
+    parser.add_argument("--dataset", choices=("a-shares", "indices", "pulse", "etfs", "all"), default="all")
     parser.add_argument("--start", help="Repair start date (YYYY-MM-DD)")
     parser.add_argument("--end", help="Repair end date (YYYY-MM-DD)")
     parser.add_argument("--sessions", type=int, default=RETENTION_SESSIONS)
@@ -1491,6 +1881,8 @@ def main(argv: list[str] | None = None) -> int:
                 run_smoke(client, args.sessions)
             if args.dataset in ("indices", "all"):
                 run_index_smoke(client, args.sessions)
+            if args.dataset in ("pulse", "all"):
+                run_pulse_smoke(args, client, SupabaseRest())
             if args.dataset in ("etfs", "all"):
                 run_etf_smoke(client, args.etf_sessions)
         else:
@@ -1499,6 +1891,8 @@ def main(argv: list[str] | None = None) -> int:
                 run_sync(args, client, db)
             if args.dataset in ("indices", "all"):
                 run_index_sync(args, client, db)
+            if args.dataset in ("pulse", "all"):
+                run_pulse_sync(args, client, db)
             if args.dataset in ("etfs", "all"):
                 run_etf_sync(args, client, db)
     finally:

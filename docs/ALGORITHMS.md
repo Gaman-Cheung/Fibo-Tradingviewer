@@ -131,3 +131,25 @@ Score = 25 × PctRank_scope(RS5)
 - Amount means exchange transaction value only. The model has no fund-flow, NAV premium/discount, yield, spot-price or currency-hedge input.
 
 The complete definitions and reading boundary are normative in `docs/ETF_RADAR_GUIDE.md`; Algorithm and Universe versions must match `scripts/etf_radar.py` and the in-product help.
+
+## FIBO Market Pulse · Algorithm v1 / Index Universe v2
+
+Market Pulse is independent official-close breadth context. Eligible stocks are traded SH/SZ A-shares with at least 62 valid closes, including ST/*ST. Stocks use the existing pctChg-reconstructed continuous sequence; indices use raw official Close. ETF, Pool, Current Preview and Radar Leader scores are excluded.
+
+```text
+Balance(P,N,E) = clamp(50 + 50 × (P-N) / max(P+N, 5% × E), 0, 100)
+
+Participation = mean(1D Up %, 5D Up %, Strong Up/Down Balance)
+Trend Breadth = mean(Above MA20 %, Above MA60 %, MA20 Rising %, MA60 Rising %)
+Expansion = mean(20D High/Low Balance, MA60 BO/BD Balance)
+Leadership = mean(Theme Above MA60, Theme MA60 Rising,
+                  Theme High/Low Balance, Broad Confirmation)
+Pulse = mean(Participation, Trend Breadth, Expansion, Leadership)
+```
+
+- Up requires a strictly positive return. Strong Up is `>= +5%`; Strong Down is `<= -5%`. Median Return is display-only and Strong is not a limit-up statistic.
+- MA Rising requires a strict one-session MA rate above `+0.01%`.
+- 20D High/Low compares current Close with the prior 20 closes. MA60 BO is previous `Close <= previous MA60` and current `Close > current MA60`; BD is the mirror.
+- Active sector/theme indices are weighted so each Theme Group totals 1. Broad Confirmation averages CSI 300, CSI 500, CSI 1000 and CNI 2000; each receives 50 for Close above MA60 and 50 for MA60 Rising.
+- State intervals are `[80,100] Broad Strength`, `[60,80) Healthy Strength`, `[40,60) Mixed`, `[20,40) Weakening` and `[0,20) Risk-Off`.
+- The browser reads at most 60 compatible aggregates and 50 requested latest members. Exact definitions, coverage gates, publication ordering and limitations are normative in `docs/MARKET_PULSE_GUIDE.md` and the v1 in-product help.

@@ -1,7 +1,7 @@
 param(
     [ValidateSet('smoke','daily','backfill','repair')]
     [string]$Mode = 'daily',
-    [ValidateSet('a-shares','indices','etfs','all')]
+    [ValidateSet('a-shares','indices','pulse','etfs','all')]
     [string]$Dataset = 'all',
     [string]$StartDate = '',
     [string]$EndDate = ''
@@ -48,10 +48,11 @@ try {
     Write-Host '=== Fibo TradingViewer - BaoStock Full-Market Sync ===' -ForegroundColor Cyan
 
     if ($Mode -eq 'repair' -and (-not $StartDate -or -not $EndDate)) {
-        Stop-Sync 'Repair mode requires: SyncBaoStock.cmd repair YYYY-MM-DD YYYY-MM-DD [indices|etfs|a-shares|all]'
+        Stop-Sync 'Repair mode requires: SyncBaoStock.cmd repair YYYY-MM-DD YYYY-MM-DD [indices|pulse|etfs|a-shares|all]'
     }
 
-    if ($Mode -ne 'smoke' -and -not (Test-Path -LiteralPath $configPath)) {
+    $needsSupabase = $Mode -ne 'smoke' -or $Dataset -in @('pulse','all')
+    if ($needsSupabase -and -not (Test-Path -LiteralPath $configPath)) {
         Copy-Item -LiteralPath $configTemplate -Destination $configPath
         Write-Host '[SETUP] Created .env.local. Fill in the two Supabase values, save it, then run again.' -ForegroundColor Yellow
         Start-Process -FilePath 'notepad.exe' -ArgumentList $configPath
@@ -59,7 +60,7 @@ try {
     }
 
     if (Test-Path -LiteralPath $configPath) { Import-LocalEnvironment $configPath }
-    if ($Mode -ne 'smoke') {
+    if ($needsSupabase) {
         $supabaseUrl = [Environment]::GetEnvironmentVariable('SUPABASE_URL', 'Process')
         $serviceKey = [Environment]::GetEnvironmentVariable('SUPABASE_SERVICE_ROLE_KEY', 'Process')
         if (-not $supabaseUrl -or $supabaseUrl -notmatch '^https://.+\.supabase\.co/?$' -or $supabaseUrl -match 'YOUR_PROJECT') {
@@ -95,8 +96,10 @@ try {
     $syncExit = Start-NativeProcess $venvPython $syncArguments
     if ($syncExit -ne 0) { Stop-Sync "sync_baostock.py exited with code $syncExit." }
 
-    if ($Mode -eq 'smoke') {
+    if ($Mode -eq 'smoke' -and $Dataset -notin @('pulse','all')) {
         Write-Host '[OK] BaoStock connectivity and QFQ reconstruction passed. Supabase was not used.' -ForegroundColor Green
+    } elseif ($Mode -eq 'smoke') {
+        Write-Host '[OK] BaoStock checks and read-only Market Pulse validation passed. Supabase was not modified.' -ForegroundColor Green
     } else {
         Write-Host '[OK] Full-market rows were uploaded directly to Supabase.' -ForegroundColor Green
     }

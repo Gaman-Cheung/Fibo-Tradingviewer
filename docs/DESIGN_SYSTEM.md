@@ -109,10 +109,19 @@ The page stylesheet must not contain selectors beginning with `.fibo-header` or 
 - Mobile uses separate horizontal Scroll Snap containers for current leaders and Leadership Memory, disables autoplay and preserves 44px controls. `prefers-reduced-motion` also disables card movement transitions.
 - A disabled/no-data Radar must remain a quiet independent section and may never block or resize the Look First table into horizontal page overflow.
 - Radar owns one `fibo-help-button` in its section header. Cards never duplicate the help icon; clicking a card opens detail using the shared `fibo-modal` geometry.
-- Market Radar uses one shared `fibo-segmented-control` for Sector Index, Equity ETF and Cross Asset. Sector Index is the non-persisted refresh default; scope selection lives only for the page session.
+- Market Context uses one shared `fibo-segmented-control` for Market Pulse, Sector Index, Equity ETF and Cross Asset. Market Pulse is the non-persisted refresh default; scope selection lives only for the page session.
 - The same segmented geometry is consumed by Terminal MACD Official/Preview. Page CSS may arrange or proportion the control but may not restyle its buttons, radius, focus, active or mobile-touch states.
 - Scope changes reuse the exact Leader card, detail modal and four Leadership Memory cards. Cross Asset may add one quiet neutral category pill; category colors or large colored surfaces are prohibited.
 - A compact header may wrap the segmented control. On mobile only the control itself may scroll horizontally; it must retain 44px targets and must not create page-level horizontal overflow.
+
+## FIBO Market Pulse dashboard
+
+- Market Pulse is the default tab in the four-option Market Context control and owns an isolated `.market-pulse-*` dashboard. It must never reuse or resize `.index-radar-dashboard`, `.index-radar-group`, `.index-radar-card` or Leadership Memory geometry.
+- Above 1100px, four quiet Pulse cards form a 2×2 block beside a 236px 60-session chart. Each compact card is approximately 112px high; only Pulse may use this composition.
+- From 769px through 1100px the 2×2 block remains above a full-width chart. Mobile uses one dedicated Scroll Snap card rail followed by the chart; page-level horizontal overflow is forbidden.
+- Pulse cards use the shared quiet white card surface, radius and low elevation. The Radar brand ring remains reserved for selected Leaders and is not applied to breadth groups. State color is limited to the compact score pill and chart line.
+- The single Market Context `fibo-help-button` changes its guide with the selected tab. Pulse group cards open latest official member detail in shared modal geometry; they never add per-card question icons.
+- A Pulse card grid or chart height may not impose a shared viewport min-height. Switching to Sector Index, Equity ETF or Cross Asset must restore their natural Leader/Memory height without stretching.
 
 ## Trend Tracker chart forecast
 
