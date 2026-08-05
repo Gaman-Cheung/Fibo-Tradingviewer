@@ -102,11 +102,11 @@ Each broad index receives 50 points when Close is above MA60 and another 50 when
 | 20–<40 | Weakening | Breadth is narrowing or downside expansion dominates. |
 | 0–<20 | Risk-Off | Weakness is broad; this is still not a timing guarantee. |
 
-### Strength Gate and Risk Gate
+### Hot, Wind and Cold
 
-The chart keeps the same fixed state boundaries. Its dashed `Strength Gate` at 60 uses Google green because crossing 60 enters Healthy Strength. Its dashed `Risk Gate` at 20 uses Google red because falling below 20 enters Risk-Off. The 40 and 80 reference lines remain neutral gray. The Gate key is centered in the chart footer between the first and latest official dates.
+The chart keeps the same fixed state boundaries. Its dashed `Hot` line at 60 uses Google green as a warm breadth observation threshold. Its dashed `Wind` line at 40 uses Google yellow as a two-way transition watch line. Its dashed `Cold` line at 20 uses Google red as a cold or Risk-Off observation threshold. The 80 reference line remains neutral gray. The three keys are centered in the chart footer between the first and latest official dates.
 
-Moving closer to either Gate only means the current breadth score is closer to that existing boundary. A Gate is not a probability, reconciliation rate, overbought/oversold oscillator, buy/sell trigger or additional Pulse input.
+Hot and Cold describe breadth temperature only; they are not confirmed overbought, oversold or reversal conditions. Wind means conditions near 40 deserve closer observation, not that 40 predicts whether the next move will be up or down. The three lines are not probabilities, reconciliation rates, buy/sell triggers or additional Pulse inputs.
 
 ## Member lists and history
 
