@@ -250,15 +250,18 @@ test('Market Pulse is the default official-close context with chart, guide and p
   await expect(context.locator('#marketPulseChart')).toBeVisible();
   await expect(context.locator('#marketPulseChart')).toHaveAttribute('aria-label',/60 official sessions/);
   await expect(context.locator('#marketPulseChart')).toHaveAttribute('aria-label',/Strength Gate is 60.*Risk Gate is 20/);
-  await expect(context.locator('.market-pulse-chart__meta')).toContainText('History 60/60');
-  await expect(context.locator('.market-pulse-chart__gates')).toHaveAttribute('aria-label','Strength Gate 60; Risk Gate 20');
+  await expect(context.locator('.market-pulse-chart__meta')).toHaveCount(0);
+  await expect(context.locator('.market-pulse-chart__coverage')).toHaveText('History 60/60');
+  const pulseFooter=context.locator('.market-pulse-chart__footer');
+  await expect(pulseFooter).toContainText('2026-07-28');
+  await expect(pulseFooter.locator('.market-pulse-chart__gates')).toHaveAttribute('aria-label','Strength Gate 60; Risk Gate 20');
   const gatePresentation=await context.evaluate(node=>Object.fromEntries(['strength','risk'].map(key=>{
     const gate=node.querySelector(`.market-pulse-chart__gate--${key}`);
     const full=gate.querySelector('.market-pulse-chart__gate-full');
     const short=gate.querySelector('.market-pulse-chart__gate-short');
     return [key,{color:getComputedStyle(gate).color,full:getComputedStyle(full).display,short:getComputedStyle(short).display}];
   })));
-  expect(gatePresentation.strength.color).toBe('rgb(66, 133, 244)');
+  expect(gatePresentation.strength.color).toBe('rgb(52, 168, 83)');
   expect(gatePresentation.risk.color).toBe('rgb(234, 67, 53)');
   expect(gatePresentation.strength.full==='none').toBe(testInfo.project.name==='iphone');
   expect(gatePresentation.strength.short==='none').toBe(testInfo.project.name!=='iphone');
@@ -367,7 +370,7 @@ test('Market Context keeps one responsive frame while Pulse reflows its cards an
   const context=page.locator('#indexRadar');
   const pulseMode=context.locator('[data-market-radar-scope="MARKET_PULSE"]');
   const sectorMode=context.locator('[data-market-radar-scope="SECTOR_INDEX"]');
-  for(const width of [1024,1280,2048]){
+  for(const width of [1024,1280,2094]){
     await page.setViewportSize({width,height:900});
     await pulseMode.click();
     await expect(context.locator('[data-market-pulse-group]')).toHaveCount(4);
@@ -377,6 +380,11 @@ test('Market Context keeps one responsive frame while Pulse reflows its cards an
       const grid=node.querySelector('.market-pulse-card-grid').getBoundingClientRect();
       const chart=node.querySelector('.market-pulse-chart-card');
       const chartRect=chart.getBoundingClientRect();
+      const plotRect=chart.querySelector('.market-pulse-chart__plot').getBoundingClientRect();
+      const footerRect=chart.querySelector('.market-pulse-chart__footer').getBoundingClientRect();
+      const gateRect=chart.querySelector('.market-pulse-chart__gates').getBoundingClientRect();
+      const startRect=chart.querySelector('.market-pulse-chart__date--start').getBoundingClientRect();
+      const endRect=chart.querySelector('.market-pulse-chart__date--end').getBoundingClientRect();
       const cards=[...node.querySelectorAll('[data-market-pulse-group]')].map(card=>card.getBoundingClientRect());
       return {
         frameHeight:frame.height,dashboardHeight:dashboard.height,
@@ -385,6 +393,8 @@ test('Market Context keeps one responsive frame while Pulse reflows its cards an
         cardOverflow:Math.max(...[...node.querySelectorAll('[data-market-pulse-group]')].map(card=>card.scrollHeight-card.clientHeight)),
         gridHeight:grid.height,gridRight:grid.right,gridBottom:grid.bottom,
         chartLeft:chartRect.left,chartTop:chartRect.top,chartHeight:chartRect.height,
+        footerBelowPlot:footerRect.top>=plotRect.bottom-1,
+        footerAlignment:Math.max(Math.abs(gateRect.top+gateRect.height/2-(startRect.top+startRect.height/2)),Math.abs(gateRect.top+gateRect.height/2-(endRect.top+endRect.height/2))),
         chartOverflow:chart.scrollHeight-chart.clientHeight,
         pageOverflow:document.documentElement.scrollWidth-window.innerWidth,
       };
@@ -393,6 +403,8 @@ test('Market Context keeps one responsive frame while Pulse reflows its cards an
     expect(geometry.cardOverflow).toBeLessThanOrEqual(1);
     expect(geometry.pageOverflow).toBeLessThanOrEqual(1);
     expect(geometry.chartOverflow).toBeLessThanOrEqual(1);
+    expect(geometry.footerBelowPlot).toBe(true);
+    expect(geometry.footerAlignment).toBeLessThanOrEqual(2);
     if(width===1024){
       expect(geometry.rows).toBe(2);
       expect(Math.abs(geometry.dashboardHeight-616)).toBeLessThanOrEqual(1);
@@ -434,12 +446,13 @@ test('Look First Index Radar renders current leaders and Leadership Memory', asy
   await expect(memoryCards).toHaveCount(4);
   await expect(radar.locator('[data-index-radar-memory="yesterday"]')).toContainText('1/1 session');
   await expect(radar.locator('[data-index-radar-memory="regime60"]')).toContainText('60/60 sessions');
-  const ring=await cards.first().evaluate(node=>({
+  const surface=await cards.first().evaluate(node=>({
     border:getComputedStyle(node).borderTopWidth,
     background:getComputedStyle(node).backgroundImage
   }));
-  expect(ring.border).toBe('2px');
-  expect(ring.background).toContain('conic-gradient');
+  expect(surface.border).toBe('1px');
+  expect(surface.background).not.toContain('conic-gradient');
+  await expect(cards.first()).not.toHaveClass(/fibo-card--brand-ring/);
 
   await radar.locator('#indexRadarHelpButton').click();
   await expect(page.locator('#indexRadarHelpBackdrop')).toHaveClass(/open/);
@@ -520,6 +533,7 @@ test('Market Radar switches lazy ETF scopes without mixing cards or Memory', asy
   await sector.click();
   await expect(sector).toHaveAttribute('aria-selected','true');
   await expect(radar.locator('[data-index-radar-leader]')).toHaveCount(5);
+  await expect(radar.locator('[data-index-radar-leader]').first()).not.toHaveClass(/fibo-card--brand-ring/);
   const sectorCardGeometry=await radar.locator('[data-index-radar-leader]').first().evaluate(card=>({
     height:card.getBoundingClientRect().height,minHeight:getComputedStyle(card).minHeight,
   }));
@@ -530,6 +544,7 @@ test('Market Radar switches lazy ETF scopes without mixing cards or Memory', asy
   await expect(equity).toHaveAttribute('aria-selected','true');
   await expect(radar.locator('#indexRadarTitle')).toHaveText('ETF RADAR · EQUITY LEADERS');
   await expect(radar.locator('[data-index-radar-leader]')).toHaveCount(5);
+  await expect(radar.locator('[data-index-radar-leader]').first()).not.toHaveClass(/fibo-card--brand-ring/);
   await expect(radar.locator('[data-index-radar-leader]').first()).toContainText('CSI 300 ETF');
   await expect(radar.locator('[data-index-radar-leader]').first()).toContainText('RS5');
   await expect(radar.locator('[data-index-radar-leader]').first()).toContainText('RS20');
@@ -552,6 +567,7 @@ test('Market Radar switches lazy ETF scopes without mixing cards or Memory', asy
   await expect(cross).toHaveAttribute('aria-selected','true');
   await expect(radar.locator('#indexRadarTitle')).toHaveText('ETF RADAR · CROSS-ASSET LEADERS');
   await expect(radar.locator('.index-radar-category')).toHaveCount(5);
+  await expect(radar.locator('[data-index-radar-leader]').first()).not.toHaveClass(/fibo-card--brand-ring/);
   expect(Math.abs(await frameHeight()-sharedFrameHeight)).toBeLessThanOrEqual(1);
   await expect(radar.locator('.index-radar-category').first()).toContainText('Overseas');
   expect(await page.evaluate(()=>window.__etfRadarOrders?.CROSS_ASSET)).toBe(2);
@@ -780,15 +796,21 @@ test('Then Leap balances desktop columns without a duplicate top scrollbar', asy
     const mobile=await page.evaluate(()=>({
       pageOverflow:document.documentElement.scrollWidth-window.innerWidth,
       rsiHeight:document.querySelector('#tableBodyV7 tr.mobile-current .rsi')?.getBoundingClientRect().height||0,
+      macdHeight:document.querySelector('#tableBodyV7 tr.mobile-current .macd')?.getBoundingClientRect().height||0,
+      suggestSize:(()=>{const rect=document.querySelector('#tableBodyV7 tr.mobile-current .macd-suggest-button')?.getBoundingClientRect();return {width:rect?.width||0,height:rect?.height||0};})(),
     }));
     expect(mobile.pageOverflow).toBeLessThanOrEqual(1);
     expect(mobile.rsiHeight).toBeGreaterThanOrEqual(44);
+    expect(mobile.macdHeight).toBeGreaterThanOrEqual(44);
+    expect(mobile.suggestSize.width).toBeGreaterThanOrEqual(44);
+    expect(mobile.suggestSize.height).toBeGreaterThanOrEqual(44);
     return;
   }
 
   await page.setViewportSize({width:2048,height:900});
   const row=page.locator('#tableBodyV7 tr[data-instrument-id="e2e-a"]');
   await row.locator('.rsi').fill('100');
+  await row.locator('.macd').selectOption('divergence');
   const wide=await page.evaluate(()=>{
     const table=document.getElementById('v7Table');
     const card=document.getElementById('v7TableCard');
@@ -801,7 +823,10 @@ test('Then Leap balances desktop columns without a duplicate top scrollbar', asy
       rsiCell:row.children[12].getBoundingClientRect().width,
       trendCell:row.children[11].getBoundingClientRect().width,
       macdCell:row.children[13].getBoundingClientRect().width,
+      signalCell:row.children[14].getBoundingClientRect().width,
       rsiClient:row.querySelector('.rsi').clientWidth,
+      macdClient:row.querySelector('.macd').getBoundingClientRect().width,
+      signalOverflow:row.children[14].scrollWidth-row.children[14].clientWidth,
     };
   });
   expect(wide.pageOverflow).toBeLessThanOrEqual(1);
@@ -809,18 +834,33 @@ test('Then Leap balances desktop columns without a duplicate top scrollbar', asy
   expect(wide.levelMax).toBeLessThanOrEqual(110);
   expect(wide.rsiCell).toBeGreaterThanOrEqual(72);
   expect(wide.trendCell).toBeGreaterThanOrEqual(118);
-  expect(wide.macdCell).toBeGreaterThanOrEqual(118);
+  expect(wide.macdCell).toBeGreaterThan(wide.signalCell);
+  expect(wide.macdClient).toBeGreaterThanOrEqual(149);
+  expect(wide.signalCell).toBeLessThanOrEqual(200);
+  expect(wide.signalOverflow).toBeLessThanOrEqual(1);
   expect(wide.rsiClient).toBeGreaterThanOrEqual(60);
 
-  await page.setViewportSize({width:1280,height:900});
-  const narrow=await page.evaluate(()=>({
-    pageOverflow:document.documentElement.scrollWidth-window.innerWidth,
-    tableOverflow:document.getElementById('v7Table').scrollWidth-document.getElementById('v7TableCard').clientWidth,
-    cardOverflow:getComputedStyle(document.getElementById('v7TableCard')).overflowX,
-  }));
-  expect(narrow.pageOverflow).toBeLessThanOrEqual(1);
-  expect(narrow.tableOverflow).toBeGreaterThan(0);
-  expect(['auto','scroll']).toContain(narrow.cardOverflow);
+  for(const width of [1331,1280]){
+    await page.setViewportSize({width,height:900});
+    const narrow=await page.evaluate(()=>{
+      const row=document.querySelector('#tableBodyV7 tr[data-instrument-id="e2e-a"]');
+      return {
+        pageOverflow:document.documentElement.scrollWidth-window.innerWidth,
+        tableOverflow:document.getElementById('v7Table').scrollWidth-document.getElementById('v7TableCard').clientWidth,
+        cardOverflow:getComputedStyle(document.getElementById('v7TableCard')).overflowX,
+        macdCell:row.children[13].getBoundingClientRect().width,
+        signalCell:row.children[14].getBoundingClientRect().width,
+        macdClient:row.querySelector('.macd').getBoundingClientRect().width,
+        signalOverflow:row.children[14].scrollWidth-row.children[14].clientWidth,
+      };
+    });
+    expect(narrow.pageOverflow).toBeLessThanOrEqual(1);
+    expect(narrow.tableOverflow).toBeGreaterThan(0);
+    expect(['auto','scroll']).toContain(narrow.cardOverflow);
+    expect(narrow.macdCell).toBeGreaterThan(narrow.signalCell);
+    expect(narrow.macdClient).toBeGreaterThanOrEqual(149);
+    expect(narrow.signalOverflow).toBeLessThanOrEqual(1);
+  }
 });
 
 test('all systems share the established header geometry', async ({ page }, testInfo) => {

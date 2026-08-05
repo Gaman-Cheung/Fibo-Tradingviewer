@@ -237,6 +237,7 @@ test('Radar keeps pure ranking, repository and shared brand-card boundaries',()=
   assert.doesNotMatch(memory,/document\.|localStorage\.|supabase|instrument\.id|market_daily_bar/);
   assert.doesNotMatch(controller,/configureMotion|indexRadarLoop|localStorage\.|loadInstrumentPool/);
   assert.match(components,/\.fibo-card--brand-ring\s*\{/);
+  assert.doesNotMatch(controller,/fibo-card--brand-ring/);
   assert.doesNotMatch(terminalCss,/\.fibo-card--brand-ring\s*\{/);
   assert.equal((terminalHtml.match(/id="indexRadarHelpButton"/g)||[]).length,1);
   assert.equal((terminalHtml.match(/class="fibo-help-button" id="indexRadarHelpButton"/g)||[]).length,1);

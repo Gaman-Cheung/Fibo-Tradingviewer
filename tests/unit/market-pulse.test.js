@@ -38,12 +38,12 @@ test('Pulse chart model fixes Y to 0..100 and keeps all ordered points in bounds
   const model=buildPulseChartModel(history,{width:600,height:236});
   assert.equal(model.points.length,3);
   assert.ok(model.points[0].x<model.points[1].x && model.points[1].x<model.points[2].x);
-  assert.equal(model.points[0].y,236-28);
+  assert.equal(model.points[0].y,236-10);
   assert.equal(model.points[2].y,18);
   assert.deepEqual(model.thresholds.map(({value,label,shortLabel,colorToken})=>({value,label,shortLabel,colorToken})),[
     {value:20,label:'Risk Gate',shortLabel:'R20',colorToken:'--brand-red'},
     {value:40,label:'',shortLabel:'40',colorToken:'--color-border-subtle'},
-    {value:60,label:'Strength Gate',shortLabel:'S60',colorToken:'--brand-blue'},
+    {value:60,label:'Strength Gate',shortLabel:'S60',colorToken:'--brand-green'},
     {value:80,label:'',shortLabel:'80',colorToken:'--color-border-subtle'}
   ]);
 });
