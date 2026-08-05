@@ -227,6 +227,18 @@ test('Market Pulse schema is additive, independently keyed and authenticated-rea
   }
 });
 
+test('all four Market Context scopes share one responsive frame contract', () => {
+  const html=fs.readFileSync(path.join(root,'Terminal.html'),'utf8');
+  const css=fs.readFileSync(path.join(root,'assets/css/terminal.css'),'utf8');
+  const design=fs.readFileSync(path.join(root,'docs/DESIGN_SYSTEM.md'),'utf8');
+  assert.match(html,/class="index-radar-viewport market-context-viewport"/);
+  assert.match(css,/\.market-context-viewport\s*\{\s*height:316px/);
+  for(const height of [236,425,516,616]) assert.match(css,new RegExp(`\\.market-context-viewport \\{ height:${height}px; \\}`));
+  assert.match(css,/\.market-context-viewport > \.index-radar-dashboard,\.market-context-viewport > \.market-pulse-dashboard \{ height:100%; \}/);
+  assert.match(design,/All four tabs occupy one shared responsive Market Context frame/);
+  assert.match(design,/each active dashboard must fit it without an inner vertical scrollbar/);
+});
+
 test('authentication entry exposes one unified, accessible form', () => {
   const source = fs.readFileSync(path.join(root,'TradingViewer.html'),'utf8');
   const controller = fs.readFileSync(path.join(root,'src/apps/auth-app.js'),'utf8');

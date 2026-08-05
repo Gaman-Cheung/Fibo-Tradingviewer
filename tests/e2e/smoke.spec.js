@@ -277,6 +277,7 @@ test('Market Pulse is the default official-close context with chart, guide and p
       gridHeight:grid.getBoundingClientRect().height,
       chartHeight:chart.getBoundingClientRect().height,
       chartOverflow:chart.scrollHeight-chart.clientHeight,
+      dashboardHeight:node.querySelector('.market-pulse-dashboard').getBoundingClientRect().height,
       pageOverflow:document.documentElement.scrollWidth-window.innerWidth,
     };
   });
@@ -284,11 +285,13 @@ test('Market Pulse is the default official-close context with chart, guide and p
     expect(pulseGeometry.snap).toContain('x');
     expect(pulseGeometry.overflow).toBeGreaterThan(0);
     expect(pulseGeometry.rows).toBe(1);
+    expect(Math.abs(pulseGeometry.gridHeight-148)).toBeLessThanOrEqual(1);
+    expect(Math.abs(pulseGeometry.dashboardHeight-425)).toBeLessThanOrEqual(1);
   }else{
     expect(pulseGeometry.overflow).toBeLessThanOrEqual(1);
-    expect(pulseGeometry.rows).toBe(2);
-    expect(Math.abs(pulseGeometry.gridHeight-236)).toBeLessThanOrEqual(1);
-    expect(Math.abs(pulseGeometry.chartHeight-236)).toBeLessThanOrEqual(1);
+    expect(pulseGeometry.rows).toBe(1);
+    expect(Math.abs(pulseGeometry.gridHeight-112)).toBeLessThanOrEqual(1);
+    expect(Math.abs(pulseGeometry.dashboardHeight-516)).toBeLessThanOrEqual(1);
     expect(pulseGeometry.chartOverflow).toBeLessThanOrEqual(1);
   }
   expect(pulseGeometry.pageOverflow).toBeLessThanOrEqual(1);
@@ -343,37 +346,59 @@ test('Market Pulse is the default official-close context with chart, guide and p
   await page.locator('#indexRadarDetailClose').click();
 });
 
-test('Market Pulse keeps its 2x2 cards and chart composition at desktop breakpoints', async ({ page }, testInfo) => {
+test('Market Context keeps one responsive frame while Pulse reflows its cards and chart', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name==='iphone','Desktop-only Pulse composition');
   await page.setViewportSize({width:1024,height:900});
   await page.goto('/Terminal.html?tab=v6');
   const context=page.locator('#indexRadar');
-  await expect(context.locator('[data-market-pulse-group]')).toHaveCount(4);
+  const pulseMode=context.locator('[data-market-radar-scope="MARKET_PULSE"]');
+  const sectorMode=context.locator('[data-market-radar-scope="SECTOR_INDEX"]');
   for(const width of [1024,1280,2048]){
     await page.setViewportSize({width,height:900});
+    await pulseMode.click();
+    await expect(context.locator('[data-market-pulse-group]')).toHaveCount(4);
     const geometry=await context.evaluate(node=>{
+      const frame=node.querySelector('#indexRadarViewport').getBoundingClientRect();
       const dashboard=node.querySelector('.market-pulse-dashboard').getBoundingClientRect();
       const grid=node.querySelector('.market-pulse-card-grid').getBoundingClientRect();
       const chart=node.querySelector('.market-pulse-chart-card');
       const chartRect=chart.getBoundingClientRect();
       const cards=[...node.querySelectorAll('[data-market-pulse-group]')].map(card=>card.getBoundingClientRect());
       return {
+        frameHeight:frame.height,dashboardHeight:dashboard.height,
         dashboardOverflow:node.querySelector('.market-pulse-dashboard').scrollWidth-dashboard.width,
         rows:new Set(cards.map(rect=>Math.round(rect.top))).size,
-        gridRight:grid.right,gridBottom:grid.bottom,chartLeft:chartRect.left,chartTop:chartRect.top,
-        chartHeight:chartRect.height,chartOverflow:chart.scrollHeight-chart.clientHeight,
+        cardOverflow:Math.max(...[...node.querySelectorAll('[data-market-pulse-group]')].map(card=>card.scrollHeight-card.clientHeight)),
+        gridHeight:grid.height,gridRight:grid.right,gridBottom:grid.bottom,
+        chartLeft:chartRect.left,chartTop:chartRect.top,chartHeight:chartRect.height,
+        chartOverflow:chart.scrollHeight-chart.clientHeight,
         pageOverflow:document.documentElement.scrollWidth-window.innerWidth,
       };
     });
-    expect(geometry.rows).toBe(2);
     expect(geometry.dashboardOverflow).toBeLessThanOrEqual(1);
+    expect(geometry.cardOverflow).toBeLessThanOrEqual(1);
     expect(geometry.pageOverflow).toBeLessThanOrEqual(1);
     expect(geometry.chartOverflow).toBeLessThanOrEqual(1);
-    if(width<=1100) expect(geometry.chartTop).toBeGreaterThanOrEqual(geometry.gridBottom);
-    else{
+    if(width===1024){
+      expect(geometry.rows).toBe(2);
+      expect(Math.abs(geometry.dashboardHeight-616)).toBeLessThanOrEqual(1);
+      expect(Math.abs(geometry.gridHeight-236)).toBeLessThanOrEqual(1);
+      expect(geometry.chartTop).toBeGreaterThanOrEqual(geometry.gridBottom);
+    }else if(width===1280){
+      expect(geometry.rows).toBe(1);
+      expect(Math.abs(geometry.dashboardHeight-516)).toBeLessThanOrEqual(1);
+      expect(Math.abs(geometry.gridHeight-112)).toBeLessThanOrEqual(1);
+      expect(geometry.chartTop).toBeGreaterThanOrEqual(geometry.gridBottom);
+    }else{
+      expect(geometry.rows).toBe(2);
+      expect(Math.abs(geometry.dashboardHeight-236)).toBeLessThanOrEqual(1);
       expect(geometry.chartLeft).toBeGreaterThanOrEqual(geometry.gridRight);
       expect(Math.abs(geometry.chartHeight-236)).toBeLessThanOrEqual(1);
     }
+    await sectorMode.click();
+    await expect(context.locator('[data-index-radar-leader]')).toHaveCount(5);
+    const radarFrameHeight=await context.locator('#indexRadarViewport').evaluate(node=>node.getBoundingClientRect().height);
+    expect(Math.abs(radarFrameHeight-geometry.frameHeight)).toBeLessThanOrEqual(1);
   }
 });
 
@@ -447,6 +472,7 @@ test('Look First Index Radar renders current leaders and Leadership Memory', asy
       leaderScrollWidth:leaders.scrollWidth,leaderClientWidth:leaders.clientWidth,leaderSnap:getComputedStyle(leaders).scrollSnapType,
       memoryScrollWidth:memory.scrollWidth,memoryClientWidth:memory.clientWidth,memorySnap:getComputedStyle(memory).scrollSnapType,
       memoryCardHeight:memoryCard.getBoundingClientRect().height,
+      dashboardHeight:node.querySelector('.index-radar-dashboard').getBoundingClientRect().height,
       animated:Boolean(node.querySelector('.is-animated')),
     };
   });
@@ -457,6 +483,7 @@ test('Look First Index Radar renders current leaders and Leadership Memory', asy
     expect(geometry.leaderSnap).toContain('x');
     expect(geometry.memorySnap).toContain('x');
     expect(geometry.memoryCardHeight).toBeGreaterThanOrEqual(44);
+    expect(Math.abs(geometry.dashboardHeight-425)).toBeLessThanOrEqual(1);
   }else{
     expect(geometry.leaderScrollWidth-geometry.leaderClientWidth).toBeLessThanOrEqual(1);
     expect(geometry.memoryScrollWidth-geometry.memoryClientWidth).toBeLessThanOrEqual(1);
@@ -472,7 +499,9 @@ test('Market Radar switches lazy ETF scopes without mixing cards or Memory', asy
   const sector=modes.getByRole('tab',{name:'Sector Index'});
   const equity=modes.getByRole('tab',{name:'Equity ETF'});
   const cross=modes.getByRole('tab',{name:'Cross Asset'});
+  const frameHeight=()=>radar.locator('#indexRadarViewport').evaluate(node=>node.getBoundingClientRect().height);
   await expect(modes.getByRole('tab',{name:'Market Pulse'})).toHaveAttribute('aria-selected','true');
+  const sharedFrameHeight=await frameHeight();
   await expect(radar.locator('#indexRadarTitle')).toHaveText('FIBO MARKET PULSE · MARKET BREADTH');
   await sector.click();
   await expect(sector).toHaveAttribute('aria-selected','true');
@@ -480,6 +509,7 @@ test('Market Radar switches lazy ETF scopes without mixing cards or Memory', asy
   const sectorCardGeometry=await radar.locator('[data-index-radar-leader]').first().evaluate(card=>({
     height:card.getBoundingClientRect().height,minHeight:getComputedStyle(card).minHeight,
   }));
+  expect(Math.abs(await frameHeight()-sharedFrameHeight)).toBeLessThanOrEqual(1);
   await expect(radar.locator('#indexRadarTitle')).toHaveText('INDEX RADAR · SECTOR LEADERS');
 
   await equity.click();
@@ -490,6 +520,7 @@ test('Market Radar switches lazy ETF scopes without mixing cards or Memory', asy
   await expect(radar.locator('[data-index-radar-leader]').first()).toContainText('RS5');
   await expect(radar.locator('[data-index-radar-leader]').first()).toContainText('RS20');
   await expect(radar.locator('[data-index-radar-memory]')).toHaveCount(4);
+  expect(Math.abs(await frameHeight()-sharedFrameHeight)).toBeLessThanOrEqual(1);
   expect(await page.evaluate(()=>window.__etfRadarOrders?.EQUITY_ETF)).toBe(2);
 
   await radar.locator('#indexRadarHelpButton').click();
@@ -507,6 +538,7 @@ test('Market Radar switches lazy ETF scopes without mixing cards or Memory', asy
   await expect(cross).toHaveAttribute('aria-selected','true');
   await expect(radar.locator('#indexRadarTitle')).toHaveText('ETF RADAR · CROSS-ASSET LEADERS');
   await expect(radar.locator('.index-radar-category')).toHaveCount(5);
+  expect(Math.abs(await frameHeight()-sharedFrameHeight)).toBeLessThanOrEqual(1);
   await expect(radar.locator('.index-radar-category').first()).toContainText('Overseas');
   expect(await page.evaluate(()=>window.__etfRadarOrders?.CROSS_ASSET)).toBe(2);
 
@@ -545,7 +577,7 @@ test('Radar desktop breakpoints never require horizontal navigation', async ({ p
       const leaderCards=[...node.querySelectorAll('[data-index-radar-leader]')].map(card=>card.getBoundingClientRect());
       const memoryRect=memory.getBoundingClientRect();
       return {
-        dashboardWidth:dashboard.width,
+        dashboardWidth:dashboard.width,dashboardHeight:dashboard.height,
         dashboardScrollWidth:node.querySelector('.index-radar-dashboard').scrollWidth,
         leaderOverflow:leaders.scrollWidth-leaders.clientWidth,
         memoryOverflow:memory.scrollWidth-memory.clientWidth,
@@ -559,6 +591,7 @@ test('Radar desktop breakpoints never require horizontal navigation', async ({ p
     expect(geometry.dashboardScrollWidth-geometry.dashboardWidth).toBeLessThanOrEqual(1);
     expect(geometry.leaderOverflow).toBeLessThanOrEqual(1);
     expect(geometry.memoryOverflow).toBeLessThanOrEqual(1);
+    expect(Math.abs(geometry.dashboardHeight-(width===1024?616:width===1280?516:236))).toBeLessThanOrEqual(1);
     if(width===2048){
       expect(geometry.leaderRows).toBe(1);
       expect(geometry.memoryLeft).toBeGreaterThanOrEqual(geometry.leaderRight);
