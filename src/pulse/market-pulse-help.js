@@ -55,9 +55,9 @@ export const MARKET_PULSE_GUIDE_HTML=`<div class="fibo-help-content market-pulse
     <tr><td>0–&lt;20</td><td>Risk-Off</td><td>Weakness is broad; it is still not a timing guarantee.</td></tr>
   </tbody></table></div>
 
-  <h3>Strength Gate and Risk Gate</h3>
-  <p>The chart keeps all four existing state boundaries. The dashed <strong>Strength Gate at 60</strong> uses Google green because crossing it enters Healthy Strength. The dashed <strong>Risk Gate at 20</strong> uses Google red because falling below it enters Risk-Off. The 40 and 80 guides remain neutral gray. The two Gate keys sit in the chart footer between the first and latest official dates.</p>
-  <p>Moving closer to a Gate means the breadth score is closer to that existing state boundary. A Gate is not a probability, reconciliation rate, overbought/oversold oscillator, buy/sell trigger or new scored input.</p>
+  <h3>Hot, Wind and Cold</h3>
+  <p>The chart keeps all four existing state boundaries. The dashed <strong>Hot line at 60</strong> uses Google green as a warm breadth observation threshold. The dashed <strong>Wind line at 40</strong> uses Google yellow as a two-way transition watch line. The dashed <strong>Cold line at 20</strong> uses Google red as a cold or Risk-Off observation threshold. The 80 guide remains neutral gray. The three keys sit in the chart footer between the first and latest official dates.</p>
+  <p>Hot and Cold describe breadth temperature only; they are not confirmed overbought, oversold or reversal conditions. Wind means conditions near 40 deserve closer observation, not that 40 predicts whether the next move will be up or down. These lines are not a probability, reconciliation rate, buy/sell trigger or new scored input.</p>
 
   <h3>Cards, member lists and 60D history</h3>
   <p>Click a group card to inspect the exact latest official stocks or indices behind each numerator. Search matches security name or permanent Market + Code and results are paginated at 50 rows. Only the latest two official member sets are retained for safe publication; the chart stores 60 aggregate snapshots, not 60 days of security-level membership.</p>

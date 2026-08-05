@@ -95,7 +95,7 @@ function chartSummary(history) {
   if (!history.length) return 'No compatible Market Pulse history.';
   const scores=history.map(item=>item.score);
   const latest=history.at(-1);
-  return `${history.length} official sessions. Latest ${latest.tradeDate}: ${latest.score.toFixed(1)}, ${latest.state}. Range ${Math.min(...scores).toFixed(1)} to ${Math.max(...scores).toFixed(1)}. Strength Gate is 60. Risk Gate is 20.`;
+  return `${history.length} official sessions. Latest ${latest.tradeDate}: ${latest.score.toFixed(1)}, ${latest.state}. Range ${Math.min(...scores).toFixed(1)} to ${Math.max(...scores).toFixed(1)}. Hot is 60. Wind is 40. Cold is 20.`;
 }
 
 function dashboardMarkup(snapshot,history) {
@@ -109,7 +109,7 @@ function dashboardMarkup(snapshot,history) {
     <section class="fibo-card market-pulse-chart-card" aria-labelledby="marketPulseChartTitle">
       <div class="market-pulse-chart__header"><span><small>60 OFFICIAL SESSIONS</small><strong id="marketPulseChartTitle">FIBO MARKET PULSE</strong><span class="market-pulse-chart__coverage">${escapePulseHtml(coverage)}</span></span><span class="market-pulse-chart__current"><b>${formatPulseNumber(snapshot.score,1)}</b><small>${escapePulseHtml(snapshot.state)}</small></span></div>
       <div class="market-pulse-chart__plot"><canvas id="marketPulseChart" tabindex="0" role="img" aria-label="${escapePulseHtml(chartSummary(history))}"></canvas><div class="market-pulse-chart__tooltip" id="marketPulseChartTooltip" role="status" aria-live="polite" hidden></div></div>
-      <div class="market-pulse-chart__footer"><span class="market-pulse-chart__date market-pulse-chart__date--start">${escapePulseHtml(firstDate)}</span><span class="market-pulse-chart__gates" aria-label="Strength Gate 60; Risk Gate 20"><span class="market-pulse-chart__gate market-pulse-chart__gate--strength"><i></i><span class="market-pulse-chart__gate-full">60 · Strength Gate</span><span class="market-pulse-chart__gate-short">S60</span></span><span class="market-pulse-chart__gate market-pulse-chart__gate--risk"><i></i><span class="market-pulse-chart__gate-full">20 · Risk Gate</span><span class="market-pulse-chart__gate-short">R20</span></span></span><span class="market-pulse-chart__date market-pulse-chart__date--end">${escapePulseHtml(lastDate)}</span></div>
+      <div class="market-pulse-chart__footer"><span class="market-pulse-chart__date market-pulse-chart__date--start">${escapePulseHtml(firstDate)}</span><span class="market-pulse-chart__gates" aria-label="Hot 60; Wind 40; Cold 20"><span class="market-pulse-chart__gate market-pulse-chart__gate--hot"><i></i><span class="market-pulse-chart__gate-full">60 · Hot</span><span class="market-pulse-chart__gate-short">H60</span></span><span class="market-pulse-chart__gate market-pulse-chart__gate--wind"><i></i><span class="market-pulse-chart__gate-full">40 · Wind</span><span class="market-pulse-chart__gate-short">W40</span></span><span class="market-pulse-chart__gate market-pulse-chart__gate--cold"><i></i><span class="market-pulse-chart__gate-full">20 · Cold</span><span class="market-pulse-chart__gate-short">C20</span></span></span><span class="market-pulse-chart__date market-pulse-chart__date--end">${escapePulseHtml(lastDate)}</span></div>
     </section>
   </div>`;
 }
@@ -191,7 +191,7 @@ export function createMarketPulseController({ client,setStatus,openModal }) {
     tooltip.innerHTML=`<strong>${escapePulseHtml(point.tradeDate)} · ${formatPulseNumber(point.score,1)}</strong><span>${escapePulseHtml(point.state)}</span><small>P ${formatPulseNumber(point.participation.score,1)} · T ${formatPulseNumber(point.trendBreadth.score,1)} · E ${formatPulseNumber(point.expansion.score,1)} · L ${formatPulseNumber(point.leadership.score,1)}</small>`;
     const left=Math.max(4,Math.min(canvas.clientWidth-tooltip.offsetWidth-4,point.x-tooltip.offsetWidth/2));
     tooltip.style.left=`${left}px`;tooltip.style.top=`${Math.max(2,point.y-tooltip.offsetHeight-8)}px`;
-    if (focus) canvas.setAttribute('aria-label',`${point.tradeDate}: Pulse ${point.score.toFixed(1)}, ${point.state}. Participation ${Number(point.participation.score).toFixed(1)}, Trend ${Number(point.trendBreadth.score).toFixed(1)}, Expansion ${Number(point.expansion.score).toFixed(1)}, Leadership ${Number(point.leadership.score).toFixed(1)}. Strength Gate is 60. Risk Gate is 20.`);
+    if (focus) canvas.setAttribute('aria-label',`${point.tradeDate}: Pulse ${point.score.toFixed(1)}, ${point.state}. Participation ${Number(point.participation.score).toFixed(1)}, Trend ${Number(point.trendBreadth.score).toFixed(1)}, Expansion ${Number(point.expansion.score).toFixed(1)}, Leadership ${Number(point.leadership.score).toFixed(1)}. Hot is 60. Wind is 40. Cold is 20.`);
   }
 
   function bindChart() {

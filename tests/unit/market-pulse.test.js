@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import { loadMarketPulse,loadMarketPulseMembers,PULSE_MEMBER_FILTERS } from '../../src/core/market-pulse-repository.js';
 import { MARKET_PULSE_GUIDE_HTML,MARKET_PULSE_GUIDE_VERSION } from '../../src/pulse/market-pulse-help.js';
-import { buildPulseChartModel,compatiblePulseHistory,normalizePulseSnapshot,pulseStateClass } from '../../src/pulse/market-pulse-view-model.js';
+import { buildPulseChartModel,compatiblePulseHistory,normalizePulseSnapshot,PULSE_ALGORITHM_VERSION,pulseStateClass } from '../../src/pulse/market-pulse-view-model.js';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 
@@ -41,11 +41,12 @@ test('Pulse chart model fixes Y to 0..100 and keeps all ordered points in bounds
   assert.equal(model.points[0].y,236-10);
   assert.equal(model.points[2].y,18);
   assert.deepEqual(model.thresholds.map(({value,label,shortLabel,colorToken})=>({value,label,shortLabel,colorToken})),[
-    {value:20,label:'Risk Gate',shortLabel:'R20',colorToken:'--brand-red'},
-    {value:40,label:'',shortLabel:'40',colorToken:'--color-border-subtle'},
-    {value:60,label:'Strength Gate',shortLabel:'S60',colorToken:'--brand-green'},
+    {value:20,label:'Cold',shortLabel:'C20',colorToken:'--brand-red'},
+    {value:40,label:'Wind',shortLabel:'W40',colorToken:'--brand-yellow'},
+    {value:60,label:'Hot',shortLabel:'H60',colorToken:'--brand-green'},
     {value:80,label:'',shortLabel:'80',colorToken:'--color-border-subtle'}
   ]);
+  assert.equal(PULSE_ALGORITHM_VERSION,1);
 });
 
 test('Pulse latest snapshot survives an isolated history read failure',async()=>{
@@ -105,10 +106,12 @@ test('Pulse algorithm, product help and manual keep the same v1 contract',()=>{
     assert.match(source,/(CNI 2000|国证2000)/i);
   }
   for(const source of [manual,MARKET_PULSE_GUIDE_HTML]){
-    for(const text of ['Official','62','ST','25%','Theme Group','Broad Strength','Healthy Strength','Mixed','Weakening','Risk-Off','Strength Gate','Risk Gate','95%','Composite Signal']){
+    for(const text of ['Official','62','ST','25%','Theme Group','Broad Strength','Healthy Strength','Mixed','Weakening','Risk-Off','Hot','Wind','Cold','95%','Composite Signal']){
       assert.ok(source.toLowerCase().includes(text.toLowerCase()),`Pulse guide contract missing ${text}`);
     }
     assert.match(source,/not (?:a )?probability/i);
+    assert.match(source,/not confirmed overbought, oversold or reversal/i);
+    assert.match(source,/not that 40 predicts/i);
     assert.match(source,/50 (?:rows|row)/i);
   }
   assert.match(python,/ALGORITHM_VERSION\s*=\s*1/);

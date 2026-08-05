@@ -4,9 +4,9 @@ export const PULSE_ALGORITHM_VERSION = 1;
 export const PULSE_INDEX_UNIVERSE_VERSION = 2;
 export const PULSE_HISTORY_LIMIT = 60;
 export const PULSE_CHART_THRESHOLDS = Object.freeze([
-  Object.freeze({ value:20,label:'Risk Gate',shortLabel:'R20',colorToken:'--brand-red',fallback:'#ea4335' }),
-  Object.freeze({ value:40,label:'',shortLabel:'40',colorToken:'--color-border-subtle',fallback:'#e5e7eb' }),
-  Object.freeze({ value:60,label:'Strength Gate',shortLabel:'S60',colorToken:'--brand-green',fallback:'#34a853' }),
+  Object.freeze({ value:20,label:'Cold',shortLabel:'C20',colorToken:'--brand-red',fallback:'#ea4335' }),
+  Object.freeze({ value:40,label:'Wind',shortLabel:'W40',colorToken:'--brand-yellow',fallback:'#fbbc05' }),
+  Object.freeze({ value:60,label:'Hot',shortLabel:'H60',colorToken:'--brand-green',fallback:'#34a853' }),
   Object.freeze({ value:80,label:'',shortLabel:'80',colorToken:'--color-border-subtle',fallback:'#e5e7eb' }),
 ]);
 

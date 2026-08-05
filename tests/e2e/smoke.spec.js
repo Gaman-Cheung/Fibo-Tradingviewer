@@ -249,22 +249,28 @@ test('Market Pulse is the default official-close context with chart, guide and p
   await expect(cards.nth(3)).toContainText('Broad Confirm');
   await expect(context.locator('#marketPulseChart')).toBeVisible();
   await expect(context.locator('#marketPulseChart')).toHaveAttribute('aria-label',/60 official sessions/);
-  await expect(context.locator('#marketPulseChart')).toHaveAttribute('aria-label',/Strength Gate is 60.*Risk Gate is 20/);
+  await expect(context.locator('#marketPulseChart')).toHaveAttribute('aria-label',/Hot is 60.*Wind is 40.*Cold is 20/);
   await expect(context.locator('.market-pulse-chart__meta')).toHaveCount(0);
   await expect(context.locator('.market-pulse-chart__coverage')).toHaveText('History 60/60');
   const pulseFooter=context.locator('.market-pulse-chart__footer');
   await expect(pulseFooter).toContainText('2026-07-28');
-  await expect(pulseFooter.locator('.market-pulse-chart__gates')).toHaveAttribute('aria-label','Strength Gate 60; Risk Gate 20');
-  const gatePresentation=await context.evaluate(node=>Object.fromEntries(['strength','risk'].map(key=>{
+  await expect(pulseFooter.locator('.market-pulse-chart__gates')).toHaveAttribute('aria-label','Hot 60; Wind 40; Cold 20');
+  await expect(pulseFooter).toContainText('60 · Hot');
+  await expect(pulseFooter).toContainText('40 · Wind');
+  await expect(pulseFooter).toContainText('20 · Cold');
+  const gatePresentation=await context.evaluate(node=>Object.fromEntries(['hot','wind','cold'].map(key=>{
     const gate=node.querySelector(`.market-pulse-chart__gate--${key}`);
     const full=gate.querySelector('.market-pulse-chart__gate-full');
     const short=gate.querySelector('.market-pulse-chart__gate-short');
     return [key,{color:getComputedStyle(gate).color,full:getComputedStyle(full).display,short:getComputedStyle(short).display}];
   })));
-  expect(gatePresentation.strength.color).toBe('rgb(52, 168, 83)');
-  expect(gatePresentation.risk.color).toBe('rgb(234, 67, 53)');
-  expect(gatePresentation.strength.full==='none').toBe(testInfo.project.name==='iphone');
-  expect(gatePresentation.strength.short==='none').toBe(testInfo.project.name!=='iphone');
+  expect(gatePresentation.hot.color).toBe('rgb(52, 168, 83)');
+  expect(gatePresentation.wind.color).toBe('rgb(251, 188, 5)');
+  expect(gatePresentation.cold.color).toBe('rgb(234, 67, 53)');
+  for(const presentation of Object.values(gatePresentation)){
+    expect(presentation.full==='none').toBe(testInfo.project.name==='iphone');
+    expect(presentation.short==='none').toBe(testInfo.project.name!=='iphone');
+  }
   const pulseChart=context.locator('#marketPulseChart');
   await pulseChart.focus();
   await page.keyboard.press('ArrowLeft');
@@ -316,8 +322,9 @@ test('Market Pulse is the default official-close context with chart, guide and p
   await expect(page.locator('#indexRadarHelpTitle')).toContainText('FIBO MARKET PULSE');
   await expect(page.locator('#indexRadarHelpContent')).toContainText('Balance(P,N,E)');
   await expect(page.locator('#indexRadarHelpContent')).toContainText('Theme Group');
-  await expect(page.locator('#indexRadarHelpContent')).toContainText('Strength Gate');
-  await expect(page.locator('#indexRadarHelpContent')).toContainText('Risk Gate');
+  await expect(page.locator('#indexRadarHelpContent')).toContainText('Hot');
+  await expect(page.locator('#indexRadarHelpContent')).toContainText('Wind');
+  await expect(page.locator('#indexRadarHelpContent')).toContainText('Cold');
   await expect(page.locator('#indexRadarHelpContent')).toContainText('not a probability');
   if(testInfo.project.name==='iphone'){
     const helpOverflow=await page.locator('#indexRadarHelpBackdrop .fibo-modal').evaluate(modal=>({
