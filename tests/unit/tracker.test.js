@@ -9,7 +9,7 @@ import { buildScenarioComparison } from '../../src/tracker/scenario-comparison.j
 import { projectMovingAverageSeries } from '../../src/tracker/ma-projection.js';
 import { formatTurnLabel } from '../../src/tracker/status-presenter.js';
 import { loadLatestOfficialClose } from '../../src/core/market-repository.js';
-import { normalizeTrackerMaProjectionScenario } from '../../src/core/tracker-state.js';
+import { normalizeTrackerMaProjectionScenario, normalizeTrackerScenarioVisibility } from '../../src/core/tracker-state.js';
 
 class MemoryStorage {
   constructor(entries={}) { this.values=new Map(Object.entries(entries)); }
@@ -59,7 +59,7 @@ test('Prev Close migration defaults eligible instruments to Auto and preserves c
   ]);
 });
 
-test('Tracker MA projection selection migration is idempotent and stays keyed by permanent ID', () => {
+test('Tracker Scenario selection and visibility migrations are idempotent and stay keyed by permanent ID', () => {
   const storage=new MemoryStorage({
     fibo_schema_migration_version:'4',
     tv_instrument_pool_v1:JSON.stringify({version:1,items:[
@@ -67,8 +67,8 @@ test('Tracker MA projection selection migration is idempotent and stays keyed by
     ],tombstones:[]}),
     tv_trend_tracker_state_v1:JSON.stringify({version:1,instruments:{
       'same-a':{horizon:20},
-      'same-b':{horizon:30,maProjectionScenario:'custom'},
-      'same-c':{horizon:40,maProjectionScenario:'invalid'}
+      'same-b':{horizon:30,maProjectionScenario:'custom',scenarioVisibility:{flat:false,trend:true,custom:'invalid'}},
+      'same-c':{horizon:40,maProjectionScenario:'invalid',scenarioVisibility:{flat:false,trend:false,custom:false}}
     }})
   });
   runMigrations(storage);
@@ -79,8 +79,15 @@ test('Tracker MA projection selection migration is idempotent and stays keyed by
   assert.deepEqual(Object.fromEntries(Object.entries(state.instruments).map(([id,value])=>[id,value.maProjectionScenario])),{
     'same-a':'trend','same-b':'custom','same-c':'trend'
   });
+  assert.deepEqual(Object.fromEntries(Object.entries(state.instruments).map(([id,value])=>[id,value.scenarioVisibility])),{
+    'same-a':{flat:true,trend:true,custom:true},
+    'same-b':{flat:false,trend:true,custom:true},
+    'same-c':{flat:false,trend:false,custom:false}
+  });
   assert.equal(normalizeTrackerMaProjectionScenario('FLAT'),'flat');
   assert.equal(normalizeTrackerMaProjectionScenario('unknown'),'trend');
+  assert.deepEqual(normalizeTrackerScenarioVisibility(null),{flat:true,trend:true,custom:true});
+  assert.deepEqual(normalizeTrackerScenarioVisibility({flat:false,trend:'false',custom:true}),{flat:false,trend:true,custom:true});
 });
 
 function marketClient(rowsByTable={}, errorsByTable={}, calls=[]) {
@@ -286,6 +293,11 @@ test('chart x model renders forecast days at one-third scale without a minimum a
   assert.ok(Math.abs(trackerForecastRatio(120,60)-expectedRatio(120,60))<1e-12);
   assert.equal(trackerForecastRatio(120,240),TRACKER_FORECAST_MAX_RATIO);
   assert.ok(Math.abs(trackerForecastRatio(80,20)-expectedRatio(80,20))<1e-12);
+  assert.equal(trackerForecastRatio(120,0),0);
+  const historyOnly=buildTrackerChartXModel(120,0,plot);
+  assert.equal(historyOnly.forecastRatio,0);
+  assert.equal(historyOnly.historyRight,plot.right);
+  assert.deepEqual(historyOnly.forecast,[]);
   for(const horizon of [1,20,60,240]){
     const model=buildTrackerChartXModel(120,horizon,plot);
     assert.equal(model.history[0],plot.left);

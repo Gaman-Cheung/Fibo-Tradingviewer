@@ -3,6 +3,12 @@
 export const PULSE_ALGORITHM_VERSION = 1;
 export const PULSE_INDEX_UNIVERSE_VERSION = 2;
 export const PULSE_HISTORY_LIMIT = 60;
+export const PULSE_CHART_THRESHOLDS = Object.freeze([
+  Object.freeze({ value:20,label:'Risk Gate',shortLabel:'R20',colorToken:'--brand-red',fallback:'#ea4335' }),
+  Object.freeze({ value:40,label:'',shortLabel:'40',colorToken:'--color-border-subtle',fallback:'#e5e7eb' }),
+  Object.freeze({ value:60,label:'Strength Gate',shortLabel:'S60',colorToken:'--brand-blue',fallback:'#4285f4' }),
+  Object.freeze({ value:80,label:'',shortLabel:'80',colorToken:'--color-border-subtle',fallback:'#e5e7eb' }),
+]);
 
 export function escapePulseHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, character => ({
@@ -89,7 +95,7 @@ export function buildPulseChartModel(history,{ width=640,height=236,padding={ le
   }));
   return {
     width,height,padding,plotWidth,plotHeight,points,
-    thresholds:[20,40,60,80].map(value=>({ value,y:padding.top+plotHeight*(1-value/100) })),
+    thresholds:PULSE_CHART_THRESHOLDS.map(threshold=>({ ...threshold,y:padding.top+plotHeight*(1-threshold.value/100) })),
     firstDate:points[0]?.tradeDate||'',
     lastDate:points.at(-1)?.tradeDate||'',
   };

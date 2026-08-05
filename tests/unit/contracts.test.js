@@ -176,6 +176,23 @@ test('Tracker MA Reverse Price engine, help and algorithm guide share one derive
   }
 });
 
+test('Tracker Scenario visibility remains per permanent ID and presentation-only', () => {
+  const state=fs.readFileSync(path.join(root,'src/core/tracker-state.js'),'utf8');
+  const migrations=fs.readFileSync(path.join(root,'src/core/migrations.js'),'utf8');
+  const tracker=fs.readFileSync(path.join(root,'src/apps/tracker-app.js'),'utf8');
+  const contracts=fs.readFileSync(path.join(root,'docs/DATA_CONTRACTS.md'),'utf8');
+  const algorithms=fs.readFileSync(path.join(root,'docs/ALGORITHMS.md'),'utf8');
+  assert.match(state,/DEFAULT_TRACKER_SCENARIO_VISIBILITY/);
+  assert.match(state,/flat:true,trend:true,custom:true/);
+  assert.match(migrations,/current < 6/);
+  for(const source of [state,tracker,contracts,algorithms])assert.match(source,/scenarioVisibility|Scenario visibility/i);
+  for(const source of [tracker,contracts,algorithms]){
+    for(const text of ['permanent','hidden','projected MA'])assert.ok(source.toLowerCase().includes(text.toLowerCase()),`Scenario visibility contract missing ${text}`);
+  }
+  assert.match(tracker,/data-scenario-visibility/);
+  assert.match(tracker,/All Scenario paths are hidden/);
+});
+
 test('local BaoStock launcher keeps credentials and its environment out of Git', () => {
   const ignore=fs.readFileSync(path.join(root,'.gitignore'),'utf8');
   const launcher=fs.readFileSync(path.join(root,'SyncBaoStock.cmd'),'utf8');

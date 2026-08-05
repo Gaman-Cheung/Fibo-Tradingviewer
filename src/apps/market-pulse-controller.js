@@ -95,7 +95,7 @@ function chartSummary(history) {
   if (!history.length) return 'No compatible Market Pulse history.';
   const scores=history.map(item=>item.score);
   const latest=history.at(-1);
-  return `${history.length} official sessions. Latest ${latest.tradeDate}: ${latest.score.toFixed(1)}, ${latest.state}. Range ${Math.min(...scores).toFixed(1)} to ${Math.max(...scores).toFixed(1)}.`;
+  return `${history.length} official sessions. Latest ${latest.tradeDate}: ${latest.score.toFixed(1)}, ${latest.state}. Range ${Math.min(...scores).toFixed(1)} to ${Math.max(...scores).toFixed(1)}. Strength Gate is 60. Risk Gate is 20.`;
 }
 
 function dashboardMarkup(snapshot,history) {
@@ -106,7 +106,7 @@ function dashboardMarkup(snapshot,history) {
     </div></div>
     <section class="fibo-card market-pulse-chart-card" aria-labelledby="marketPulseChartTitle">
       <div class="market-pulse-chart__header"><span><small>60 OFFICIAL SESSIONS</small><strong id="marketPulseChartTitle">FIBO MARKET PULSE</strong></span><span class="market-pulse-chart__current"><b>${formatPulseNumber(snapshot.score,1)}</b><small>${escapePulseHtml(snapshot.state)}</small></span></div>
-      <div class="market-pulse-chart__meta"><span>${escapePulseHtml(coverage)}</span><span>${escapePulseHtml(snapshot.tradeDate)}</span></div>
+      <div class="market-pulse-chart__meta"><span>${escapePulseHtml(coverage)}</span><span class="market-pulse-chart__gates" aria-label="Strength Gate 60; Risk Gate 20"><span class="market-pulse-chart__gate market-pulse-chart__gate--strength"><i></i><span class="market-pulse-chart__gate-full">Strength Gate 60</span><span class="market-pulse-chart__gate-short">S60</span></span><span class="market-pulse-chart__gate market-pulse-chart__gate--risk"><i></i><span class="market-pulse-chart__gate-full">Risk Gate 20</span><span class="market-pulse-chart__gate-short">R20</span></span></span><span>${escapePulseHtml(snapshot.tradeDate)}</span></div>
       <div class="market-pulse-chart__plot"><canvas id="marketPulseChart" tabindex="0" role="img" aria-label="${escapePulseHtml(chartSummary(history))}"></canvas><div class="market-pulse-chart__tooltip" id="marketPulseChartTooltip" role="status" aria-live="polite" hidden></div></div>
     </section>
   </div>`;
@@ -158,9 +158,9 @@ export function createMarketPulseController({ client,setStatus,openModal }) {
     context.textBaseline='middle';
     for (const threshold of model.thresholds) {
       context.setLineDash([3,4]);
-      context.strokeStyle=css('--color-border-subtle','#e5e7eb');
+      context.strokeStyle=css(threshold.colorToken,threshold.fallback);
       context.beginPath();context.moveTo(model.padding.left,threshold.y);context.lineTo(width-model.padding.right,threshold.y);context.stroke();
-      context.fillStyle=css('--color-text-tertiary','#80868b');
+      context.fillStyle=threshold.label?css(threshold.colorToken,threshold.fallback):css('--color-text-tertiary','#80868b');
       context.fillText(String(threshold.value),8,threshold.y);
     }
     context.setLineDash([]);
@@ -193,7 +193,7 @@ export function createMarketPulseController({ client,setStatus,openModal }) {
     tooltip.innerHTML=`<strong>${escapePulseHtml(point.tradeDate)} · ${formatPulseNumber(point.score,1)}</strong><span>${escapePulseHtml(point.state)}</span><small>P ${formatPulseNumber(point.participation.score,1)} · T ${formatPulseNumber(point.trendBreadth.score,1)} · E ${formatPulseNumber(point.expansion.score,1)} · L ${formatPulseNumber(point.leadership.score,1)}</small>`;
     const left=Math.max(4,Math.min(canvas.clientWidth-tooltip.offsetWidth-4,point.x-tooltip.offsetWidth/2));
     tooltip.style.left=`${left}px`;tooltip.style.top=`${Math.max(2,point.y-tooltip.offsetHeight-8)}px`;
-    if (focus) canvas.setAttribute('aria-label',`${point.tradeDate}: Pulse ${point.score.toFixed(1)}, ${point.state}. Participation ${Number(point.participation.score).toFixed(1)}, Trend ${Number(point.trendBreadth.score).toFixed(1)}, Expansion ${Number(point.expansion.score).toFixed(1)}, Leadership ${Number(point.leadership.score).toFixed(1)}.`);
+    if (focus) canvas.setAttribute('aria-label',`${point.tradeDate}: Pulse ${point.score.toFixed(1)}, ${point.state}. Participation ${Number(point.participation.score).toFixed(1)}, Trend ${Number(point.trendBreadth.score).toFixed(1)}, Expansion ${Number(point.expansion.score).toFixed(1)}, Leadership ${Number(point.leadership.score).toFixed(1)}. Strength Gate is 60. Risk Gate is 20.`);
   }
 
   function bindChart() {

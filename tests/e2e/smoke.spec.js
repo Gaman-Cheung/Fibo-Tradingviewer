@@ -249,7 +249,19 @@ test('Market Pulse is the default official-close context with chart, guide and p
   await expect(cards.nth(3)).toContainText('Broad Confirm');
   await expect(context.locator('#marketPulseChart')).toBeVisible();
   await expect(context.locator('#marketPulseChart')).toHaveAttribute('aria-label',/60 official sessions/);
+  await expect(context.locator('#marketPulseChart')).toHaveAttribute('aria-label',/Strength Gate is 60.*Risk Gate is 20/);
   await expect(context.locator('.market-pulse-chart__meta')).toContainText('History 60/60');
+  await expect(context.locator('.market-pulse-chart__gates')).toHaveAttribute('aria-label','Strength Gate 60; Risk Gate 20');
+  const gatePresentation=await context.evaluate(node=>Object.fromEntries(['strength','risk'].map(key=>{
+    const gate=node.querySelector(`.market-pulse-chart__gate--${key}`);
+    const full=gate.querySelector('.market-pulse-chart__gate-full');
+    const short=gate.querySelector('.market-pulse-chart__gate-short');
+    return [key,{color:getComputedStyle(gate).color,full:getComputedStyle(full).display,short:getComputedStyle(short).display}];
+  })));
+  expect(gatePresentation.strength.color).toBe('rgb(66, 133, 244)');
+  expect(gatePresentation.risk.color).toBe('rgb(234, 67, 53)');
+  expect(gatePresentation.strength.full==='none').toBe(testInfo.project.name==='iphone');
+  expect(gatePresentation.strength.short==='none').toBe(testInfo.project.name!=='iphone');
   const pulseChart=context.locator('#marketPulseChart');
   await pulseChart.focus();
   await page.keyboard.press('ArrowLeft');
@@ -301,6 +313,8 @@ test('Market Pulse is the default official-close context with chart, guide and p
   await expect(page.locator('#indexRadarHelpTitle')).toContainText('FIBO MARKET PULSE');
   await expect(page.locator('#indexRadarHelpContent')).toContainText('Balance(P,N,E)');
   await expect(page.locator('#indexRadarHelpContent')).toContainText('Theme Group');
+  await expect(page.locator('#indexRadarHelpContent')).toContainText('Strength Gate');
+  await expect(page.locator('#indexRadarHelpContent')).toContainText('Risk Gate');
   await expect(page.locator('#indexRadarHelpContent')).toContainText('not a probability');
   if(testInfo.project.name==='iphone'){
     const helpOverflow=await page.locator('#indexRadarHelpBackdrop .fibo-modal').evaluate(modal=>({
@@ -757,6 +771,58 @@ test('Then Leap retains an instrument and its manual fields when Current is clea
   await expect(row.locator('.support-cell')).not.toHaveText('-');
 });
 
+test('Then Leap balances desktop columns without a duplicate top scrollbar', async ({ page },testInfo) => {
+  await page.goto('/Terminal.html?tab=v7');
+  await expect(page.locator('#v7TopScroll')).toHaveCount(0);
+  if(testInfo.project.name==='iphone'){
+    await page.locator('#tableBodyV7 tr.mobile-current .mobile-detail-toggle').click();
+    await expect(page.locator('#tableBodyV7 tr.mobile-current .rsi')).toBeVisible();
+    const mobile=await page.evaluate(()=>({
+      pageOverflow:document.documentElement.scrollWidth-window.innerWidth,
+      rsiHeight:document.querySelector('#tableBodyV7 tr.mobile-current .rsi')?.getBoundingClientRect().height||0,
+    }));
+    expect(mobile.pageOverflow).toBeLessThanOrEqual(1);
+    expect(mobile.rsiHeight).toBeGreaterThanOrEqual(44);
+    return;
+  }
+
+  await page.setViewportSize({width:2048,height:900});
+  const row=page.locator('#tableBodyV7 tr[data-instrument-id="e2e-a"]');
+  await row.locator('.rsi').fill('100');
+  const wide=await page.evaluate(()=>{
+    const table=document.getElementById('v7Table');
+    const card=document.getElementById('v7TableCard');
+    const row=document.querySelector('#tableBodyV7 tr[data-instrument-id="e2e-a"]');
+    const widths=[...row.querySelectorAll('.auto-level')].map(cell=>cell.getBoundingClientRect().width);
+    return {
+      pageOverflow:document.documentElement.scrollWidth-window.innerWidth,
+      tableOverflow:table.scrollWidth-card.clientWidth,
+      levelMax:Math.max(...widths),
+      rsiCell:row.children[12].getBoundingClientRect().width,
+      trendCell:row.children[11].getBoundingClientRect().width,
+      macdCell:row.children[13].getBoundingClientRect().width,
+      rsiClient:row.querySelector('.rsi').clientWidth,
+    };
+  });
+  expect(wide.pageOverflow).toBeLessThanOrEqual(1);
+  expect(wide.tableOverflow).toBeLessThanOrEqual(1);
+  expect(wide.levelMax).toBeLessThanOrEqual(110);
+  expect(wide.rsiCell).toBeGreaterThanOrEqual(72);
+  expect(wide.trendCell).toBeGreaterThanOrEqual(118);
+  expect(wide.macdCell).toBeGreaterThanOrEqual(118);
+  expect(wide.rsiClient).toBeGreaterThanOrEqual(60);
+
+  await page.setViewportSize({width:1280,height:900});
+  const narrow=await page.evaluate(()=>({
+    pageOverflow:document.documentElement.scrollWidth-window.innerWidth,
+    tableOverflow:document.getElementById('v7Table').scrollWidth-document.getElementById('v7TableCard').clientWidth,
+    cardOverflow:getComputedStyle(document.getElementById('v7TableCard')).overflowX,
+  }));
+  expect(narrow.pageOverflow).toBeLessThanOrEqual(1);
+  expect(narrow.tableOverflow).toBeGreaterThan(0);
+  expect(['auto','scroll']).toContain(narrow.cardOverflow);
+});
+
 test('all systems share the established header geometry', async ({ page }, testInfo) => {
   const results=[];
   for (const name of ['Terminal.html?tab=v6','WaveAnalysis.html','TrendTracker.html']) {
@@ -906,6 +972,9 @@ test('Tracker compares all Scenario paths and extends MAs for one persisted Scen
   const flat=page.locator('[data-scenario="flat"]');
   const trend=page.locator('[data-scenario="trend"]');
   const custom=page.locator('[data-scenario="custom"]');
+  const flatEye=page.locator('[data-scenario-visibility="flat"]');
+  const trendEye=page.locator('[data-scenario-visibility="trend"]');
+  const customEye=page.locator('[data-scenario-visibility="custom"]');
   const canvas=page.locator('#trackerChart');
   await expect(flat).toContainText('Flat');
   await expect(trend).toContainText('Trend continuation');
@@ -913,6 +982,9 @@ test('Tracker compares all Scenario paths and extends MAs for one persisted Scen
   await expect(flat).toHaveAttribute('aria-pressed','false');
   await expect(custom).toHaveClass(/is-disabled/);
   await expect(custom).toBeDisabled();
+  await expect(customEye).toBeDisabled();
+  await expect(flatEye).toHaveAttribute('aria-pressed','true');
+  await expect(trendEye).toHaveAttribute('aria-pressed','true');
   await expect(custom).toContainText('Set Target');
   await expect(page.locator('#maProjectionLegendLabel')).toHaveText('Projected MA · Trend continuation');
   await expect(canvas).toHaveAttribute('data-ma-projection-scenario','trend');
@@ -921,6 +993,7 @@ test('Tracker compares all Scenario paths and extends MAs for one persisted Scen
   await expect(canvas).toHaveAttribute('aria-label',/Flat forecast ends at/);
   await expect(canvas).toHaveAttribute('aria-label',/Trend continuation forecast ends at/);
   await expect(canvas).toHaveAttribute('aria-label',/Custom target is not set/);
+  await expect(canvas).toHaveAttribute('data-visible-scenarios','flat,trend');
 
   await flat.focus();
   await page.keyboard.press('Enter');
@@ -929,6 +1002,22 @@ test('Tracker compares all Scenario paths and extends MAs for one persisted Scen
   await expect(page.locator('#maProjectionLegendLabel')).toHaveText('Projected MA · Flat');
   const flatSaved=await page.evaluate(()=>JSON.parse(localStorage.getItem('tv_trend_tracker_state_v1')).instruments['e2e-a'].maProjectionScenario);
   expect(flatSaved).toBe('flat');
+
+  await flatEye.click();
+  await expect(flatEye).toHaveAttribute('aria-pressed','false');
+  await expect(flat).toBeDisabled();
+  await expect(page.locator('#scenarioLegendFlat')).toBeHidden();
+  await expect(page.locator('#maProjectionLegend')).toBeHidden();
+  await expect(canvas).toHaveAttribute('data-visible-scenarios','trend');
+  await expect(canvas).toHaveAttribute('data-ma-projection-periods','');
+  await expect(canvas).toHaveAttribute('aria-label',/Flat forecast is hidden/);
+  await expect(canvas).toHaveAttribute('aria-label',/Projected moving averages are hidden/);
+  await flatEye.click();
+  await expect(flat).toBeEnabled();
+  await expect(flat).toHaveAttribute('aria-pressed','true');
+  await expect(page.locator('#maProjectionLegend')).toBeVisible();
+  await expect(canvas).toHaveAttribute('data-visible-scenarios','flat,trend');
+  await expect(canvas).toHaveAttribute('data-ma-projection-periods','5,10,20,30,60,120');
 
   const legendPresentation=await page.evaluate(()=>({
     scenarios:Object.fromEntries(['flat','trend','custom'].map(key=>{
@@ -959,6 +1048,7 @@ test('Tracker compares all Scenario paths and extends MAs for one persisted Scen
   await page.locator('#scenarioTarget').fill('42.96');
   await expect(custom).not.toHaveClass(/is-disabled/);
   await expect(custom).toBeEnabled();
+  await expect(customEye).toBeEnabled();
   await expect(custom.locator('.scenario-result-row__numbers strong')).toContainText('Day 13: 42.960');
   await custom.click();
   await expect(custom).toHaveAttribute('aria-pressed','true');
@@ -970,6 +1060,27 @@ test('Tracker compares all Scenario paths and extends MAs for one persisted Scen
   await expect(canvas).toHaveAttribute('aria-label',/beyond the lower chart edge/);
   await expect(canvas).toHaveAttribute('data-forecast-clipped',/custom:low/);
   await expect(canvas).toHaveAttribute('data-ma-projection-periods','5,10,20,30,60,120');
+
+  await flatEye.click();
+  await trendEye.click();
+  await customEye.click();
+  await expect(canvas).toHaveAttribute('data-visible-scenarios','');
+  await expect(canvas).toHaveAttribute('data-forecast-horizon','0');
+  await expect(canvas).toHaveAttribute('data-forecast-ratio','0.0000');
+  await expect(canvas).toHaveAttribute('data-ma-projection-periods','');
+  await expect(canvas).toHaveAttribute('aria-label',/All Scenario paths are hidden/);
+  await expect(page.locator('#maProjectionLegend')).toBeHidden();
+  await expect(page.locator('#scenarioLegendFlat')).toBeHidden();
+  await expect(page.locator('#scenarioLegendTrend')).toBeHidden();
+  await expect(page.locator('#scenarioLegendCustom')).toBeHidden();
+  await customEye.click();
+  await expect(custom).toBeEnabled();
+  await expect(custom).toHaveAttribute('aria-pressed','true');
+  await expect(canvas).toHaveAttribute('data-visible-scenarios','custom');
+  await expect(canvas).toHaveAttribute('data-ma-projection-periods','5,10,20,30,60,120');
+  await flatEye.click();
+  await trendEye.click();
+  await expect(canvas).toHaveAttribute('data-visible-scenarios','flat,trend,custom');
 
   const ma10=page.locator('#maToggles input[value="10"]');
   await ma10.uncheck();
@@ -1009,6 +1120,7 @@ test('Tracker compares all Scenario paths and extends MAs for one persisted Scen
   await expect(page.locator('#scenarioTarget')).toHaveValue('');
   await expect(page.locator('#scenarioTargetDate')).toHaveValue('');
   await expect(custom).toHaveClass(/is-disabled/);
+  await expect(customEye).toBeDisabled();
   await expect(trend).toHaveAttribute('aria-pressed','true');
   await expect(canvas).toHaveAttribute('data-ma-projection-scenario','trend');
   await expect(page.locator('#maProjectionLegendLabel')).toHaveText('Projected MA · Trend continuation');
@@ -1017,7 +1129,7 @@ test('Tracker compares all Scenario paths and extends MAs for one persisted Scen
     current:JSON.parse(localStorage.getItem('tv_lookfirst_data_v3')).find(row=>row.id==='e2e-a')?.c,
     vr:JSON.parse(localStorage.getItem('tv_thenleap_data_v3')).find(row=>row.id==='e2e-a')?.v
   }));
-  expect(saved.tracker.instruments['e2e-a']).toEqual({horizon:20,target:'',targetDate:'',maProjectionScenario:'trend'});
+  expect(saved.tracker.instruments['e2e-a']).toEqual({horizon:20,target:'',targetDate:'',maProjectionScenario:'trend',scenarioVisibility:{flat:true,trend:true,custom:true}});
   expect(saved.current).toBe('70');
   expect(saved.vr).toBe('1');
   expect(saved.tracker.visibleMas.length).toBeGreaterThan(0);
@@ -1030,6 +1142,15 @@ test('Tracker compares all Scenario paths and extends MAs for one persisted Scen
   await expect(page.locator('[data-scenario="trend"]')).toHaveAttribute('aria-pressed','true');
   const rowHeight=await page.locator('[data-scenario="trend"]').evaluate(node=>node.getBoundingClientRect().height);
   expect(rowHeight).toBeGreaterThanOrEqual(44);
+  const eyeSize=await page.locator('[data-scenario-visibility="trend"]').evaluate(node=>({width:node.getBoundingClientRect().width,height:node.getBoundingClientRect().height}));
+  if(testInfo.project.name==='iphone'){
+    expect(eyeSize.width).toBeGreaterThanOrEqual(44);
+    expect(eyeSize.height).toBeGreaterThanOrEqual(44);
+  }
+  await page.locator('[data-fibo-click="openTrackerHelp(\'scenario\')"]').click();
+  await expect(page.locator('#trackerHelpContent')).toContainText('Scenario visibility');
+  await expect(page.locator('#trackerHelpContent')).toContainText('all three eyes are closed');
+  await page.locator('#trackerHelpBackdrop .fibo-modal__close').click();
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(1);
 });

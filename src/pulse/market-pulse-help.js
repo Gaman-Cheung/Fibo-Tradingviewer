@@ -55,6 +55,10 @@ export const MARKET_PULSE_GUIDE_HTML=`<div class="fibo-help-content market-pulse
     <tr><td>0–&lt;20</td><td>Risk-Off</td><td>Weakness is broad; it is still not a timing guarantee.</td></tr>
   </tbody></table></div>
 
+  <h3>Strength Gate and Risk Gate</h3>
+  <p>The chart keeps all four existing state boundaries. The dashed <strong>Strength Gate at 60</strong> uses Google blue because crossing it enters Healthy Strength. The dashed <strong>Risk Gate at 20</strong> uses Google red because falling below it enters Risk-Off. The 40 and 80 guides remain neutral gray.</p>
+  <p>Moving closer to a Gate means the breadth score is closer to that existing state boundary. A Gate is not a probability, reconciliation rate, overbought/oversold oscillator, buy/sell trigger or new scored input.</p>
+
   <h3>Cards, member lists and 60D history</h3>
   <p>Click a group card to inspect the exact latest official stocks or indices behind each numerator. Search matches security name or permanent Market + Code and results are paginated at 50 rows. Only the latest two official member sets are retained for safe publication; the chart stores 60 aggregate snapshots, not 60 days of security-level membership.</p>
   <p>History with a different Pulse Algorithm or Index Universe version is excluded. Partial history is labeled <code>History N/60 · Building</code> and is never padded or interpolated.</p>
@@ -63,4 +67,3 @@ export const MARKET_PULSE_GUIDE_HTML=`<div class="fibo-help-content market-pulse
   <p>CN_A and CN_INDEX must both be successful and share the same official date. A-share row coverage and sector/theme coverage must each be at least 95%, and all four broad indices must be available. A failed run keeps the last valid Pulse and member set.</p>
   <p>Pulse is breadth context, not a probability, position size, target price or buy/sell signal. It does not observe futures basis, active order flow, fund flows, ETF NAV premiums, news or intraday reversals.</p>
 </div>`;
-

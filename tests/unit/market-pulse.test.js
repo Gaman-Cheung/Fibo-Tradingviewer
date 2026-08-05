@@ -40,7 +40,12 @@ test('Pulse chart model fixes Y to 0..100 and keeps all ordered points in bounds
   assert.ok(model.points[0].x<model.points[1].x && model.points[1].x<model.points[2].x);
   assert.equal(model.points[0].y,236-28);
   assert.equal(model.points[2].y,18);
-  assert.deepEqual(model.thresholds.map(item=>item.value),[20,40,60,80]);
+  assert.deepEqual(model.thresholds.map(({value,label,shortLabel,colorToken})=>({value,label,shortLabel,colorToken})),[
+    {value:20,label:'Risk Gate',shortLabel:'R20',colorToken:'--brand-red'},
+    {value:40,label:'',shortLabel:'40',colorToken:'--color-border-subtle'},
+    {value:60,label:'Strength Gate',shortLabel:'S60',colorToken:'--brand-blue'},
+    {value:80,label:'',shortLabel:'80',colorToken:'--color-border-subtle'}
+  ]);
 });
 
 test('Pulse latest snapshot survives an isolated history read failure',async()=>{
@@ -100,7 +105,7 @@ test('Pulse algorithm, product help and manual keep the same v1 contract',()=>{
     assert.match(source,/(CNI 2000|国证2000)/i);
   }
   for(const source of [manual,MARKET_PULSE_GUIDE_HTML]){
-    for(const text of ['Official','62','ST','25%','Theme Group','Broad Strength','Healthy Strength','Mixed','Weakening','Risk-Off','95%','Composite Signal']){
+    for(const text of ['Official','62','ST','25%','Theme Group','Broad Strength','Healthy Strength','Mixed','Weakening','Risk-Off','Strength Gate','Risk Gate','95%','Composite Signal']){
       assert.ok(source.toLowerCase().includes(text.toLowerCase()),`Pulse guide contract missing ${text}`);
     }
     assert.match(source,/not (?:a )?probability/i);

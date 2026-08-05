@@ -474,7 +474,6 @@ import { initializeIndexRadar } from './index-radar-controller.js';
             if (tabId === 'pool') renderInstrumentPool();
             if (tabId === 'v7') {
                 syncV7withV6(true);
-                requestAnimationFrame(syncV7ScrollWidth);
             }
             applyMobileActiveInstrument();
             updateMobileNavigation(tabId);
@@ -551,41 +550,6 @@ import { initializeIndexRadar } from './index-radar-controller.js';
             backdrop.classList.remove('open'); backdrop.setAttribute('aria-hidden','true');
         }
         function handleMobileActionsBackdrop(event) { if (event.target.id === 'mobileActionsBackdrop') closeMobileActions(); }
-
-        function syncV7ScrollWidth() {
-            const table = document.getElementById('v7Table');
-            const inner = document.getElementById('v7TopScrollInner');
-            const topScroll = document.getElementById('v7TopScroll');
-            const tableCard = document.getElementById('v7TableCard');
-            if (table && inner) inner.style.width = table.scrollWidth + 'px';
-            if (table && topScroll && tableCard && tableCard.clientWidth > 0) {
-                topScroll.style.display = table.scrollWidth > tableCard.clientWidth + 1 ? 'block' : 'none';
-            }
-        }
-
-        function initV7TableUX() {
-            const topScroll = document.getElementById('v7TopScroll');
-            const tableCard = document.getElementById('v7TableCard');
-            if (!topScroll || !tableCard) return;
-
-            let syncing = false;
-            topScroll.addEventListener('scroll', () => {
-                if (syncing) return;
-                syncing = true;
-                tableCard.scrollLeft = topScroll.scrollLeft;
-                syncing = false;
-            });
-            tableCard.addEventListener('scroll', () => {
-                if (syncing) return;
-                syncing = true;
-                topScroll.scrollLeft = tableCard.scrollLeft;
-                syncing = false;
-            });
-
-            syncV7ScrollWidth();
-            if (window.ResizeObserver) new ResizeObserver(syncV7ScrollWidth).observe(document.getElementById('v7Table'));
-            window.addEventListener('resize', syncV7ScrollWidth);
-        }
 
         function applyAutoHighlight(row, currentPrice, levelsDict) {
             row.querySelectorAll('td.calc-result').forEach(td => {
@@ -937,7 +901,6 @@ import { initializeIndexRadar } from './index-radar-controller.js';
             });
 
             saveLocalV7();
-            requestAnimationFrame(syncV7ScrollWidth);
             if (!silent) {
                 const syncBtn = document.querySelector('#tab-v7 .btn-sync');
                 if (!syncBtn) return;
@@ -1583,7 +1546,6 @@ import { initializeIndexRadar } from './index-radar-controller.js';
             // 直接用 Look first 价格与 V7 附加字段合并建表，避免先生成空价格行。
             syncV7withV6(true, savedV7Data);
             refreshAllAutoPreviousCloses();
-            initV7TableUX();
             renderInstrumentPool();
             const savedTab = localStorage.getItem('tv_active_tab');
             const requestedTab = new URLSearchParams(window.location.search).get('tab');
@@ -1615,4 +1577,4 @@ import { initializeIndexRadar } from './index-radar-controller.js';
     
 
 // Central event registry; handlers stay module-scoped and are not globals.
-bindDeclarativeEvents({ checkAuth, showLoader, hideLoader, saveToCloud, loadFromCloud, normalizeInstrumentName, createInstrumentId, loadInstrumentPool, mergeInstrumentPools, saveInstrumentPool, getInstrumentById, isInstrumentActive, migrateInstrumentIdentity, escapePoolHtml, readStoredRows, mergeRowsWithHiddenInstruments, renderInstrumentPool, initPoolDrag, savePoolDomOrder, reorderStoredRowsByPool, createDesktopInstrumentRow, handleDesktopTickerInput, openInstrumentDialog, closeInstrumentDialog, handleInstrumentBackdrop, saveInstrumentDialog, openInstrument, openInstrumentWave, archiveInstrument, removeInstrumentFromCurrentLayout, restoreInstrument, permanentlyDeleteInstrument, switchTab, switchMobileTerminal, updateMobileNavigation, ensureMobileCardControls, syncMobileCompositeSignal, applyMobileActiveInstrument, openMobileActions, closeMobileActions, handleMobileActionsBackdrop, syncV7ScrollWidth, initV7TableUX, applyAutoHighlight, updateV6Medals, calcV6, addV6Row, refreshPreviousCloseRow, refreshAllAutoPreviousCloses, togglePreviousCloseMode, handlePreviousCloseInput, handleCurrentInput, mergeLookFirstRecords, collectLookFirstRecords, updateLookFirstCurrent, syncV7withV6, getAutoPlan, movePct, levelHtml, getStopCandidates, useStopCandidate, calcV7, addV7Row, openMacdSuggestion, closeMacdSuggestion, handleMacdSuggestionBackdrop, selectMacdSuggestionBasis, applyMacdSuggestion, makeRowDraggable, getDragAfterElement, saveLocalV6, saveLocalV7, openHelp, closeHelp, handleHelpBackdrop, openSignalExplanation, renderHeaderMarquee, openNoteEditor, closeNoteEditor, saveNoteEditor, handleNoteBackdrop, exportData, importData, migrateExecutionFields });
+bindDeclarativeEvents({ checkAuth, showLoader, hideLoader, saveToCloud, loadFromCloud, normalizeInstrumentName, createInstrumentId, loadInstrumentPool, mergeInstrumentPools, saveInstrumentPool, getInstrumentById, isInstrumentActive, migrateInstrumentIdentity, escapePoolHtml, readStoredRows, mergeRowsWithHiddenInstruments, renderInstrumentPool, initPoolDrag, savePoolDomOrder, reorderStoredRowsByPool, createDesktopInstrumentRow, handleDesktopTickerInput, openInstrumentDialog, closeInstrumentDialog, handleInstrumentBackdrop, saveInstrumentDialog, openInstrument, openInstrumentWave, archiveInstrument, removeInstrumentFromCurrentLayout, restoreInstrument, permanentlyDeleteInstrument, switchTab, switchMobileTerminal, updateMobileNavigation, ensureMobileCardControls, syncMobileCompositeSignal, applyMobileActiveInstrument, openMobileActions, closeMobileActions, handleMobileActionsBackdrop, applyAutoHighlight, updateV6Medals, calcV6, addV6Row, refreshPreviousCloseRow, refreshAllAutoPreviousCloses, togglePreviousCloseMode, handlePreviousCloseInput, handleCurrentInput, mergeLookFirstRecords, collectLookFirstRecords, updateLookFirstCurrent, syncV7withV6, getAutoPlan, movePct, levelHtml, getStopCandidates, useStopCandidate, calcV7, addV7Row, openMacdSuggestion, closeMacdSuggestion, handleMacdSuggestionBackdrop, selectMacdSuggestionBasis, applyMacdSuggestion, makeRowDraggable, getDragAfterElement, saveLocalV6, saveLocalV7, openHelp, closeHelp, handleHelpBackdrop, openSignalExplanation, renderHeaderMarquee, openNoteEditor, closeNoteEditor, saveNoteEditor, handleNoteBackdrop, exportData, importData, migrateExecutionFields });
