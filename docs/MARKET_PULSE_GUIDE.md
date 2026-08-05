@@ -104,7 +104,7 @@ Each broad index receives 50 points when Close is above MA60 and another 50 when
 
 ### Strength Gate and Risk Gate
 
-The chart keeps the same fixed state boundaries. Its dashed `Strength Gate` at 60 uses Google blue because crossing 60 enters Healthy Strength. Its dashed `Risk Gate` at 20 uses Google red because falling below 20 enters Risk-Off. The 40 and 80 reference lines remain neutral gray.
+The chart keeps the same fixed state boundaries. Its dashed `Strength Gate` at 60 uses Google green because crossing 60 enters Healthy Strength. Its dashed `Risk Gate` at 20 uses Google red because falling below 20 enters Risk-Off. The 40 and 80 reference lines remain neutral gray. The Gate key is centered in the chart footer between the first and latest official dates.
 
 Moving closer to either Gate only means the current breadth score is closer to that existing boundary. A Gate is not a probability, reconciliation rate, overbought/oversold oscillator, buy/sell trigger or additional Pulse input.
 

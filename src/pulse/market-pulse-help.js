@@ -56,7 +56,7 @@ export const MARKET_PULSE_GUIDE_HTML=`<div class="fibo-help-content market-pulse
   </tbody></table></div>
 
   <h3>Strength Gate and Risk Gate</h3>
-  <p>The chart keeps all four existing state boundaries. The dashed <strong>Strength Gate at 60</strong> uses Google blue because crossing it enters Healthy Strength. The dashed <strong>Risk Gate at 20</strong> uses Google red because falling below it enters Risk-Off. The 40 and 80 guides remain neutral gray.</p>
+  <p>The chart keeps all four existing state boundaries. The dashed <strong>Strength Gate at 60</strong> uses Google green because crossing it enters Healthy Strength. The dashed <strong>Risk Gate at 20</strong> uses Google red because falling below it enters Risk-Off. The 40 and 80 guides remain neutral gray. The two Gate keys sit in the chart footer between the first and latest official dates.</p>
   <p>Moving closer to a Gate means the breadth score is closer to that existing state boundary. A Gate is not a probability, reconciliation rate, overbought/oversold oscillator, buy/sell trigger or new scored input.</p>
 
   <h3>Cards, member lists and 60D history</h3>

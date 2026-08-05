@@ -100,11 +100,11 @@ The page stylesheet must not contain selectors beginning with `.fibo-header` or 
 - Manual live-price results use `fibo-analysis-source--preview` and must say `Current Preview`; provisional states must never be styled or worded as confirmed closes.
 - When both bases are available, changing the visible basis must not write a trading value until the user invokes the page's explicit Apply action.
 
-## Brand-ring selected cards and Index Radar
+## Quiet cards, optional brand ring and Market Radar
 
 - `fibo-card--brand-ring` is the shared quiet-card variant for a system-selected item. Its 2px conic border uses the existing Google blue, red, yellow and green brand tokens over a white surface, shared radius and low elevation.
 - The four-color ring means “selected by this system,” not bullishness, safety or a four-level score. Warnings and risks continue to use semantic warning/danger tokens; large colored card fills are prohibited.
-- Index Radar composes the shared selected card in a page-owned responsive Grid on desktop. Desktop never uses autoplay, cloned cards, horizontal scrolling or drag navigation; cards wrap when the available width is insufficient.
+- Sector Index, Equity ETF and Cross Asset Leader cards intentionally use the base `fibo-card` with its quiet 1px border; Market Radar does not apply the optional brand ring. Desktop composes these cards in a page-owned responsive Grid without autoplay, clones, horizontal scrolling or drag navigation; cards wrap when the available width is insufficient.
 - At the documented Wide desktop breakpoint, current leaders occupy the left column and four quiet Leadership Memory summaries occupy the right column. Below that breakpoint the summaries move under the leaders without creating page overflow.
 - Mobile uses separate horizontal Scroll Snap containers for current leaders and Leadership Memory, disables autoplay and preserves 44px controls. `prefers-reduced-motion` also disables card movement transitions.
 - A disabled/no-data Radar must remain a quiet independent section and may never block or resize the Look First table into horizontal page overflow.
@@ -119,8 +119,8 @@ The page stylesheet must not contain selectors beginning with `.fibo-header` or 
 - Market Pulse is the default tab in the four-option Market Context control. All four tabs occupy one shared responsive Market Context frame, so changing scope must not move the Look First table below it. Pulse still owns isolated `.market-pulse-*` internals and must never reuse `.index-radar-card` or Leadership Memory content geometry.
 - The shared content height is 236px at `≥1800px`, 316px at `1330–1799px`, 516px at `1101–1329px`, 616px at `769–1100px`, and 425px on mobile. These are Market Context composition dimensions, not shared Card component dimensions.
 - At `≥1330px`, four quiet Pulse cards remain a compact 2×2 block beside a chart that consumes the available frame height. At `1101–1329px`, the four compact cards form one row above a full-width chart. At `769–1100px`, they use 2×2 above the chart. Mobile uses one dedicated Scroll Snap card rail followed by the chart; page-level horizontal overflow is forbidden.
-- Pulse cards use the shared quiet white card surface, radius and low elevation. The Radar brand ring remains reserved for selected Leaders and is not applied to breadth groups. State color is limited to the compact score pill and chart line.
-- The Pulse chart keeps neutral 40/80 guides, uses a Google-blue dashed `Strength Gate` at 60 and a Google-red dashed `Risk Gate` at 20, and identifies both in its existing metadata row without increasing the shared Market Context frame height. Mobile abbreviates the same labels to `S60` and `R20`.
+- Pulse cards and Market Radar Leaders use the shared quiet white card surface, radius, 1px border and low elevation. State color remains limited to compact score pills, labels and chart lines.
+- The Pulse chart keeps neutral 40/80 guides, uses a Google-green dashed `Strength Gate` at 60 and a Google-red dashed `Risk Gate` at 20. A three-column footer places the first date, centered Gate key and latest date on one line without increasing the shared Market Context frame height. Mobile abbreviates the Gate labels to `S60` and `R20`.
 - The single Market Context `fibo-help-button` changes its guide with the selected tab. Pulse group cards open latest official member detail in shared modal geometry; they never add per-card question icons.
 - The shared frame owns scope height; each active dashboard must fit it without an inner vertical scrollbar. Radar Leader/Memory geometry and Pulse card geometry remain independently owned, while flexible chart space absorbs the remaining height. Loading, empty and failed states occupy the same frame.
 

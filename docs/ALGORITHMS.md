@@ -152,5 +152,5 @@ Pulse = mean(Participation, Trend Breadth, Expansion, Leadership)
 - 20D High/Low compares current Close with the prior 20 closes. MA60 BO is previous `Close <= previous MA60` and current `Close > current MA60`; BD is the mirror.
 - Active sector/theme indices are weighted so each Theme Group totals 1. Broad Confirmation averages CSI 300, CSI 500, CSI 1000 and CNI 2000; each receives 50 for Close above MA60 and 50 for MA60 Rising.
 - State intervals are `[80,100] Broad Strength`, `[60,80) Healthy Strength`, `[40,60) Mixed`, `[20,40) Weakening` and `[0,20) Risk-Off`.
-- The chart names the unchanged 60 boundary `Strength Gate` and the unchanged 20 boundary `Risk Gate`. Their blue/red dashed presentation is display-only and is not another score, probability, overbought/oversold rule or trading trigger.
+- The chart names the unchanged 60 boundary `Strength Gate` and the unchanged 20 boundary `Risk Gate`. Their green/red dashed presentation is display-only and is not another score, probability, overbought/oversold rule or trading trigger.
 - The browser reads at most 60 compatible aggregates and 50 requested latest members. Exact definitions, coverage gates, publication ordering and limitations are normative in `docs/MARKET_PULSE_GUIDE.md` and the v1 in-product help.

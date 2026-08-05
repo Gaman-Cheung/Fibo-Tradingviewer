@@ -100,14 +100,16 @@ function chartSummary(history) {
 
 function dashboardMarkup(snapshot,history) {
   const coverage=history.length===60?'History 60/60':`History ${history.length}/60 · Building`;
+  const firstDate=history[0]?.tradeDate||snapshot.tradeDate;
+  const lastDate=history.at(-1)?.tradeDate||snapshot.tradeDate;
   return `<div class="market-pulse-dashboard">
     <div class="market-pulse-cards-viewport" aria-label="Market Pulse component scores"><div class="market-pulse-card-grid">
       ${Object.keys(GROUPS).map(id=>cardMarkup(id,snapshot)).join('')}
     </div></div>
     <section class="fibo-card market-pulse-chart-card" aria-labelledby="marketPulseChartTitle">
-      <div class="market-pulse-chart__header"><span><small>60 OFFICIAL SESSIONS</small><strong id="marketPulseChartTitle">FIBO MARKET PULSE</strong></span><span class="market-pulse-chart__current"><b>${formatPulseNumber(snapshot.score,1)}</b><small>${escapePulseHtml(snapshot.state)}</small></span></div>
-      <div class="market-pulse-chart__meta"><span>${escapePulseHtml(coverage)}</span><span class="market-pulse-chart__gates" aria-label="Strength Gate 60; Risk Gate 20"><span class="market-pulse-chart__gate market-pulse-chart__gate--strength"><i></i><span class="market-pulse-chart__gate-full">Strength Gate 60</span><span class="market-pulse-chart__gate-short">S60</span></span><span class="market-pulse-chart__gate market-pulse-chart__gate--risk"><i></i><span class="market-pulse-chart__gate-full">Risk Gate 20</span><span class="market-pulse-chart__gate-short">R20</span></span></span><span>${escapePulseHtml(snapshot.tradeDate)}</span></div>
+      <div class="market-pulse-chart__header"><span><small>60 OFFICIAL SESSIONS</small><strong id="marketPulseChartTitle">FIBO MARKET PULSE</strong><span class="market-pulse-chart__coverage">${escapePulseHtml(coverage)}</span></span><span class="market-pulse-chart__current"><b>${formatPulseNumber(snapshot.score,1)}</b><small>${escapePulseHtml(snapshot.state)}</small></span></div>
       <div class="market-pulse-chart__plot"><canvas id="marketPulseChart" tabindex="0" role="img" aria-label="${escapePulseHtml(chartSummary(history))}"></canvas><div class="market-pulse-chart__tooltip" id="marketPulseChartTooltip" role="status" aria-live="polite" hidden></div></div>
+      <div class="market-pulse-chart__footer"><span class="market-pulse-chart__date market-pulse-chart__date--start">${escapePulseHtml(firstDate)}</span><span class="market-pulse-chart__gates" aria-label="Strength Gate 60; Risk Gate 20"><span class="market-pulse-chart__gate market-pulse-chart__gate--strength"><i></i><span class="market-pulse-chart__gate-full">60 · Strength Gate</span><span class="market-pulse-chart__gate-short">S60</span></span><span class="market-pulse-chart__gate market-pulse-chart__gate--risk"><i></i><span class="market-pulse-chart__gate-full">20 · Risk Gate</span><span class="market-pulse-chart__gate-short">R20</span></span></span><span class="market-pulse-chart__date market-pulse-chart__date--end">${escapePulseHtml(lastDate)}</span></div>
     </section>
   </div>`;
 }
@@ -175,10 +177,6 @@ export function createMarketPulseController({ client,setStatus,openModal }) {
       context.strokeStyle=css('--color-primary','#4285f4');context.lineWidth=2;context.stroke();
       const latest=model.points.at(-1);
       context.beginPath();context.arc(latest.x,latest.y,4,0,Math.PI*2);context.fillStyle=css('--color-primary','#4285f4');context.fill();
-      context.fillStyle=css('--color-text-tertiary','#80868b');context.textBaseline='alphabetic';
-      context.fillText(model.firstDate,model.padding.left,height-7);
-      const lastWidth=context.measureText(model.lastDate).width;
-      context.fillText(model.lastDate,width-model.padding.right-lastWidth,height-7);
     }
   }
 

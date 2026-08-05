@@ -6,7 +6,7 @@ export const PULSE_HISTORY_LIMIT = 60;
 export const PULSE_CHART_THRESHOLDS = Object.freeze([
   Object.freeze({ value:20,label:'Risk Gate',shortLabel:'R20',colorToken:'--brand-red',fallback:'#ea4335' }),
   Object.freeze({ value:40,label:'',shortLabel:'40',colorToken:'--color-border-subtle',fallback:'#e5e7eb' }),
-  Object.freeze({ value:60,label:'Strength Gate',shortLabel:'S60',colorToken:'--brand-blue',fallback:'#4285f4' }),
+  Object.freeze({ value:60,label:'Strength Gate',shortLabel:'S60',colorToken:'--brand-green',fallback:'#34a853' }),
   Object.freeze({ value:80,label:'',shortLabel:'80',colorToken:'--color-border-subtle',fallback:'#e5e7eb' }),
 ]);
 
@@ -83,7 +83,7 @@ export function pulseStateClass(value) {
   return 'is-risk-off';
 }
 
-export function buildPulseChartModel(history,{ width=640,height=236,padding={ left:38,right:14,top:18,bottom:28 } }={}) {
+export function buildPulseChartModel(history,{ width=640,height=236,padding={ left:38,right:14,top:18,bottom:10 } }={}) {
   const snapshots=(history||[]).map(normalizePulseSnapshot).filter(Boolean)
     .sort((a,b)=>a.tradeDate.localeCompare(b.tradeDate)).slice(-PULSE_HISTORY_LIMIT);
   const plotWidth=Math.max(1,width-padding.left-padding.right);

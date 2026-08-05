@@ -153,7 +153,7 @@ function cardMarkup(leader,index) {
   const coverage=state.memory
     ? `Leadership Memory uses ${state.memory.sessionsAvailable}/${state.memory.historyTarget} compatible official sessions.`
     : 'Leadership Memory history is unavailable.';
-  return `<button class="fibo-card fibo-card--brand-ring index-radar-card" type="button" data-index-radar-leader="${index}" aria-label="Open details for rank ${leader.rank} ${escapeRadarHtml(leader.name)}">
+  return `<button class="fibo-card index-radar-card" type="button" data-index-radar-leader="${index}" aria-label="Open details for rank ${leader.rank} ${escapeRadarHtml(leader.name)}">
     <span class="index-radar-card__top">
       <span class="index-radar-rank">#${leader.rank}</span>
       <span class="index-radar-symbol">${escapeRadarHtml(leader.market)} · ${escapeRadarHtml(leader.code)}</span>
