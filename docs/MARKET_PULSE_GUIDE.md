@@ -102,6 +102,12 @@ Each broad index receives 50 points when Close is above MA60 and another 50 when
 | 20–<40 | Weakening | Breadth is narrowing or downside expansion dominates. |
 | 0–<20 | Risk-Off | Weakness is broad; this is still not a timing guarantee. |
 
+### Strength Gate and Risk Gate
+
+The chart keeps the same fixed state boundaries. Its dashed `Strength Gate` at 60 uses Google blue because crossing 60 enters Healthy Strength. Its dashed `Risk Gate` at 20 uses Google red because falling below 20 enters Risk-Off. The 40 and 80 reference lines remain neutral gray.
+
+Moving closer to either Gate only means the current breadth score is closer to that existing boundary. A Gate is not a probability, reconciliation rate, overbought/oversold oscillator, buy/sell trigger or additional Pulse input.
+
 ## Member lists and history
 
 Each group card opens the latest official members behind its numerators:
@@ -130,4 +136,3 @@ Members are uploaded under a new `calculation_id`; the aggregate snapshot points
 ## Limits
 
 Market Pulse is breadth context, not a probability, position size, target price or buy/sell signal. It does not observe intraday reversals, volume/Amount, fund flows, ETF NAV premium, futures basis, active order flow, news, policy changes or security-specific fundamentals.
-

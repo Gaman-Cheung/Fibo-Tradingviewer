@@ -12,7 +12,8 @@ export const TRACKER_FORECAST_Y_LIMIT_RATIO = 0.15;
 
 export function trackerForecastRatio(pointCount, horizon) {
   const historyIntervals=Math.max(1,Math.floor(Number(pointCount)||0)-1);
-  const forecastCount=Math.max(1,Math.floor(Number(horizon)||1));
+  const forecastCount=Math.max(0,Math.floor(Number(horizon)||0));
+  if(!forecastCount)return 0;
   const displayIntervals=forecastCount*TRACKER_FORECAST_DAY_SCALE;
   const compressedRatio=displayIntervals/(historyIntervals+displayIntervals);
   return Math.min(TRACKER_FORECAST_MAX_RATIO,compressedRatio);
@@ -24,7 +25,7 @@ export function buildTrackerChartXModel(pointCount, horizon, plot) {
   const ratio=trackerForecastRatio(pointCount,horizon);
   const historyRight=left+(right-left)*(1-ratio);
   const historyCount=Math.max(0,Math.floor(Number(pointCount)||0));
-  const forecastCount=Math.max(1,Math.floor(Number(horizon)||1));
+  const forecastCount=Math.max(0,Math.floor(Number(horizon)||0));
   const history=Array.from({length:historyCount},(_,index)=>historyCount===1
     ? historyRight
     : left+(historyRight-left)*index/(historyCount-1));

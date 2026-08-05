@@ -120,6 +120,7 @@ The page stylesheet must not contain selectors beginning with `.fibo-header` or 
 - The shared content height is 236px at `≥1800px`, 316px at `1330–1799px`, 516px at `1101–1329px`, 616px at `769–1100px`, and 425px on mobile. These are Market Context composition dimensions, not shared Card component dimensions.
 - At `≥1330px`, four quiet Pulse cards remain a compact 2×2 block beside a chart that consumes the available frame height. At `1101–1329px`, the four compact cards form one row above a full-width chart. At `769–1100px`, they use 2×2 above the chart. Mobile uses one dedicated Scroll Snap card rail followed by the chart; page-level horizontal overflow is forbidden.
 - Pulse cards use the shared quiet white card surface, radius and low elevation. The Radar brand ring remains reserved for selected Leaders and is not applied to breadth groups. State color is limited to the compact score pill and chart line.
+- The Pulse chart keeps neutral 40/80 guides, uses a Google-blue dashed `Strength Gate` at 60 and a Google-red dashed `Risk Gate` at 20, and identifies both in its existing metadata row without increasing the shared Market Context frame height. Mobile abbreviates the same labels to `S60` and `R20`.
 - The single Market Context `fibo-help-button` changes its guide with the selected tab. Pulse group cards open latest official member detail in shared modal geometry; they never add per-card question icons.
 - The shared frame owns scope height; each active dashboard must fit it without an inner vertical scrollbar. Radar Leader/Memory geometry and Pulse card geometry remain independently owned, while flexible chart space absorbs the remaining height. Loading, empty and failed states occupy the same frame.
 
@@ -128,6 +129,7 @@ The page stylesheet must not contain selectors beginning with `.fibo-header` or 
 - Historical Close and MA series remain the chart's primary visual area. A forecast trading day uses one-third of a historical trading day's horizontal display interval, with no minimum tail width and a 15% total-width cap.
 - Horizontal compression is presentation only. It must not remove forecast points, shorten the selected horizon or alter Scenario, MA or MACD calculations.
 - Flat, Trend continuation and Custom target price paths use 2px solid Material-color lines. Historical MAs remain solid; conditional projected MAs use the same MA colors with 1.25px short dashes and reduced opacity.
+- Each Scenario result row owns a separate eye control. Hiding a path also hides its endpoint, edge arrow, legend and any projected MAs sourced from that path; the result row remains readable. With all paths hidden, the Forecast tail collapses so official history and Current Preview use the complete plot width.
 - Compact forecast tails must keep the latest official date, forecast endpoint label and endpoint marker readable on desktop and iPhone layouts.
 
 ## Responsive contract

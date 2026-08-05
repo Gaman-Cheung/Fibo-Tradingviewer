@@ -33,7 +33,7 @@ Manual Windows launcher -----/              |
 - Supabase payload compatibility: `src/core/cloud-payload.js`.
 - Terminal calculations: `src/terminal/`.
 - Wave calculations: `src/wave/`.
-- Trend calculations: `src/tracker/`; `trend-engine.js` owns the unchanged formulas, `scenario-comparison.js` coordinates simultaneous Flat/Trend/Custom results, `ma-projection.js` derives conditional SMA tails from one selected path, and `chart-model.js` owns display-only history/forecast geometry.
+- Trend calculations: `src/tracker/`; `trend-engine.js` owns the unchanged formulas, `scenario-comparison.js` coordinates simultaneous Flat/Trend/Custom results, `ma-projection.js` derives conditional SMA tails from one selected visible path, and `chart-model.js` owns display-only history/forecast geometry including the zero-tail all-hidden state.
 - BaoStock code normalization plus Tracker history and Terminal latest-close queries: `src/core/market-code.js` and `src/core/market-repository.js`.
 - Full-market synchronization: GitHub Action and `SyncBaoStock.cmd` both call `scripts/sync_baostock.py`; neither implementation may duplicate sync rules.
 - Universe review source: `scripts/universe/index_universe_v2.csv` and `scripts/universe/etf_universe_v2.csv` contain the evidenced 507-index / 1,615-ETF review. `scripts/radar_universe_v2.py` validates them, generates deterministic v2 Market+Code seeds and provides the read-only history/capacity Dry Run; `docs/RADAR_UNIVERSE_V2_AUDIT.md` records the accepted baseline and rollout checks.
