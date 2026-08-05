@@ -116,12 +116,12 @@ The page stylesheet must not contain selectors beginning with `.fibo-header` or 
 
 ## FIBO Market Pulse dashboard
 
-- Market Pulse is the default tab in the four-option Market Context control and owns an isolated `.market-pulse-*` dashboard. It must never reuse or resize `.index-radar-dashboard`, `.index-radar-group`, `.index-radar-card` or Leadership Memory geometry.
-- Above 1100px, four quiet Pulse cards form a 2×2 block beside a 236px 60-session chart. Each compact card is approximately 112px high; only Pulse may use this composition.
-- From 769px through 1100px the 2×2 block remains above a full-width chart. Mobile uses one dedicated Scroll Snap card rail followed by the chart; page-level horizontal overflow is forbidden.
+- Market Pulse is the default tab in the four-option Market Context control. All four tabs occupy one shared responsive Market Context frame, so changing scope must not move the Look First table below it. Pulse still owns isolated `.market-pulse-*` internals and must never reuse `.index-radar-card` or Leadership Memory content geometry.
+- The shared content height is 236px at `≥1800px`, 316px at `1330–1799px`, 516px at `1101–1329px`, 616px at `769–1100px`, and 425px on mobile. These are Market Context composition dimensions, not shared Card component dimensions.
+- At `≥1330px`, four quiet Pulse cards remain a compact 2×2 block beside a chart that consumes the available frame height. At `1101–1329px`, the four compact cards form one row above a full-width chart. At `769–1100px`, they use 2×2 above the chart. Mobile uses one dedicated Scroll Snap card rail followed by the chart; page-level horizontal overflow is forbidden.
 - Pulse cards use the shared quiet white card surface, radius and low elevation. The Radar brand ring remains reserved for selected Leaders and is not applied to breadth groups. State color is limited to the compact score pill and chart line.
 - The single Market Context `fibo-help-button` changes its guide with the selected tab. Pulse group cards open latest official member detail in shared modal geometry; they never add per-card question icons.
-- A Pulse card grid or chart height may not impose a shared viewport min-height. Switching to Sector Index, Equity ETF or Cross Asset must restore their natural Leader/Memory height without stretching.
+- The shared frame owns scope height; each active dashboard must fit it without an inner vertical scrollbar. Radar Leader/Memory geometry and Pulse card geometry remain independently owned, while flexible chart space absorbs the remaining height. Loading, empty and failed states occupy the same frame.
 
 ## Trend Tracker chart forecast
 
