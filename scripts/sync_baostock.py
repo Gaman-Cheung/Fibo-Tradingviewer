@@ -896,7 +896,7 @@ def run_smoke(client: BaoStockClient, sessions: int) -> None:
     print(f"PASS: BaoStock full-market endpoint returned {len(valid):,} rows; Supabase was not used.", flush=True)
 
 
-def run_sync(args, client: BaoStockClient, db: SupabaseRest) -> None:
+def run_sync(args, client: BaoStockClient, db: SupabaseRest) -> str:
     cutoff = completed_market_date()
     checkpoint = db.get_checkpoint()
     retention_dates = recent_trading_dates(client, args.sessions, cutoff)
@@ -930,7 +930,7 @@ def run_sync(args, client: BaoStockClient, db: SupabaseRest) -> None:
             last_status="ok", last_error=None, last_mode=args.mode,
             retention_sessions=args.sessions,
         )
-        return
+        return retention_dates[-1]
 
     print(f"[SYNC] mode={args.mode}, dates={len(target_dates)}, range={target_dates[0]}..{target_dates[-1]}", flush=True)
     try:
@@ -967,6 +967,7 @@ def run_sync(args, client: BaoStockClient, db: SupabaseRest) -> None:
         retention_sessions=args.sessions,
     )
     print("[OK] Full-market synchronization completed.", flush=True)
+    return retention_dates[-1]
 
 
 def discover_index_catalog(client: BaoStockClient, db: SupabaseRest | None, trade_date: str) -> list[dict]:
@@ -1856,6 +1857,66 @@ def run_pulse_smoke(args, client: BaoStockClient, db: SupabaseRest) -> list[dict
     return _run_pulse(args, client, db, publish=False)
 
 
+def daily_all_freshness_report(db: SupabaseRest, expected_trade_date: str) -> dict:
+    """Read the persisted daily-all publication state without mutating it."""
+    checkpoints: dict[str, dict[str, str]] = {}
+    issues: list[str] = []
+    for scope in (SCOPE, INDEX_SCOPE, PULSE_SCOPE, ETF_SCOPE):
+        row = db.get_checkpoint(scope)
+        status = str(row.get("last_status") or "missing")
+        trade_date = str(row.get("latest_trade_date") or "missing")
+        checkpoints[scope] = {"status": status, "trade_date": trade_date}
+        if status != "ok" or trade_date != expected_trade_date:
+            issues.append(f"{scope} checkpoint status={status} date={trade_date}")
+
+    snapshot_rows = {
+        "SECTOR_INDEX": db.get_radar_snapshots(limit=1),
+        "MARKET_PULSE": db.get_pulse_snapshots(limit=1),
+        "EQUITY_ETF": db.get_etf_radar_snapshots("EQUITY_ETF", limit=1),
+        "CROSS_ASSET": db.get_etf_radar_snapshots("CROSS_ASSET", limit=1),
+    }
+    snapshots: dict[str, str] = {}
+    for scope, rows in snapshot_rows.items():
+        trade_date = str(rows[-1].get("trade_date") or "missing") if rows else "missing"
+        snapshots[scope] = trade_date
+        if trade_date != expected_trade_date:
+            issues.append(f"{scope} snapshot date={trade_date}")
+
+    return {
+        "expected_trade_date": expected_trade_date,
+        "checkpoints": checkpoints,
+        "snapshots": snapshots,
+        "issues": issues,
+    }
+
+
+def _github_command_value(value: str) -> str:
+    return value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+def verify_daily_all_freshness(db: SupabaseRest, expected_trade_date: str) -> dict:
+    """Fail daily/all when any checkpoint or published snapshot is stale."""
+    report = daily_all_freshness_report(db, expected_trade_date)
+    print(f"[DAILY ALL FRESHNESS] expected official session {expected_trade_date}", flush=True)
+    for scope, state in report["checkpoints"].items():
+        print(f"      checkpoint {scope}: status={state['status']} date={state['trade_date']}", flush=True)
+    for scope, trade_date in report["snapshots"].items():
+        print(f"      snapshot {scope}: date={trade_date}", flush=True)
+
+    if report["issues"]:
+        detail = "; ".join(report["issues"])
+        message = f"Daily all freshness mismatch; expected {expected_trade_date}: {detail}"
+        if os.environ.get("GITHUB_ACTIONS", "").lower() == "true":
+            print(
+                f"::error title=BaoStock daily all freshness::{_github_command_value(message)}",
+                flush=True,
+            )
+        raise RuntimeError(message)
+
+    print(f"[OK] Daily all freshness verified for {expected_trade_date}.", flush=True)
+    return report
+
+
 def parse_args(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(description="BaoStock full-market synchronization")
     parser.add_argument("--mode", choices=("smoke", "daily", "backfill", "repair"), default="daily")
@@ -1876,6 +1937,7 @@ def main(argv: list[str] | None = None) -> int:
     client = BaoStockClient()
     client.connect()
     try:
+        expected_trade_date: str | None = None
         if args.mode == "smoke":
             if args.dataset in ("a-shares", "all"):
                 run_smoke(client, args.sessions)
@@ -1888,13 +1950,17 @@ def main(argv: list[str] | None = None) -> int:
         else:
             db = SupabaseRest()
             if args.dataset in ("a-shares", "all"):
-                run_sync(args, client, db)
+                expected_trade_date = run_sync(args, client, db)
             if args.dataset in ("indices", "all"):
                 run_index_sync(args, client, db)
             if args.dataset in ("pulse", "all"):
                 run_pulse_sync(args, client, db)
             if args.dataset in ("etfs", "all"):
                 run_etf_sync(args, client, db)
+            if args.mode == "daily" and args.dataset == "all":
+                if not expected_trade_date:
+                    raise RuntimeError("Daily all freshness audit has no A-share expected trade date.")
+                verify_daily_all_freshness(db, expected_trade_date)
     finally:
         client.close()
     return 0

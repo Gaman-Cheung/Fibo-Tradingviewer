@@ -1,5 +1,6 @@
 /** Look First Market Pulse rendering adapter. No market-wide calculation occurs here. */
 import { loadMarketPulse,loadMarketPulseMembers,PULSE_MEMBER_FILTERS } from '../core/market-pulse-repository.js';
+import { isMarketContextCacheStale,marketContextCacheStamp } from './market-context-cache.js';
 import {
   buildPulseChartModel,
   compatiblePulseHistory,
@@ -228,34 +229,59 @@ export function createMarketPulseController({ client,setStatus,openModal }) {
     bindChart();
   }
 
-  async function activate({ force=false }={}) {
+  async function activate({ force=false,background=false,refreshIfStale=false }={}) {
     state.active=true;
     if (!force && state.cache) {
-      ({ snapshot:state.snapshot,history:state.history,checkpoint:state.checkpoint }=state.cache);render();return;
+      ({ snapshot:state.snapshot,history:state.history,checkpoint:state.checkpoint }=state.cache);
+      render();
+      if (refreshIfStale && isMarketContextCacheStale(state.cache)) {
+        return activate({ force:true,background:true });
+      }
+      return;
     }
     if (state.loading) return;
+    const retainedCache=state.cache;
     state.loading=true;
-    disconnectChart();
-    setStatus('<span class="index-radar-loading-label"><span class="material-icons" aria-hidden="true">sync</span>Loading official Pulse…</span>');
+    if (!background) disconnectChart();
+    if (!background) setStatus('<span class="index-radar-loading-label"><span class="material-icons" aria-hidden="true">sync</span>Loading official Pulse…</span>');
     const viewport=byId('indexRadarViewport');
-    if (viewport) viewport.innerHTML=messageMarkup('Loading Market Pulse','Reading the latest precomputed official-close breadth snapshot.');
+    if (viewport && !background) viewport.innerHTML=messageMarkup('Loading Market Pulse','Reading the latest precomputed official-close breadth snapshot.');
     try {
       const result=await loadMarketPulse(client);
       if (result.error) throw result.error;
       const snapshot=normalizePulseSnapshot(result.snapshot);
       if (!snapshot) {
+        if (background && retainedCache?.snapshot) throw new Error('No latest Market Pulse snapshot was returned.');
         setStatus('Waiting for first Market Pulse Backfill');
         if (viewport) viewport.innerHTML=messageMarkup('Market Pulse is not ready','Apply the Pulse migration, then run smoke / pulse and backfill / pulse.',{ retry:true });
         return;
       }
       const history=compatiblePulseHistory(result.historyError?[]:result.snapshots,result.snapshot);
-      state.cache={ snapshot,history,checkpoint:result.checkpoint,historyError:result.historyError||null };
+      state.cache={ snapshot,history,checkpoint:result.checkpoint,historyError:result.historyError||null,...marketContextCacheStamp() };
       state.snapshot=snapshot;state.history=history;state.checkpoint=result.checkpoint;
       if (state.active) render();
     } catch (error) {
+      if (background && retainedCache?.snapshot) {
+        state.cache=retainedCache;
+        ({ snapshot:state.snapshot,history:state.history,checkpoint:state.checkpoint }=retainedCache);
+        if (state.active) {
+          render();
+          setStatus(`<span class="fibo-analysis-source fibo-analysis-source--official">Official Close · ${escapePulseHtml(state.snapshot.tradeDate)}</span><span class="index-radar-sync-warning" title="${escapePulseHtml(error?.message||'The latest Pulse request failed.')}"><span class="material-icons" aria-hidden="true">error_outline</span>Refresh failed · cached close retained</span>`);
+        }
+        return;
+      }
       setStatus('<span class="index-radar-sync-warning"><span class="material-icons" aria-hidden="true">error_outline</span>Pulse unavailable</span>','is-error');
       if (viewport) viewport.innerHTML=messageMarkup('Could not load Market Pulse',error?.message||'The Supabase snapshot request failed.',{ retry:true,error:true });
     } finally { state.loading=false; }
+  }
+
+  function refreshIfStale() {
+    if (!state.active) return;
+    if (!state.cache) {
+      activate();
+      return;
+    }
+    if (isMarketContextCacheStale(state.cache)) activate({ force:true,background:true });
   }
 
   function deactivate() { state.active=false;disconnectChart(); }
@@ -342,5 +368,5 @@ export function createMarketPulseController({ client,setStatus,openModal }) {
     event.preventDefault();state.search=String(byId('marketPulseMemberSearch')?.value||'').trim();state.page=0;loadMembers();return true;
   }
 
-  return { activate,deactivate,handleViewportClick,handleDetailClick,handleDetailSubmit };
+  return { activate,deactivate,refreshIfStale,handleViewportClick,handleDetailClick,handleDetailSubmit };
 }

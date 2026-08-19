@@ -8,6 +8,11 @@ import { ETF_RADAR_GUIDE_HTML, INDEX_RADAR_GUIDE_HTML } from '../radar/radar-hel
 import { MARKET_PULSE_GUIDE_HTML,MARKET_PULSE_GUIDE_VERSION } from '../pulse/market-pulse-help.js';
 import { createMarketPulseController } from './market-pulse-controller.js';
 import {
+  createMarketContextRefreshCoalescer,
+  isMarketContextCacheStale,
+  marketContextCacheStamp,
+} from './market-context-cache.js';
+import {
   buildLeadershipMemory,
   findLeadershipPeriod,
   radarThemeKey,
@@ -84,6 +89,7 @@ const state = {
   bound:false,
   returnFocus:null,
   pulseController:null,
+  refreshCoalescer:null,
 };
 
 const byId = id => document.getElementById(id);
@@ -427,18 +433,25 @@ function applyCachedScope(entry) {
   renderSnapshot(entry.snapshot,entry.checkpoint);
 }
 
-async function load(scope=state.activeScope,{ force=false }={}) {
+function showCachedRefreshFailure(entry,error) {
+  applyCachedScope(entry);
+  const message=error?.message||'The latest Supabase snapshot request failed.';
+  setStatus(`<span class="fibo-analysis-source fibo-analysis-source--official">Official Close · ${escapeRadarHtml(entry.snapshot.tradeDate)}</span><span class="index-radar-sync-warning" title="${escapeRadarHtml(message)}"><span class="material-icons" aria-hidden="true">error_outline</span>Refresh failed · cached close retained</span>`);
+}
+
+async function load(scope=state.activeScope,{ force=false,background=false }={}) {
   if (scope===MARKET_RADAR_SCOPES.MARKET_PULSE) {
-    await state.pulseController?.activate({ force });
+    await state.pulseController?.activate({ force,background });
     return;
   }
   if (!state.client || state.loadingScopes.has(scope)) return;
-  if (!force && state.cache.has(scope)) {
-    if (scope===state.activeScope) applyCachedScope(state.cache.get(scope));
+  const retainedEntry=state.cache.get(scope)||null;
+  if (!force && retainedEntry) {
+    if (scope===state.activeScope) applyCachedScope(retainedEntry);
     return;
   }
   state.loadingScopes.add(scope);
-  if (scope===state.activeScope) {
+  if (scope===state.activeScope && !background) {
     const config=activeConfig();
     setStatus('<span class="index-radar-loading-label"><span class="material-icons" aria-hidden="true">sync</span>Loading official snapshot…</span>');
     renderMessage(config.loadingTitle,'Reading the latest precomputed official-close leaderboard.');
@@ -447,6 +460,9 @@ async function load(scope=state.activeScope,{ force=false }={}) {
     const result = await loadMarketRadar(state.client,scope);
     if (result.error) throw result.error;
     const snapshot = normalizeRadarSnapshot(result.snapshot);
+    if (!snapshot && background && retainedEntry?.snapshot) {
+      throw new Error('No latest '+activeConfig().shortName+' snapshot was returned.');
+    }
     const entry={
       snapshot,
       checkpoint:result.checkpoint,
@@ -454,6 +470,7 @@ async function load(scope=state.activeScope,{ force=false }={}) {
       memory:snapshot
         ? buildLeadershipMemory(result.historyError?[]:result.snapshots,{ latestSnapshot:result.snapshot })
         : null,
+      ...marketContextCacheStamp(),
     };
     state.cache.set(scope,entry);
     if (scope!==state.activeScope) return;
@@ -464,6 +481,10 @@ async function load(scope=state.activeScope,{ force=false }={}) {
     applyCachedScope(entry);
   } catch (error) {
     if (scope===state.activeScope) {
+      if (background && retainedEntry?.snapshot) {
+        showCachedRefreshFailure(retainedEntry,error);
+        return;
+      }
       state.snapshot=null;
       state.memory=null;
       state.historyError=null;
@@ -487,9 +508,26 @@ function selectScope(scope,{ focus=false }={}) {
   renderScopeChrome();
   const button=byId('indexRadarMode')?.querySelector('[data-market-radar-scope="'+scope+'"]');
   if (focus) button?.focus();
-  if (scope===MARKET_RADAR_SCOPES.MARKET_PULSE) state.pulseController?.activate();
-  else if (state.cache.has(scope)) applyCachedScope(state.cache.get(scope));
+  if (scope===MARKET_RADAR_SCOPES.MARKET_PULSE) state.pulseController?.activate({ refreshIfStale:true });
+  else if (state.cache.has(scope)) {
+    const entry=state.cache.get(scope);
+    applyCachedScope(entry);
+    if (isMarketContextCacheStale(entry)) load(scope,{ force:true,background:true });
+  }
   else load(scope);
+}
+
+function refreshActiveScopeIfStale() {
+  if (state.activeScope===MARKET_RADAR_SCOPES.MARKET_PULSE) {
+    state.pulseController?.refreshIfStale();
+    return;
+  }
+  const entry=state.cache.get(state.activeScope)||null;
+  if (!entry) {
+    load(state.activeScope);
+    return;
+  }
+  if (isMarketContextCacheStale(entry)) load(state.activeScope,{ force:true,background:true });
 }
 
 function handleScopeKeydown(event) {
@@ -507,6 +545,11 @@ function handleScopeKeydown(event) {
 function bindEvents() {
   if (state.bound) return;
   state.bound = true;
+  state.refreshCoalescer=createMarketContextRefreshCoalescer(refreshActiveScopeIfStale);
+  window.addEventListener('focus',()=>state.refreshCoalescer?.request());
+  document.addEventListener('visibilitychange',()=>{
+    if (document.visibilityState==='visible') state.refreshCoalescer?.request();
+  });
   byId('indexRadarHelpButton')?.addEventListener('click',event => openGuide(event.currentTarget));
   byId('indexRadarMode')?.addEventListener('click',event=>{
     const button=event.target.closest('[data-market-radar-scope]');
