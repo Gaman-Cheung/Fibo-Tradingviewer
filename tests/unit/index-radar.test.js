@@ -268,6 +268,8 @@ test('Radar schema and both sync launchers preserve the independent CN_INDEX con
   assert.match(launcher,/SYNC_DATASET/);
   assert.match(sync,/INDEX_SCOPE\s*=\s*"CN_INDEX"/);
   assert.match(sync,/ETF_SCOPE\s*=\s*"CN_ETF"/);
+  assert.match(sync,/verify_daily_all_freshness/);
+  assert.match(sync,/args\.mode == "daily" and args\.dataset == "all"/);
   assert.match(sync,/choices=\("a-shares", "indices", "pulse", "etfs", "all"\)/);
   assert.match(sync,/prune_etf_before/);
 });

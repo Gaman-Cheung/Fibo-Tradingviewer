@@ -207,6 +207,9 @@ test('local BaoStock launcher keeps credentials and its environment out of Git',
   assert.match(example,/PASTE_YOUR_SERVICE_ROLE_OR_SB_SECRET_KEY_HERE/);
   assert.doesNotMatch(example,/sb_secret_[A-Za-z0-9_-]{20,}/);
   assert.match(workflow,/cron:\s*'0 11 \* \* 1-5'/);
+  assert.match(workflow,/actions\/checkout@v7/);
+  assert.match(workflow,/actions\/setup-python@v7/);
+  assert.doesNotMatch(workflow,/actions\/(?:checkout@v4|setup-python@v5)/);
   for(const mode of ['smoke','daily','backfill','repair']) assert.match(workflow,new RegExp(`\\b${mode}\\b`));
   assert.match(workflow,/baostock-full-market-sync/);
   assert.match(ignore,/^local-market-data\/$/m);
