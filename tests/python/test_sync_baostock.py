@@ -1,5 +1,6 @@
 import json
 import unittest
+from copy import deepcopy
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -13,6 +14,7 @@ from scripts.sync_baostock import (
     _etf_target_dates,
     chunks,
     completed_market_date,
+    daily_all_freshness_report,
     normalize_daily_rows,
     normalize_etf_rows,
     parse_args,
@@ -20,6 +22,7 @@ from scripts.sync_baostock import (
     reconstruct_front_adjusted,
     run_sync,
     sync_one_date,
+    verify_daily_all_freshness,
 )
 
 
@@ -104,6 +107,35 @@ class FakeEtfDb:
         self.pruned.append(cutoff)
 
 
+class FakeFreshnessDb:
+    def __init__(self, trade_date="2026-08-18"):
+        self.checkpoints = {
+            scope: {"last_status": "ok", "latest_trade_date": trade_date}
+            for scope in (sync_module.SCOPE, sync_module.INDEX_SCOPE, sync_module.PULSE_SCOPE, sync_module.ETF_SCOPE)
+        }
+        self.snapshot_dates = {
+            "SECTOR_INDEX": trade_date,
+            "MARKET_PULSE": trade_date,
+            "EQUITY_ETF": trade_date,
+            "CROSS_ASSET": trade_date,
+        }
+
+    def get_checkpoint(self, scope):
+        return dict(self.checkpoints.get(scope, {}))
+
+    def get_radar_snapshots(self, limit=1):
+        value = self.snapshot_dates.get("SECTOR_INDEX")
+        return [{"trade_date": value}] if value else []
+
+    def get_pulse_snapshots(self, limit=1):
+        value = self.snapshot_dates.get("MARKET_PULSE")
+        return [{"trade_date": value}] if value else []
+
+    def get_etf_radar_snapshots(self, scope, limit=1):
+        value = self.snapshot_dates.get(scope)
+        return [{"trade_date": value}] if value else []
+
+
 class SyncBaoStockTests(unittest.TestCase):
     def test_daily_normalization_keeps_only_valid_sh_sz_rows(self):
         rows = normalize_daily_rows([
@@ -132,6 +164,61 @@ class SyncBaoStockTests(unittest.TestCase):
         zone = ZoneInfo("Asia/Shanghai")
         self.assertEqual(str(completed_market_date(datetime(2026,7,24,17,59,tzinfo=zone))), "2026-07-23")
         self.assertEqual(str(completed_market_date(datetime(2026,7,24,18,0,tzinfo=zone))), "2026-07-24")
+
+    def test_daily_all_freshness_accepts_one_complete_official_session_without_mutation(self):
+        db = FakeFreshnessDb()
+        before = deepcopy((db.checkpoints, db.snapshot_dates))
+        report = verify_daily_all_freshness(db, "2026-08-18")
+        self.assertEqual(report["issues"], [])
+        self.assertEqual(report["snapshots"], {
+            "SECTOR_INDEX": "2026-08-18",
+            "MARKET_PULSE": "2026-08-18",
+            "EQUITY_ETF": "2026-08-18",
+            "CROSS_ASSET": "2026-08-18",
+        })
+        self.assertEqual((db.checkpoints, db.snapshot_dates), before)
+
+    def test_daily_all_freshness_reports_missing_error_and_stale_components(self):
+        db = FakeFreshnessDb()
+        db.checkpoints.pop(sync_module.PULSE_SCOPE)
+        db.checkpoints[sync_module.INDEX_SCOPE]["last_status"] = "error"
+        db.snapshot_dates["SECTOR_INDEX"] = "2026-08-17"
+        report = daily_all_freshness_report(db, "2026-08-18")
+        detail = "; ".join(report["issues"])
+        self.assertIn("CN_PULSE checkpoint status=missing date=missing", detail)
+        self.assertIn("CN_INDEX checkpoint status=error date=2026-08-18", detail)
+        self.assertIn("SECTOR_INDEX snapshot date=2026-08-17", detail)
+        with self.assertRaisesRegex(RuntimeError, "CN_PULSE.*CN_INDEX|CN_INDEX.*CN_PULSE"):
+            verify_daily_all_freshness(db, "2026-08-18")
+
+    def test_daily_all_freshness_rejects_split_etf_scope_dates(self):
+        db = FakeFreshnessDb()
+        db.snapshot_dates["CROSS_ASSET"] = "2026-08-17"
+        with self.assertRaisesRegex(RuntimeError, "CROSS_ASSET snapshot date=2026-08-17"):
+            verify_daily_all_freshness(db, "2026-08-18")
+
+    def test_main_runs_freshness_audit_only_for_daily_all(self):
+        class MainClient:
+            def connect(self):
+                return None
+            def close(self):
+                return None
+
+        db = FakeFreshnessDb()
+        with (
+            patch.object(sync_module, "BaoStockClient", return_value=MainClient()),
+            patch.object(sync_module, "SupabaseRest", return_value=db),
+            patch.object(sync_module, "run_sync", return_value="2026-08-18"),
+            patch.object(sync_module, "run_index_sync"),
+            patch.object(sync_module, "run_pulse_sync"),
+            patch.object(sync_module, "run_etf_sync"),
+            patch.object(sync_module, "verify_daily_all_freshness", wraps=verify_daily_all_freshness) as audit,
+        ):
+            self.assertEqual(sync_module.main(["--mode", "daily", "--dataset", "all"]), 0)
+            self.assertEqual(audit.call_count, 1)
+            self.assertEqual(sync_module.main(["--mode", "daily", "--dataset", "indices"]), 0)
+            self.assertEqual(sync_module.main(["--mode", "backfill", "--dataset", "all"]), 0)
+            self.assertEqual(audit.call_count, 1)
 
     def test_chunks_and_cli_modes_are_deterministic(self):
         self.assertEqual([len(batch) for batch in chunks(list(range(7)),3)], [3,3,1])

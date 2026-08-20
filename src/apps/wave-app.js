@@ -17,7 +17,7 @@ import { runCloudPushFeedback } from './cloud-action-feedback.js';
 const supabaseClient = getSupabaseClient('wave');
 runMigrations(localStorage);
 
-// 🆕 核心配置 3：页面加载时“自动拦截登录态”并“自动拉取云端数据”
+// 页面加载只校验登录态；工作区云端恢复必须由用户手动触发。
     // ========================================================
     // ========================================================
     // 🛠️ 2. 页面加载：安全拦截登录态
@@ -34,8 +34,8 @@ runMigrations(localStorage);
         }
 
         console.log("👋 欢迎回来，已确认用户:", session.user.email);
-        // 云端恢复只由顶部/移动端的 Pull 按钮触发，避免打开 Wave 时覆盖
-        // 尚未上传的 Terminal 或 Trend Tracker 本地修改。
+        // Keep startup local-only so opening Wave cannot overwrite newer local
+        // Terminal or Trend Tracker edits that have not been pushed yet.
     });
 
     // ========================================================
@@ -780,7 +780,7 @@ async function pullFromCloud() {
         return false;
     }
 
-    // 共享服务已先完成全部本地写入；这里仅重新装载Wave内存和视图。
+    // The shared service has applied every local section; only rebuild Wave memory/view here.
     loadTabs();
     ensureWaveInstrumentLinks();
     appState.instrumentPool = loadSharedInstrumentPool();

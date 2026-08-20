@@ -50,7 +50,7 @@ import { initializeIndexRadar } from './index-radar-controller.js';
             // ================= 统一全工作区云端同步 =================
             async function performTerminalCloudPush() {
                 showLoader('Pushing Workspace to Cloud...');
-                // 读取当前表格，避免仍停留在DOM里的最后一次编辑遗漏。
+                // Flush edits that may still exist only in the live Terminal tables.
                 saveLocalV6();
                 saveLocalV7();
                 const result = await pushWorkspaceToCloud({ client:supabaseClient,storage:localStorage });
