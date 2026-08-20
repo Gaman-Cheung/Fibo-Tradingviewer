@@ -7,11 +7,10 @@ import { bindDeclarativeEvents } from '../core/declarative-events.js';
 import { getSupabaseClient } from '../core/supabase-client.js';
 import { STORAGE_KEYS, ROUTES } from '../core/config.js';
 import { runMigrations } from '../core/migrations.js';
-import { loadInstrumentPool, saveInstrumentPool } from '../core/instrument-identity.js';
-import { readArray, readJson, writeJson } from '../core/storage.js';
-import { getAuthenticatedUser, loadCloudRow, upsertCloudRow } from '../core/cloud-repository.js';
-import { buildCloudPayload, unpackCloudPayload } from '../core/cloud-payload.js';
-import { loadDailyCloses, loadMarketSyncState, loadTrackerState, saveTrackerState, syncMarketBindings } from '../core/market-repository.js';
+import { loadInstrumentPool } from '../core/instrument-identity.js';
+import { readJson, writeJson } from '../core/storage.js';
+import { loadDailyCloses, loadMarketSyncState } from '../core/market-repository.js';
+import { formatWorkspaceSyncFailure, pullWorkspaceFromCloud, pushWorkspaceToCloud } from '../core/workspace-cloud-sync.js';
 import { DEFAULT_TRACKER_MA_PROJECTION_SCENARIO, DEFAULT_TRACKER_SCENARIO_VISIBILITY, TRACKER_MA_PROJECTION_SCENARIOS, normalizeTrackerMaProjectionScenario, normalizeTrackerScenarioVisibility } from '../core/tracker-state.js';
 import { MA_PERIODS, DEFAULT_VISIBLE_MAS, analyzeTrend, appendProvisionalCurrent, maDirectionThresholds, sma } from '../tracker/trend-engine.js';
 import { buildTrackerChartModel, buildTrackerChartXModel, buildTrackerChartYModel, trackerChartEdge } from '../tracker/chart-model.js';
@@ -453,13 +452,11 @@ async function pushTrackerCloud(trigger){
   const button=trigger||document.querySelector('.fibo-header__actions .fibo-button--cloud-up');
   const mobileAction=!!button?.closest('#trackerActionsBackdrop');
   return runCloudPushFeedback(button,async()=>{
-    setLoading(true); const {user}=await getAuthenticatedUser(client); if(!user){setLoading(false);return false;}
-    const existing=(await loadCloudRow(client,user.id,'wp_data')).data?.wp_data||{};
-    const notes={marquee:localStorage.getItem(STORAGE_KEYS.marquee)||'',tips:localStorage.getItem(STORAGE_KEYS.tips)||''};
-    const payload=buildCloudPayload({userId:user.id,lookFirst:readArray(localStorage,STORAGE_KEYS.lookFirst),thenLeap:readArray(localStorage,STORAGE_KEYS.thenLeap),waveState:readJson(localStorage,STORAGE_KEYS.waveState,null),instrumentPool:pool,uiNotes:notes,existingWaveData:existing});
-    const results=await Promise.all([upsertCloudRow(client,payload),syncMarketBindings(client,user.id,pool),saveTrackerState(client,user.id,trackerState)]); setLoading(false);
-    const error=results.find(result=>result?.error)?.error;
-    if(error){alert(`Push failed: ${error.message}`);return false;}
+    setLoading(true);
+    persistState();
+    const result=await pushWorkspaceToCloud({client,storage:localStorage});
+    setLoading(false);
+    if(!result.ok){alert(formatWorkspaceSyncFailure(result,'Push failed'));return false;}
     return true;
   },{
     onSuccessSettled:()=>{if(mobileAction)closeActions();},
@@ -468,19 +465,23 @@ async function pushTrackerCloud(trigger){
 }
 
 async function pullTrackerCloud(){
-  setLoading(true); const {user}=await getAuthenticatedUser(client); if(!user){setLoading(false);return;}
-  const [cloud,tracker]=await Promise.all([loadCloudRow(client,user.id),loadTrackerState(client,user.id)]);
-  if(cloud.data){
-    const unpacked=unpackCloudPayload(cloud.data);
-    if(Array.isArray(cloud.data.v6_data))writeJson(localStorage,STORAGE_KEYS.lookFirst,unpacked.lookFirst);
-    if(Array.isArray(cloud.data.v7_data))writeJson(localStorage,STORAGE_KEYS.thenLeap,unpacked.thenLeap);
-    if(unpacked.instrumentPool?.items){pool=unpacked.instrumentPool;saveInstrumentPool(pool);}
-    if(unpacked.uiNotes){localStorage.setItem(STORAGE_KEYS.marquee,unpacked.uiNotes.marquee||'');localStorage.setItem(STORAGE_KEYS.tips,unpacked.uiNotes.tips||'');}
+  setLoading(true);
+  let result;
+  try {
+    result=await pullWorkspaceFromCloud({client,storage:localStorage});
+  } catch(error) {
+    setLoading(false);
+    alert(formatWorkspaceSyncFailure({failures:[{scope:'fibo_data',error}]},'Pull failed'));
+    return false;
   }
-  if(tracker.data?.state)writeJson(localStorage,STORAGE_KEYS.trackerState,normalizeTrackerState(tracker.data.state));
-  reconcileLegacyTrackerInputs(localStorage,pool);
+  setLoading(false);
+  if(result.empty){alert('云端还没有你的工作区记录，请先在任一页面点击 Push to Cloud。');return false;}
+  if(!result.ok){alert(formatWorkspaceSyncFailure(result,'Pull failed'));return false;}
+  pool=loadInstrumentPool();
   trackerState=normalizeTrackerState(readJson(localStorage,STORAGE_KEYS.trackerState,{}));
-  persistState();renderMarquee();renderInstrumentPicker();await loadInstrumentHistory();setLoading(false);
+  persistState();renderMarquee();renderInstrumentPicker();await loadInstrumentHistory();
+  if(result.trackerMissing) console.warn('Cloud workspace has no Trend Tracker state; local Tracker state was retained.');
+  return true;
 }
 
 async function logout(){await client.auth.signOut();window.location.href=ROUTES.auth;}

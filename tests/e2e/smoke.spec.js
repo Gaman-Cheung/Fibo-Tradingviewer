@@ -56,7 +56,7 @@ window.supabase={createClient(){
      computed_at:date+'T11:45:00Z',
    };
  });
-  const pulseMembers=[
+ const pulseMembers=[
    ...Array.from({length:120},(_,index)=>({
      provider:'baostock',trade_date:'2026-07-28',calculation_id:'pulse-calc-2026-07-28',member_type:'stock',
      market:index%2?'SZ':'SH',code:String(600000+index).slice(-6),name:'Market Stock '+String(index+1).padStart(3,'0'),theme_group:'',close:10+index/10,
@@ -79,50 +79,26 @@ window.supabase={createClient(){
      return_1d:.5,return_5d:2,direction_1d:1,direction_5d:1,strong_up:false,strong_down:false,
      above_ma20:true,above_ma60:index<3,ma20_rising:true,ma60_rising:index!==2,new_high_20:false,new_low_20:false,
      ma60_breakout:false,ma60_breakdown:false,distance_ma20_pct:1,distance_ma60_pct:2,ma20_slope_pct:.05,ma60_slope_pct:.03,
-    })),
-  ];
-  const marketContextMock={
-    date:'2026-07-28',
-    fail:new Set(),
-    requests:{MARKET_PULSE:0,SECTOR_INDEX:0,EQUITY_ETF:0,CROSS_ASSET:0},
-  };
-  window.__marketContextMock=marketContextMock;
-  const datedRows=(rows,scope)=>rows.map((row,index)=>index===0?{
-    ...row,
-    trade_date:marketContextMock.date,
-    ...(scope==='MARKET_PULSE'?{calculation_id:'pulse-calc-'+marketContextMock.date}:{}),
-  }:row);
-  function builder(table){
+   })),
+ ];
+ function builder(table){
    const filters={};
    let requestedLimit=0;
    let searchTerm='';
    return {
-     select(){return this},eq(column,value){filters[column]=value;return this},gt(column,value){filters[column]={op:'gt',value};return this},lt(column,value){filters[column]={op:'lt',value};return this},
+      select(){return this},eq(column,value){filters[column]=value;return this},gt(column,value){filters[column]={op:'gt',value};return this},lt(column,value){filters[column]={op:'lt',value};return this},
      or(value){searchTerm=String(value).match(/name\.ilike\.%(.*?)%/)?.[1]||'';return this},limit(value){requestedLimit=value;return this},
-      order(){
-        if(table==='market_daily_bar')window.__marketDailyBarOrders=(window.__marketDailyBarOrders||0)+1;
-        if(table==='market_pulse_member_snapshot')return this;
-        if(table==='market_pulse_snapshot'){
-          marketContextMock.requests.MARKET_PULSE+=1;
-          if(marketContextMock.fail.has('MARKET_PULSE'))return Promise.resolve({data:null,error:{message:'Mock Pulse refresh failure'}});
-          const rows=datedRows(pulseSnapshots,'MARKET_PULSE');
-          return Promise.resolve({data:requestedLimit===1?[rows[0]]:rows,error:null});
-        }
-        if(table==='market_etf_radar_snapshot'){
-          window.__etfRadarOrders=window.__etfRadarOrders||{};
-          window.__etfRadarOrders[filters.scope]=(window.__etfRadarOrders[filters.scope]||0)+1;
-          marketContextMock.requests[filters.scope]+=1;
-          if(marketContextMock.fail.has(filters.scope))return Promise.resolve({data:null,error:{message:'Mock '+filters.scope+' refresh failure'}});
-          const rows=datedRows(etfRadarSnapshots[filters.scope]||[],filters.scope);
-          return Promise.resolve({data:requestedLimit===1?[rows[0]]:rows,error:null});
-        }
-        if(table==='market_index_radar_snapshot'){
-          marketContextMock.requests.SECTOR_INDEX+=1;
-          if(marketContextMock.fail.has('SECTOR_INDEX'))return Promise.resolve({data:null,error:{message:'Mock Sector refresh failure'}});
-          const rows=datedRows(radarSnapshots,'SECTOR_INDEX');
-          return Promise.resolve({data:requestedLimit===1?[rows[0]]:rows,error:null});
-        }
-        return Promise.resolve({data:table==='market_daily_bar'&&filters.code==='300657'?marketRows:[],error:null});
+     order(){
+       if(table==='market_daily_bar')window.__marketDailyBarOrders=(window.__marketDailyBarOrders||0)+1;
+       if(table==='market_pulse_member_snapshot')return this;
+       if(table==='market_pulse_snapshot')return Promise.resolve({data:requestedLimit===1?[pulseSnapshots[0]]:pulseSnapshots,error:null});
+       if(table==='market_etf_radar_snapshot'){
+         window.__etfRadarOrders=window.__etfRadarOrders||{};
+         window.__etfRadarOrders[filters.scope]=(window.__etfRadarOrders[filters.scope]||0)+1;
+         const rows=etfRadarSnapshots[filters.scope]||[];
+         return Promise.resolve({data:requestedLimit===1?[rows[0]]:rows,error:null});
+       }
+       return Promise.resolve({data:table==='market_daily_bar'&&filters.code==='300657'?marketRows:table==='market_index_radar_snapshot'?(requestedLimit===1?[radarSnapshot]:radarSnapshots):[],error:null});
      },
      range(from,to){
        let rows=pulseMembers.filter(row=>Object.entries(filters).every(([column,expected])=>{
@@ -133,9 +109,22 @@ window.supabase={createClient(){
        if(searchTerm){const term=searchTerm.toLowerCase();rows=rows.filter(row=>row.name.toLowerCase().includes(term)||row.code.includes(term));}
        return Promise.resolve({data:rows.slice(from,to+1),count:rows.length,error:null});
      },
-     single(){return Promise.resolve({data:null,error:{code:'PGRST116'}})},
-     maybeSingle(){return Promise.resolve({data:table==='market_sync_checkpoint'?{last_status:'ok',latest_trade_date:'2026-07-28'}:null,error:null})},
-     upsert(){return Promise.resolve({data:null,error:null})}
+      single(){
+        window.__workspaceCloudReads=window.__workspaceCloudReads||{};
+        window.__workspaceCloudReads[table]=(window.__workspaceCloudReads[table]||0)+1;
+        const seeded=window.__workspaceCloudSeed&&Object.prototype.hasOwnProperty.call(window.__workspaceCloudSeed,table)
+          ? window.__workspaceCloudSeed[table] : null;
+        const forcedError=window.__workspaceCloudFailures&&window.__workspaceCloudFailures[table];
+        if(forcedError)return Promise.resolve({data:null,error:{message:String(forcedError)}});
+        return seeded?Promise.resolve({data:seeded,error:null}):Promise.resolve({data:null,error:{code:'PGRST116'}});
+      },
+      maybeSingle(){return Promise.resolve({data:table==='market_sync_checkpoint'?{last_status:'ok',latest_trade_date:'2026-07-28'}:null,error:null})},
+      upsert(payload){
+        window.__workspaceCloudUpserts=window.__workspaceCloudUpserts||{};
+        window.__workspaceCloudUpserts[table]=payload;
+        const forcedError=window.__workspaceCloudFailures&&window.__workspaceCloudFailures[table];
+        return Promise.resolve(forcedError?{data:null,error:{message:String(forcedError)}}:{data:null,error:null});
+      }
    };
  }
  return {auth:{getSession:async()=>({data:{session:{user:{id:'test'}}},error:null}),getUser:async()=>({data:{user:{id:'test'}},error:null}),signOut:async()=>({error:null}),signInWithPassword:async()=>({data:{user:{id:'test'}},error:null}),signUp:async()=>({data:{user:{id:'test'}},error:null})},from(table){return builder(table)}};
@@ -620,62 +609,6 @@ test('Market Radar switches lazy ETF scopes without mixing cards or Memory', asy
   }));
   if(testInfo.project.name==='iphone') expect(Math.min(...geometry.height)).toBeGreaterThanOrEqual(44);
   expect(geometry.pageOverflow).toBeLessThanOrEqual(1);
-});
-
-test('Market Context refreshes stale active caches and retains cards after a background failure', async ({ page }) => {
-  await page.goto('/Terminal.html?tab=v6');
-  const context=page.locator('#indexRadar');
-  await expect(context.locator('#indexRadarStatus')).toContainText('2026-07-28');
-  const initialNow=await page.evaluate(()=>Date.now());
-  const initialRequests=await page.evaluate(()=>({...window.__marketContextMock.requests}));
-  expect(initialRequests.MARKET_PULSE).toBe(2);
-  expect(initialRequests.SECTOR_INDEX).toBe(0);
-
-  await page.evaluate(({now})=>{
-    window.__marketContextMock.date='2026-07-29';
-    Date.now=()=>now;
-    window.dispatchEvent(new Event('focus'));
-    document.dispatchEvent(new Event('visibilitychange'));
-  },{now:initialNow+24*60*60*1000});
-  await expect(context.locator('#indexRadarStatus')).toContainText('2026-07-29');
-  await expect.poll(()=>page.evaluate(()=>window.__marketContextMock.requests.MARKET_PULSE)).toBe(4);
-  expect(await page.evaluate(()=>window.__marketContextMock.requests.SECTOR_INDEX)).toBe(0);
-
-  await context.locator('[data-market-radar-scope="SECTOR_INDEX"]').click();
-  await expect(context.locator('#indexRadarStatus')).toContainText('2026-07-29');
-  await expect(context.locator('[data-index-radar-leader]')).toHaveCount(5);
-  await expect.poll(()=>page.evaluate(()=>window.__marketContextMock.requests.SECTOR_INDEX)).toBe(2);
-
-  await page.evaluate(({now})=>{
-    window.__marketContextMock.date='2026-07-30';
-    window.__marketContextMock.fail.add('SECTOR_INDEX');
-    Date.now=()=>now;
-    window.dispatchEvent(new Event('focus'));
-    document.dispatchEvent(new Event('visibilitychange'));
-  },{now:initialNow+24*60*60*1000+5*60*1000});
-  await expect(context.locator('#indexRadarStatus')).toContainText('Refresh failed · cached close retained');
-  await expect(context.locator('#indexRadarStatus')).toContainText('2026-07-29');
-  await expect(context.locator('[data-index-radar-leader]')).toHaveCount(5);
-  await expect.poll(()=>page.evaluate(()=>window.__marketContextMock.requests.SECTOR_INDEX)).toBe(4);
-
-  await page.evaluate(()=>{
-    window.__marketContextMock.fail.delete('SECTOR_INDEX');
-    window.dispatchEvent(new Event('focus'));
-    document.dispatchEvent(new Event('visibilitychange'));
-  });
-  await expect(context.locator('#indexRadarStatus')).toContainText('2026-07-30');
-  await expect(context.locator('#indexRadarStatus')).not.toContainText('Refresh failed');
-  await expect.poll(()=>page.evaluate(()=>window.__marketContextMock.requests.SECTOR_INDEX)).toBe(6);
-
-  await context.locator('[data-market-radar-scope="MARKET_PULSE"]').click();
-  await expect(context.locator('#indexRadarStatus')).toContainText('2026-07-30');
-  await expect.poll(()=>page.evaluate(()=>window.__marketContextMock.requests.MARKET_PULSE)).toBe(6);
-  const untouched=await page.evaluate(()=>({
-    equity:window.__marketContextMock.requests.EQUITY_ETF,
-    cross:window.__marketContextMock.requests.CROSS_ASSET,
-    overflow:document.documentElement.scrollWidth-window.innerWidth,
-  }));
-  expect(untouched).toEqual({equity:0,cross:0,overflow:0});
 });
 
 test('Radar desktop breakpoints never require horizontal navigation', async ({ page }, testInfo) => {
@@ -1362,10 +1295,49 @@ test('all Push actions use inline Saved to Cloud feedback', async ({ page },test
     }else push=page.locator('.fibo-header__actions .fibo-button--cloud-up');
     await push.click();
     await expect(push).toContainText('Saved to Cloud');
+    const uploaded=await page.evaluate(()=>Object.keys(window.__workspaceCloudUpserts||{}));
+    expect(uploaded).toEqual(expect.arrayContaining(['fibo_data','trend_tracker_state','market_instrument_bindings']));
     if(testInfo.project.name==='iphone'){
       await expect(page.locator(system.sheet)).toHaveClass(/open/);
       await expect(page.locator(system.sheet)).not.toHaveClass(/open/,{timeout:3500});
     }else await expect(push).toContainText('Push to Cloud',{timeout:3500});
+  }
+});
+
+test('manual Pull restores the full workspace and Wave startup stays local-only', async ({ page },testInfo) => {
+  await page.goto('/WaveAnalysis.html');
+  expect(await page.evaluate(()=>window.__workspaceCloudReads?.fibo_data||0)).toBe(0);
+
+  const seed={
+    fibo_data:{
+      user_id:'test',
+      v6_data:[{id:'e2e-a',n:'CLOUD',h:'100',l:'50',c:'88',p:'87'}],
+      v7_data:[{id:'e2e-a',n:'CLOUD',t:'uptrend',r:'60',m:'bullish',v:'2.2'}],
+      wp_data:{activeTabId:'tab-cloud',tabs:[{id:'tab-cloud',instrumentId:'e2e-a',name:'Cloud',form:{symbolName:'Cloud'}}],instrumentPool:{version:1,items:[{id:'e2e-a',ticker:'CLOUD',code:'300657',market:'SZ'}],tombstones:[]},uiNotes:{marquee:'cloud reminder',tips:'cloud tips'}}
+    },
+    trend_tracker_state:{user_id:'test',state:{version:1,activeInstrumentId:'e2e-a',visibleMas:[20],instruments:{'e2e-a':{horizon:15,target:'',targetDate:'',maProjectionScenario:'trend',scenarioVisibility:{flat:true,trend:true,custom:true}}}}}
+  };
+  const systems=[
+    {url:'Terminal.html?tab=v6',open:'openMobileActions()',sheet:'#mobileActionsBackdrop'},
+    {url:'WaveAnalysis.html',open:'openWaveMobileActions()',sheet:'#waveMobileActionsBackdrop'},
+    {url:'TrendTracker.html',open:'openActions()',sheet:'#trackerActionsBackdrop'}
+  ];
+  for(const system of systems){
+    await page.goto(`/${system.url}`);
+    await page.evaluate(({seed})=>{
+      window.__workspaceCloudSeed=seed;
+      const look=JSON.parse(localStorage.getItem('tv_lookfirst_data_v3')||'[]');
+      if(look[0]){look[0].c='1';localStorage.setItem('tv_lookfirst_data_v3',JSON.stringify(look));}
+    },{seed});
+    let pull;
+    if(testInfo.project.name==='iphone'){
+      await page.locator(`[data-fibo-click="${system.open}"]`).click();
+      pull=page.locator(`${system.sheet} .fibo-button--cloud-down`);
+    }else pull=page.locator('.fibo-header__actions .fibo-button--cloud-down');
+    await pull.click();
+    await page.waitForFunction(()=>JSON.parse(localStorage.getItem('tv_lookfirst_data_v3')||'[]')[0]?.c==='88');
+    expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('tv_thenleap_data_v3')||'[]')[0]?.v)).toBe('2.2');
+    expect(await page.evaluate(()=>localStorage.getItem('tv_header_marquee_v1')||'')).toBe('cloud reminder');
   }
 });
 

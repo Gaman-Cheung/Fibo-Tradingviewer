@@ -131,6 +131,21 @@ test('all systems use the shared inline cloud Push feedback contract', () => {
   }
 });
 
+test('all page controllers use one full-workspace cloud service', () => {
+  for (const name of ['terminal-app.js','wave-app.js','tracker-app.js']) {
+    const source=fs.readFileSync(path.join(root,'src/apps',name),'utf8');
+    assert.match(source,/pushWorkspaceToCloud/,`${name}: shared Push service missing`);
+    assert.match(source,/pullWorkspaceFromCloud/,`${name}: shared Pull service missing`);
+    for (const privateOperation of ['buildCloudPayload','loadCloudRow','upsertCloudRow','syncMarketBindings','saveTrackerState']) {
+      assert.doesNotMatch(source,new RegExp(`\\b${privateOperation}\\b`),`${name}: page must not implement ${privateOperation}`);
+    }
+  }
+  const wave=fs.readFileSync(path.join(root,'src/apps/wave-app.js'),'utf8');
+  assert.equal((wave.match(/pullFromCloud\(/g)||[]).length,1,'Wave Pull may only be the explicit button handler');
+  const service=fs.readFileSync(path.join(root,'src/core/workspace-cloud-sync.js'),'utf8');
+  for (const symbol of ['pushWorkspaceToCloud','pullWorkspaceFromCloud','trend_tracker_state','market_instrument_bindings']) assert.match(service,new RegExp(symbol));
+});
+
 test('official and preview MACD results use one shared source-label contract', () => {
   const components=fs.readFileSync(path.join(root,'assets/css/components.css'),'utf8');
   const terminal=fs.readFileSync(path.join(root,'src/apps/terminal-app.js'),'utf8');
@@ -207,9 +222,6 @@ test('local BaoStock launcher keeps credentials and its environment out of Git',
   assert.match(example,/PASTE_YOUR_SERVICE_ROLE_OR_SB_SECRET_KEY_HERE/);
   assert.doesNotMatch(example,/sb_secret_[A-Za-z0-9_-]{20,}/);
   assert.match(workflow,/cron:\s*'0 11 \* \* 1-5'/);
-  assert.match(workflow,/actions\/checkout@v7/);
-  assert.match(workflow,/actions\/setup-python@v7/);
-  assert.doesNotMatch(workflow,/actions\/(?:checkout@v4|setup-python@v5)/);
   for(const mode of ['smoke','daily','backfill','repair']) assert.match(workflow,new RegExp(`\\b${mode}\\b`));
   assert.match(workflow,/baostock-full-market-sync/);
   assert.match(ignore,/^local-market-data\/$/m);

@@ -5,16 +5,15 @@
  */
 import { bindDeclarativeEvents } from '../core/declarative-events.js';
 import { getSupabaseClient } from '../core/supabase-client.js';
-import { buildCloudPayload } from '../core/cloud-payload.js';
-import { getAuthenticatedUser, loadCloudRow, upsertCloudRow } from '../core/cloud-repository.js';
 import { runMigrations } from '../core/migrations.js';
 import { getAutoPlan as calculateAutoPlan, movePct as calculateMovePct, getStopCandidates as calculateStopCandidates } from '../terminal/fibonacci.js';
 import { calculateTechnicalScore, classifyCompositeSignal } from '../terminal/composite-signal.js';
 import { normalizeTicker, createPermanentId, loadInstrumentPool as loadPoolCore, saveInstrumentPool as savePoolCore, mergeInstrumentPools as mergePoolsCore, migrateTerminalIdentity } from '../core/instrument-identity.js';
 import { MARKET_OPTIONS, normalizeSecurityCode } from '../core/market-code.js';
-import { loadDailyCloses, loadLatestOfficialClose, syncMarketBindings } from '../core/market-repository.js';
+import { loadDailyCloses, loadLatestOfficialClose } from '../core/market-repository.js';
 import { readJson } from '../core/storage.js';
 import { readSharedLiveInputs, reconcileLegacyTrackerInputs } from '../core/shared-live-inputs.js';
+import { formatWorkspaceSyncFailure, pullWorkspaceFromCloud, pushWorkspaceToCloud } from '../core/workspace-cloud-sync.js';
 import { runCloudPushFeedback } from './cloud-action-feedback.js';
 import { appendProvisionalCurrent } from '../tracker/trend-engine.js';
 import { buildTerminalMacdSuggestion, detectCloseMacdDivergence } from '../tracker/macd-suggestion.js';
@@ -48,56 +47,19 @@ import { initializeIndexRadar } from './index-radar-controller.js';
             }
             function hideLoader() { document.getElementById('loader').style.display = 'none'; }
 
-            // ================= 全新多用户云端同步逻辑 =================
+            // ================= 统一全工作区云端同步 =================
             async function performTerminalCloudPush() {
-                showLoader('Pushing to Cloud...');
-                const v6Data = JSON.parse(localStorage.getItem('tv_lookfirst_data_v3') || '[]');
-                const v7Data = JSON.parse(localStorage.getItem('tv_thenleap_data_v3') || '[]');
-                const headerNotes = {
-                    marquee: localStorage.getItem('tv_header_marquee_v1') || '',
-                    tips: localStorage.getItem('tv_header_tips_v1') || ''
-                };
-                const instrumentPool = loadInstrumentPool();
-
-                // 1. 动态获取当前正在操作的“打碟宇航员”是谁
-                const { user } = await getAuthenticatedUser(supabaseClient);
-            
-                if (!user) {
-                    hideLoader();
-                    return alert("未检测到登录状态，请刷新页面或重新登录！");
-                }
-
-                const { data: existingCloudRow } = await loadCloudRow(supabaseClient, user.id, 'wp_data');
-                let localWaveState = null;
-                try {
-                    const parsedWaveState = JSON.parse(localStorage.getItem('wave_matrix_tabs_v3') || 'null');
-                    if (parsedWaveState?.tabs && Array.isArray(parsedWaveState.tabs)) localWaveState = parsedWaveState;
-                } catch (e) {}
-                const mergedWpData = { ...(existingCloudRow?.wp_data || {}), ...(localWaveState || {}), instrumentPool, uiNotes:headerNotes };
-                if (Array.isArray(mergedWpData.tabs)) {
-                    const validInstrumentIds = new Set(instrumentPool.items.map(item => item.id));
-                    const deletedInstrumentIds = new Set((instrumentPool.tombstones || []).map(item => item.id));
-                    mergedWpData.tabs = mergedWpData.tabs.filter(tab => !tab.instrumentId || (validInstrumentIds.has(tab.instrumentId) && !deletedInstrumentIds.has(tab.instrumentId)));
-                }
-
-                // 2. 将数据连同他的专属 user_id 一起推上云端
-                // (因为去掉了 id:1，现在直接根据 user_id 自动匹配他的专属行)
-                const cloudPayload = buildCloudPayload({
-                    userId:user.id, lookFirst:v6Data, thenLeap:v7Data, waveState:localWaveState,
-                    instrumentPool, uiNotes:headerNotes, existingWaveData:existingCloudRow?.wp_data || {}
-                });
-                cloudPayload.wp_data = mergedWpData;
-                const { data, error } = await upsertCloudRow(supabaseClient, cloudPayload);
-
+                showLoader('Pushing Workspace to Cloud...');
+                // 读取当前表格，避免仍停留在DOM里的最后一次编辑遗漏。
+                saveLocalV6();
+                saveLocalV7();
+                const result = await pushWorkspaceToCloud({ client:supabaseClient,storage:localStorage });
                 hideLoader();
-                if (error) {
-                    alert("❌ Cloud Sync Failed: " + error.message);
-                } else {
-                    const bindingResult = await syncMarketBindings(supabaseClient, user.id, instrumentPool).catch(bindingError => ({ error:bindingError }));
-                    if (bindingResult?.error) console.warn('Tracker bindings were not synced. Apply the Trend Tracker Supabase migration.', bindingResult.error);
-                    return true;
+                if (!result.ok) {
+                    alert(formatWorkspaceSyncFailure(result,'❌ Cloud Push Failed'));
+                    return false;
                 }
-                return !error;
+                return true;
             }
 
             async function saveToCloud(trigger) {
@@ -110,66 +72,29 @@ import { initializeIndexRadar } from './index-radar-controller.js';
             }
 
             async function loadFromCloud() {
-                showLoader('Pulling from Cloud...');
-
-                const { user } = await getAuthenticatedUser(supabaseClient);
-                if (!user) {
+                showLoader('Pulling Full Workspace from Cloud...');
+                let result;
+                try {
+                    result = await pullWorkspaceFromCloud({ client:supabaseClient,storage:localStorage });
+                } catch (error) {
                     hideLoader();
-                    return alert("未检测到登录状态，请刷新页面或重新登录！");
-                }
-            
-                // 3. 直接请求！有了 RLS 的保护，这句代码在云端会自动被过滤，
-                // 保证只返回当前登录用户自己的那一行数据，绝对拿不到别人的。
-                const { data, error } = await loadCloudRow(supabaseClient, user.id, '*'); 
-
-                hideLoader();
-                // PGRST116 是 Supabase 的一个特定状态码，意思是"找不到数据"
-                // 这对新注册、还没点过 push 的用户是正常现象，我们予以放行
-                if (error && error.code !== 'PGRST116') { 
-                    alert("❌ Load Failed: " + error.message);
+                    alert(formatWorkspaceSyncFailure({failures:[{scope:'fibo_data',error}]},'❌ Cloud Pull Failed'));
                     return;
                 }
-
-                if (data) {
-                    if (data.v6_data) {
-                        const cloudV6Data = Array.isArray(data.v6_data) ? data.v6_data : [];
-                        const noteCarrier = cloudV6Data.find(item => item && typeof item === 'object' && item.__header_notes_v1);
-                        const cloudNotes = data.wp_data?.uiNotes || noteCarrier?.__header_notes_v1;
-                        const poolCarrier = cloudV6Data.find(item => item && typeof item === 'object' && item.__instrument_pool_v1);
-                        const mergedCloudPool = mergeInstrumentPools(loadInstrumentPool(), poolCarrier?.__instrument_pool_v1, data.wp_data?.instrumentPool);
-                        if (mergedCloudPool.items.length) saveInstrumentPool(mergedCloudPool);
-                        if (cloudNotes && Object.prototype.hasOwnProperty.call(cloudNotes, 'marquee')) localStorage.setItem('tv_header_marquee_v1', cloudNotes.marquee || '');
-                        if (cloudNotes && Object.prototype.hasOwnProperty.call(cloudNotes, 'tips')) localStorage.setItem('tv_header_tips_v1', cloudNotes.tips || '');
-                        const cleanV6Data = cloudV6Data
-                            .filter(item => item && typeof item === 'object')
-                            .map(item => {
-                                const cleanRow = { ...item };
-                                delete cleanRow.__header_notes_v1;
-                                delete cleanRow.__instrument_pool_v1;
-                                return cleanRow;
-                            })
-                            .filter(item => ['n','h','l','c'].some(key => Object.prototype.hasOwnProperty.call(item, key)));
-                        localStorage.setItem('tv_lookfirst_data_v3', JSON.stringify(cleanV6Data));
-                    }
-                    if (!data.v6_data && data.wp_data?.uiNotes) {
-                        localStorage.setItem('tv_header_marquee_v1', data.wp_data.uiNotes.marquee || '');
-                        localStorage.setItem('tv_header_tips_v1', data.wp_data.uiNotes.tips || '');
-                    }
-                    if (!data.v6_data && data.wp_data?.instrumentPool?.items) saveInstrumentPool(mergeInstrumentPools(loadInstrumentPool(), data.wp_data.instrumentPool));
-                    if (data.v7_data) localStorage.setItem('tv_thenleap_data_v3', JSON.stringify(data.v7_data));
-                    if (data.wp_data?.tabs && Array.isArray(data.wp_data.tabs)) {
-                        const waveState = { ...data.wp_data, instrumentPool:loadInstrumentPool(), uiNotes:data.wp_data.uiNotes || {} };
-                        localStorage.setItem('wave_matrix_tabs_v3', JSON.stringify(waveState));
-                    }
-                    reconcileLegacyTrackerInputs(localStorage,loadInstrumentPool());
-                
-                    const btn = document.getElementById('btn-pull');
-                    const orig = btn.innerHTML;
-                    btn.innerHTML = '<span class="material-icons" style="font-size:16px;">check</span> Up to Date';
-                    setTimeout(() => { btn.innerHTML = orig; location.reload(); }, 1000);
-                } else {
-                    alert("云端还没有你的数据记录哦！请先在页面上添加几行 K 线数据，然后点击 Push to Cloud ☁️。");
+                hideLoader();
+                if (result.empty) {
+                    alert("云端还没有你的工作区记录，请先在任一页面点击 Push to Cloud。");
+                    return;
                 }
+                if (!result.ok) {
+                    alert(formatWorkspaceSyncFailure(result,'❌ Cloud Pull Failed'));
+                    return;
+                }
+                if (result.trackerMissing) console.warn('Cloud workspace has no Trend Tracker state; local Tracker state was retained.');
+                const btn = document.getElementById('btn-pull');
+                const orig = btn.innerHTML;
+                btn.innerHTML = '<span class="material-icons" style="font-size:16px;">check</span> Workspace Up to Date';
+                setTimeout(() => { btn.innerHTML = orig; location.reload(); }, 1000);
             }
 
         // ================= Instrument Pool / Permanent IDs =================

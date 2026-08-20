@@ -5,13 +5,12 @@
  */
 import { bindDeclarativeEvents } from '../core/declarative-events.js';
 import { getSupabaseClient } from '../core/supabase-client.js';
-import { getAuthenticatedUser, loadCloudRow, upsertCloudRow } from '../core/cloud-repository.js';
 import { runMigrations } from '../core/migrations.js';
 import { rangeOf as calculateRange, directionSign as calculateDirection, addByDir as calculateAddByDir, subByDir as calculateSubByDir, calcSubTargets as calculateSubTargets, findClusters as calculateClusters } from '../wave/wave-math.js';
 import { validateWaveStructure as validateWaveStructurePure } from '../wave/wave-validation.js';
 import { buildWaveModel } from '../wave/wave-model.js';
 import { normalizeTicker, createPermanentId, loadInstrumentPool as loadPoolCore, saveInstrumentPool as savePoolCore, mergeInstrumentPools as mergePoolsCore } from '../core/instrument-identity.js';
-import { syncMarketBindings } from '../core/market-repository.js';
+import { formatWorkspaceSyncFailure, pullWorkspaceFromCloud, pushWorkspaceToCloud } from '../core/workspace-cloud-sync.js';
 import { runCloudPushFeedback } from './cloud-action-feedback.js';
 
 // 1. 初始化 Supabase 配置（请替换为您的实际凭证）
@@ -35,7 +34,8 @@ runMigrations(localStorage);
         }
 
         console.log("👋 欢迎回来，已确认用户:", session.user.email);
-        await pullFromCloud();
+        // 云端恢复只由顶部/移动端的 Pull 按钮触发，避免打开 Wave 时覆盖
+        // 尚未上传的 Terminal 或 Trend Tracker 本地修改。
     });
 
     // ========================================================
@@ -739,36 +739,16 @@ function restoreSubWaves(list) {
     });
 }
 
-// 假设您已经完成了 supabase 客户端初始化，并完成了用户登录
-
-// ☁️ 上传数据：将当前整个 appState 推送到云端对应的 wp_data 字段中
-// 🛠️ 3. 云端推送
+// ☁️ 上传数据：由共享服务将完整工作区推送到云端
 // ========================================================
 async function performWaveCloudPush() {
     if (typeof saveCurrentTab === 'function') saveCurrentTab();
     ensureWaveInstrumentLinks();
     appState.instrumentPool = loadSharedInstrumentPool();
-
-    // 使用更安全的防崩溃写法
-    const { user, error:userError } = await getAuthenticatedUser(supabaseClient);
-
-    if (userError || !user) {
-        alert("未找到有效的用户信息，请重新登录！(请确保在线上环境运行)");
-        return false;
-    }
-
-    const { error } = await upsertCloudRow(supabaseClient, { user_id:user.id, wp_data:appState });
-
-    if (!error) {
-        const bindingResult = await syncMarketBindings(supabaseClient, user.id, appState.instrumentPool).catch(bindingError => ({ error:bindingError }));
-        if (bindingResult?.error) console.warn('Tracker bindings were not synced. Apply the Trend Tracker Supabase migration.', bindingResult.error);
-    }
-    if (error) {
-        alert("同步至云端失败：" + error.message);
-    } else {
-        return true;
-    }
-    return false;
+    persistTabs();
+    const result = await pushWorkspaceToCloud({ client:supabaseClient,storage:localStorage });
+    if (!result.ok) alert(formatWorkspaceSyncFailure(result,'同步工作区失败'));
+    return result.ok;
 }
 
 async function pushToCloud(trigger) {
@@ -781,47 +761,39 @@ async function pushToCloud(trigger) {
 }
 
 // ========================================================
-// 🛠️ 4. 云端拉取
+// 🛠️ 4. 完整工作区云端拉取
 // ========================================================
 async function pullFromCloud() {
-    // 使用更安全的防崩溃写法
-    const { user, error:userError } = await getAuthenticatedUser(supabaseClient);
-
-    if (userError || !user) return;
-
-    const { data, error } = await loadCloudRow(supabaseClient, user.id, 'wp_data, v6_data');
-
-    if (error && error.code !== 'PGRST116') {
-        alert("从云端拉取失败：" + error.message);
-        return;
+    let result;
+    try {
+        result = await pullWorkspaceFromCloud({ client:supabaseClient,storage:localStorage });
+    } catch (error) {
+        alert(formatWorkspaceSyncFailure({failures:[{scope:'fibo_data',error}]},'从云端拉取工作区失败'));
+        return false;
+    }
+    if (result.empty) {
+        alert('云端还没有你的工作区记录，请先在任一页面点击 Push to Cloud。');
+        return false;
+    }
+    if (!result.ok) {
+        alert(formatWorkspaceSyncFailure(result,'从云端拉取工作区失败'));
+        return false;
     }
 
-    if (data && data.wp_data) {
-        appState = data.wp_data;
-        const v6PoolCarrier = Array.isArray(data.v6_data) ? data.v6_data.find(item => item?.__instrument_pool_v1?.items) : null;
-        const v6NoteCarrier = Array.isArray(data.v6_data) ? data.v6_data.find(item => item?.__header_notes_v1) : null;
-        const pulledNotes = appState.uiNotes || v6NoteCarrier?.__header_notes_v1;
-        if (pulledNotes && Object.prototype.hasOwnProperty.call(pulledNotes, 'marquee')) localStorage.setItem(SHARED_MARQUEE_KEY, pulledNotes.marquee || '');
-        if (pulledNotes && Object.prototype.hasOwnProperty.call(pulledNotes, 'tips')) localStorage.setItem(SHARED_TIPS_KEY, pulledNotes.tips || '');
-        if (v6PoolCarrier?.__instrument_pool_v1?.items) {
-            const embeddedItems = Array.isArray(appState.instrumentPool?.items) ? appState.instrumentPool.items : [];
-            const embeddedTombstones = Array.isArray(appState.instrumentPool?.tombstones) ? appState.instrumentPool.tombstones : [];
-            const cloudTombstones = Array.isArray(v6PoolCarrier.__instrument_pool_v1.tombstones) ? v6PoolCarrier.__instrument_pool_v1.tombstones : [];
-            appState.instrumentPool = { version:1, items:[...embeddedItems, ...v6PoolCarrier.__instrument_pool_v1.items], tombstones:[...embeddedTombstones, ...cloudTombstones] };
-        }
-        if (appState.instrumentPool?.items && Array.isArray(appState.instrumentPool.items)) saveSharedInstrumentPool(appState.instrumentPool);
-        ensureWaveInstrumentLinks(Array.isArray(data.v6_data) ? data.v6_data : []);
-        ensureWaveUiNotes();
-
-        if (typeof persistTabs === 'function') {
-            persistTabs();
-            renderTabs();
-            renderWaveHeaderMarquee();
-            loadTabToForm(activeTab());
-            calculateAll();
-        }
-        console.log("☁️ 成功从云端恢复推演矩阵数据！");
-    }
+    // 共享服务已先完成全部本地写入；这里仅重新装载Wave内存和视图。
+    loadTabs();
+    ensureWaveInstrumentLinks();
+    appState.instrumentPool = loadSharedInstrumentPool();
+    ensureWaveUiNotes();
+    persistTabs();
+    renderTabs();
+    renderWaveHeaderMarquee();
+    loadTabToForm(activeTab());
+    calculateAll();
+    updateMobileWaveSelector();
+    if (result.trackerMissing) console.warn('Cloud workspace has no Trend Tracker state; local Tracker state was retained.');
+    console.log("☁️ 成功从云端恢复完整工作区数据！");
+    return true;
 }
 
 // ========================================================
