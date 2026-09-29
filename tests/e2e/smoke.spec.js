@@ -221,6 +221,35 @@ test('Market Insights preserves original boards and exposes honest waiting state
   expect(errors).toEqual([]);
 });
 
+test('Reverse Pickup is a temporary draggable calculator outside the page layout',async({page})=>{
+  await page.goto('/Terminal.html?tab=v6');
+  const widget=page.locator('.reverse-pickup-widget'),launcher=widget.locator('.reverse-pickup-launcher'),panel=widget.locator('.reverse-pickup-panel');
+  await expect(launcher).toBeVisible();
+  const before=await page.evaluate(()=>Object.fromEntries(Object.keys(localStorage).map(key=>[key,localStorage.getItem(key)])));
+  const initial=await page.locator('#indexRadar').evaluate(node=>({bottom:node.getBoundingClientRect().bottom,height:node.getBoundingClientRect().height}));
+  await launcher.click();
+  await expect(panel).toBeVisible();
+  await panel.locator('input[name="anchor"]').fill('80');
+  await panel.locator('input[name="close"]').fill('100');
+  await panel.locator('input[name="current"]').fill('90');
+  await panel.locator('form').press('Enter');
+  await expect(panel.locator('[data-reverse-pickup-primary]')).toHaveText('92.36');
+  await expect(panel.locator('[data-reverse-pickup-level="level500"]')).toHaveText('90.00');
+  await expect(panel.locator('[data-reverse-pickup-badge]')).toContainText('接近主计划价');
+  const beforeDrag=await panel.boundingBox();
+  const handle=panel.locator('[data-reverse-pickup-drag-handle]');
+  const handleBox=await handle.boundingBox();
+  await page.mouse.move(handleBox.x+80,handleBox.y+20); await page.mouse.down(); await page.mouse.move(handleBox.x+160,handleBox.y+80); await page.mouse.up();
+  const afterDrag=await panel.boundingBox();
+  expect(Math.abs(afterDrag.x-beforeDrag.x)+Math.abs(afterDrag.y-beforeDrag.y)).toBeGreaterThan(10);
+  const after=await page.evaluate(()=>Object.fromEntries(Object.keys(localStorage).map(key=>[key,localStorage.getItem(key)])));
+  expect(after).toEqual(before);
+  const final=await page.locator('#indexRadar').evaluate(node=>({bottom:node.getBoundingClientRect().bottom,height:node.getBoundingClientRect().height}));
+  expect(final).toEqual(initial);
+  await panel.locator('[data-reverse-pickup-close]').click();
+  await expect(panel).toBeHidden(); await expect(launcher).toHaveAttribute('aria-expanded','false');
+});
+
 test('Market Insights production adapter reads an independent atomic bundle',async({page},testInfo)=>{
   await page.addInitScript(row=>{window.__insightsWireRow=row;},insightsWireFixture());
   await page.goto('/Terminal.html?tab=v6');
