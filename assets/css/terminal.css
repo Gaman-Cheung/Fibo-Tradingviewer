@@ -140,6 +140,62 @@
         .market-scan-status { margin:var(--space-2) 0 0; color:var(--color-text-secondary); font-size:var(--font-size-xs); line-height:var(--line-height-relaxed); }
         .market-scan-windows { min-width:0; }
         .market-scan-window-controls { display:grid; grid-template-columns:1fr; gap:var(--space-3); }
+
+        /* Temporary Reverse Pickup tool. Fixed positioning keeps it out of every page layout flow. */
+        .reverse-pickup-widget { position:fixed; right:18px; bottom:18px; z-index:var(--z-overlay); width:50px; height:50px; pointer-events:none; }
+        .reverse-pickup-launcher { pointer-events:auto; width:50px; height:50px; display:grid; place-items:center; padding:0; border:1px solid var(--color-primary); border-radius:50%; background:var(--color-primary-action); color:var(--color-on-primary); box-shadow:var(--shadow-raised); cursor:pointer; transition:transform var(--duration-base) var(--ease-standard),box-shadow var(--duration-base) var(--ease-standard); }
+        .reverse-pickup-launcher:hover { transform:translateY(-2px); box-shadow:var(--shadow-card); }
+        .reverse-pickup-launcher .material-icons { font-size:22px; }
+        .reverse-pickup-panel { position:fixed; left:auto; top:auto; right:18px; bottom:78px; z-index:var(--z-overlay); width:min(390px,calc(100vw - 24px)); max-height:min(760px,calc(100vh - 110px)); overflow:auto; padding:0; pointer-events:auto; box-shadow:var(--shadow-card); }
+        .reverse-pickup-panel__header { display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); padding:var(--space-4) var(--space-5); border-bottom:1px solid var(--color-border-subtle); cursor:grab; touch-action:none; user-select:none; }
+        .reverse-pickup-widget.is-dragging .reverse-pickup-panel__header { cursor:grabbing; }
+        .reverse-pickup-panel__eyebrow { display:block; color:var(--color-primary); font-size:var(--font-size-2xs); font-weight:var(--font-weight-bold); letter-spacing:var(--letter-spacing-eyebrow); }
+        .reverse-pickup-panel__header h2 { margin:var(--space-1) 0 0; font-size:var(--font-size-lg); line-height:var(--line-height-tight); }
+        .reverse-pickup-panel__close { width:32px; height:32px; display:grid; place-items:center; padding:0; border:1px solid var(--color-border); border-radius:50%; background:var(--color-surface); color:var(--color-text-secondary); cursor:pointer; }
+        .reverse-pickup-panel__close:hover { border-color:var(--color-primary); color:var(--color-primary); }
+        .reverse-pickup-form,.reverse-pickup-readout { padding:var(--space-4) var(--space-5); }
+        .reverse-pickup-field { display:block; min-width:0; margin:0 0 var(--space-3); padding:0; border:0; }
+        .reverse-pickup-field > span,.reverse-pickup-field legend { display:block; margin-bottom:var(--space-2); color:var(--color-text-secondary); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }
+        .reverse-pickup-field small { color:var(--color-text-tertiary); font-weight:var(--font-weight-regular); }
+        .reverse-pickup-fields-row { display:grid; grid-template-columns:1fr 1fr; gap:var(--space-3); }
+        .reverse-pickup-input-wrap { position:relative; }
+        .reverse-pickup-input-wrap input { padding-right:34px; }
+        .reverse-pickup-input-wrap > span { position:absolute; top:50%; right:var(--space-3); transform:translateY(-50%); color:var(--color-text-tertiary); font-size:var(--font-size-xs); pointer-events:none; }
+        .reverse-pickup-anchor-toggle { display:flex; gap:2px; width:max-content; max-width:100%; margin-bottom:var(--space-2); padding:2px; border:1px solid var(--color-border); border-radius:var(--radius-pill); background:var(--color-surface-subtle); }
+        .reverse-pickup-anchor-toggle label { display:flex; min-width:0; cursor:pointer; }
+        .reverse-pickup-anchor-toggle input { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+        .reverse-pickup-anchor-toggle label span { display:grid; place-items:center; min-height:32px; padding:0 var(--space-3); border-radius:var(--radius-pill); color:var(--color-text-secondary); font-size:var(--font-size-xs); white-space:nowrap; }
+        .reverse-pickup-anchor-toggle input:checked + span { background:var(--color-primary); color:var(--color-on-primary); }
+        .reverse-pickup-hint { display:block; margin-top:var(--space-2); color:var(--color-text-tertiary); font-size:var(--font-size-2xs); line-height:var(--line-height-base); }
+        .reverse-pickup-error { min-height:18px; margin:var(--space-2) 0 0; color:var(--color-danger-text); font-size:var(--font-size-xs); }
+        .reverse-pickup-actions { display:flex; gap:var(--space-2); margin-top:var(--space-2); }
+        .reverse-pickup-actions .fibo-button--primary { flex:1; }
+        .reverse-pickup-readout { border-top:1px solid var(--color-border-subtle); background:var(--color-surface-subtle); }
+        .reverse-pickup-readout__top { display:flex; align-items:flex-start; justify-content:space-between; gap:var(--space-3); }
+        .reverse-pickup-readout__label { color:var(--color-text-secondary); font-size:var(--font-size-sm); }
+        .reverse-pickup-readout__top strong { display:block; margin-top:var(--space-2); color:var(--color-primary-action); font-family:var(--font-family-mono); font-size:var(--font-size-2xl); line-height:1; }
+        .reverse-pickup-badge { display:inline-flex; align-items:center; gap:5px; padding:6px 9px; border:1px solid var(--color-border); border-radius:var(--radius-pill); color:var(--color-text-tertiary); font-size:var(--font-size-2xs); white-space:nowrap; }
+        .reverse-pickup-badge::before { content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }
+        .reverse-pickup-badge.is-success { border-color:var(--color-success); background:var(--color-success-soft); color:var(--color-success-text); }
+        .reverse-pickup-badge.is-warning { border-color:var(--color-warning); background:var(--color-warning-soft); color:var(--color-warning-text); }
+        .reverse-pickup-badge.is-danger { border-color:var(--color-danger); background:var(--color-danger-soft); color:var(--color-danger-text); }
+        .reverse-pickup-rail { position:relative; height:78px; margin:var(--space-5) 4px var(--space-3); }
+        .reverse-pickup-rail__track { position:absolute; top:24px; left:0; right:0; height:8px; border:1px solid var(--color-border-subtle); border-radius:var(--radius-pill); background:linear-gradient(90deg,var(--color-danger-soft),var(--color-warning-soft) 50%,var(--color-success-soft)); }
+        .reverse-pickup-rail i,.reverse-pickup-rail b { position:absolute; top:14px; width:2px; height:28px; transform:translateX(-1px); background:var(--color-border); color:var(--color-text-tertiary); }
+        .reverse-pickup-rail i::after,.reverse-pickup-rail b::after { content:attr(data-label); position:absolute; top:30px; left:50%; transform:translateX(-50%); color:currentColor; font:var(--font-weight-semibold) var(--font-size-2xs) var(--font-family-sans); white-space:nowrap; }
+        .reverse-pickup-rail i[data-marker="382"] { background:var(--color-warning); color:var(--color-warning-text); height:34px; top:11px; }
+        .reverse-pickup-rail i[data-marker="current"] { background:var(--color-primary); color:var(--color-primary); height:40px; top:7px; }
+        .reverse-pickup-rail b[data-marker="close"] { background:var(--color-primary); color:var(--color-primary); height:40px; top:7px; }
+        .reverse-pickup-rail__ends { position:absolute; top:58px; left:0; right:0; display:flex; justify-content:space-between; color:var(--color-text-tertiary); font:var(--font-size-2xs) var(--font-family-mono); }
+        .reverse-pickup-levels { border-top:1px solid var(--color-border-subtle); }
+        .reverse-pickup-levels > div { display:grid; grid-template-columns:68px minmax(0,1fr) auto; gap:var(--space-2); align-items:center; padding:var(--space-2) 0; border-bottom:1px solid var(--color-border-subtle); }
+        .reverse-pickup-levels span { color:var(--color-text-secondary); font-size:var(--font-size-2xs); }
+        .reverse-pickup-levels span strong { display:block; color:var(--color-text); font-size:var(--font-size-xs); }
+        .reverse-pickup-levels small { color:var(--color-text-tertiary); font-size:var(--font-size-2xs); }
+        .reverse-pickup-levels b { color:var(--color-text); font:var(--font-weight-semibold) var(--font-size-sm) var(--font-family-mono); }
+        .reverse-pickup-reading { display:flex; gap:var(--space-2); margin-top:var(--space-3); padding:var(--space-2) var(--space-3); border:1px solid var(--color-border-subtle); border-radius:var(--radius-sm); color:var(--color-text-secondary); font-size:var(--font-size-xs); line-height:var(--line-height-base); }
+        .reverse-pickup-reading > span { display:grid; place-items:center; width:18px; height:18px; flex:0 0 18px; border:1px solid currentColor; border-radius:50%; font-weight:var(--font-weight-bold); }
+        .reverse-pickup-reading p { margin:0; }
         .index-radar-dashboard { min-width:0; display:grid; gap:var(--space-3); }
         .index-radar-leaders-viewport { min-width:0; overflow:visible; }
         .index-radar-group { min-width:0; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr)); align-items:stretch; gap:var(--space-3); }
@@ -345,6 +401,11 @@
         }
 
         @media (max-width:768px) {
+            .reverse-pickup-widget { right:14px; bottom:calc(78px + env(safe-area-inset-bottom)); width:48px; height:48px; }
+            .reverse-pickup-panel { right:12px; bottom:calc(132px + env(safe-area-inset-bottom)); width:calc(100vw - 24px); max-height:calc(100dvh - 150px); }
+            .reverse-pickup-form,.reverse-pickup-readout { padding-inline:var(--space-4); }
+            .reverse-pickup-panel__header { padding-inline:var(--space-4); }
+            .reverse-pickup-launcher { width:48px; height:48px; }
             .market-regime-header-slot { flex:1 1 100%; }
             .market-scan-grid { grid-template-columns:1fr; }
             .market-scan-window-controls { grid-template-columns:repeat(2,minmax(0,1fr)); }

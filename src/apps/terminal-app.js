@@ -18,6 +18,7 @@ import { runCloudPushFeedback } from './cloud-action-feedback.js';
 import { appendProvisionalCurrent } from '../tracker/trend-engine.js';
 import { buildTerminalMacdSuggestion, detectCloseMacdDivergence } from '../tracker/macd-suggestion.js';
 import { initializeIndexRadar } from './index-radar-controller.js';
+import { initializeReversePickupWidget } from './reverse-pickup-widget.js';
 
 // ================= Supabase 配置区域 =================
             // ⚠️ 请在这里填入你的真实数据
@@ -1513,6 +1514,7 @@ import { initializeIndexRadar } from './index-radar-controller.js';
 
         window.onload = () => {
             initializeIndexRadar({ client:supabaseClient });
+            initializeReversePickupWidget();
             refreshTerminalWorkspace();
             const savedTab = localStorage.getItem('tv_active_tab');
             const requestedTab = new URLSearchParams(window.location.search).get('tab');
