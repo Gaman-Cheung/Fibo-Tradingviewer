@@ -78,6 +78,7 @@
   box-sizing:border-box; min-height:28px; flex:0 0 auto; padding:3px 10px; border:0;
   border-radius:var(--radius-pill); background:transparent; color:var(--color-text-secondary);
   font:var(--font-weight-bold) var(--font-size-xs)/1.35 var(--font-family-sans); white-space:nowrap; cursor:pointer;
+  transition:background-color var(--duration-base) var(--ease-standard),color var(--duration-base) var(--ease-standard);
 }
 .fibo-segmented-control > button:hover { background:var(--color-surface-hover); color:var(--color-text); }
 .fibo-segmented-control > button.is-active,
@@ -140,5 +141,6 @@
 }
 
 @media (prefers-reduced-motion:reduce) {
+  .fibo-segmented-control > button { transition:none; }
   .fibo-header__marquee > * { animation:none; padding-left:0; }
 }

@@ -252,8 +252,10 @@ export function createMarketPulseController({ client,setStatus,openModal }) {
       const snapshot=normalizePulseSnapshot(result.snapshot);
       if (!snapshot) {
         if (background && retainedCache?.snapshot) throw new Error('No latest Market Pulse snapshot was returned.');
-        setStatus('Waiting for first Market Pulse Backfill');
-        if (viewport) viewport.innerHTML=messageMarkup('Market Pulse is not ready','Apply the Pulse migration, then run smoke / pulse and backfill / pulse.',{ retry:true });
+        if (state.active) {
+          setStatus('Waiting for first Market Pulse Backfill');
+          if (viewport) viewport.innerHTML=messageMarkup('Market Pulse is not ready','Apply the Pulse migration, then run smoke / pulse and backfill / pulse.',{ retry:true });
+        }
         return;
       }
       const history=compatiblePulseHistory(result.historyError?[]:result.snapshots,result.snapshot);
@@ -270,8 +272,10 @@ export function createMarketPulseController({ client,setStatus,openModal }) {
         }
         return;
       }
-      setStatus('<span class="index-radar-sync-warning"><span class="material-icons" aria-hidden="true">error_outline</span>Pulse unavailable</span>','is-error');
-      if (viewport) viewport.innerHTML=messageMarkup('Could not load Market Pulse',error?.message||'The Supabase snapshot request failed.',{ retry:true,error:true });
+      if (state.active) {
+        setStatus('<span class="index-radar-sync-warning"><span class="material-icons" aria-hidden="true">error_outline</span>Pulse unavailable</span>','is-error');
+        if (viewport) viewport.innerHTML=messageMarkup('Could not load Market Pulse',error?.message||'The Supabase snapshot request failed.',{ retry:true,error:true });
+      }
     } finally { state.loading=false; }
   }
 

@@ -91,10 +91,12 @@ import { initializeIndexRadar } from './index-radar-controller.js';
                     return;
                 }
                 if (result.trackerMissing) console.warn('Cloud workspace has no Trend Tracker state; local Tracker state was retained.');
+                refreshTerminalWorkspace();
+                closeMobileActions();
                 const btn = document.getElementById('btn-pull');
                 const orig = btn.innerHTML;
                 btn.innerHTML = '<span class="material-icons" style="font-size:16px;">check</span> Workspace Up to Date';
-                setTimeout(() => { btn.innerHTML = orig; location.reload(); }, 1000);
+                setTimeout(() => { btn.innerHTML = orig; }, 1000);
             }
 
         // ================= Instrument Pool / Permanent IDs =================
@@ -351,7 +353,8 @@ import { initializeIndexRadar } from './index-radar-controller.js';
             saveLocalV6(); saveLocalV7();
             const pool = loadInstrumentPool(); const target = pool.items.find(entry => entry.id === id);
             target.status = 'archived'; target.deletedAt = new Date().toISOString(); target.updatedAt = target.deletedAt;
-            saveInstrumentPool(pool); localStorage.setItem('tv_active_tab','pool'); location.reload();
+            saveInstrumentPool(pool);
+            removeInstrumentRows(id);
         }
 
         function removeInstrumentFromCurrentLayout(id) {
@@ -360,14 +363,21 @@ import { initializeIndexRadar } from './index-radar-controller.js';
         }
 
         function restoreInstrument(id) {
-            const pool = loadInstrumentPool(); const target = pool.items.find(entry => entry.id === id); if (!target) return;
+            saveLocalV6(); saveLocalV7();
+            const pool = loadInstrumentPool(); const target = pool.items.find(entry => entry.id === id); if (!target || target.status !== 'archived') return;
             target.status = 'active'; target.deletedAt = null; target.updatedAt = new Date().toISOString();
             target.order = pool.items.filter(item => item.status !== 'archived').length;
-            saveInstrumentPool(pool); reorderStoredRowsByPool(); localStorage.setItem('tv_active_tab','pool'); location.reload();
+            saveInstrumentPool(pool); reorderStoredRowsByPool();
+            const d = readStoredRows('tv_lookfirst_data_v3').find(row => row.id === id) || { id, n:target.ticker };
+            addV6Row(d.n, d.h, d.l, d.c, d.id, d.e, d.p, d.b, d.pm, d.pd);
+            syncV7withV6(true, readStoredRows('tv_thenleap_data_v3'));
+            refreshPreviousCloseRow(document.querySelector(`#tableBodyV6 tr[data-instrument-id="${id}"]`));
+            renderInstrumentPool(); applyMobileActiveInstrument();
         }
 
         function permanentlyDeleteInstrument(id) {
             const item = getInstrumentById(id); if (!item || !confirm(`Permanently delete “${item.ticker}” and all linked Look First / Then Leap data? This cannot be undone.`)) return;
+            saveLocalV6(); saveLocalV7();
             const pool = loadInstrumentPool();
             pool.items = pool.items.filter(entry => entry.id !== id);
             pool.tombstones = [...(pool.tombstones || []).filter(entry => entry.id !== id), { id, deletedAt:new Date().toISOString() }];
@@ -382,8 +392,17 @@ import { initializeIndexRadar } from './index-radar-controller.js';
                     localStorage.setItem('wave_matrix_tabs_v3', JSON.stringify(waveState));
                 }
             } catch (e) {}
-            if (window.matchMedia('(max-width: 768px)').matches) renderInstrumentPool();
-            else { localStorage.setItem('tv_active_tab','v6'); location.reload(); }
+            removeInstrumentRows(id);
+        }
+
+        // Keep the surrounding page, market caches and unrelated input nodes alive.
+        function removeInstrumentRows(id) {
+            document.querySelectorAll('#tableBodyV6 tr, #tableBodyV7 tr').forEach(row => {
+                if (row.dataset.instrumentId === id) row.remove();
+            });
+            if (localStorage.getItem(ACTIVE_INSTRUMENT_KEY) === id) localStorage.removeItem(ACTIVE_INSTRUMENT_KEY);
+            closeMacdSuggestion();
+            updateV6Medals(); renderInstrumentPool(); applyMobileActiveInstrument();
         }
 
         // ================= Tab & UI Logic =================
@@ -817,12 +836,24 @@ import { initializeIndexRadar } from './index-radar-controller.js';
                 });
             }
 
-            tBodyV7.innerHTML = '';
-            collectLookFirstRecords().forEach(source => {
+            const sources = collectLookFirstRecords();
+            const activeIds = new Set(sources.map(source => source.id));
+            const existingRows = new Map([...tBodyV7.rows].map(row => [row.dataset.instrumentId, row]));
+            existingRows.forEach((row,id) => { if (!activeIds.has(id)) row.remove(); });
+            sources.forEach((source,index) => {
                 const ticker = source.n;
                 const cacheKey = source.id ? `id:${source.id}` : `ticker:${ticker}`;
                 const cached = v7Cache[cacheKey] || { t:'sideways', r:'', m:'neutral', s:'', g:'', g1:'', v:'' };
-                addV7Row(ticker, cached.t, cached.r, cached.m, cached.s, cached.g, cached.v, cached.g1, source.id);
+                let row = existingRows.get(source.id);
+                if (!row) row = addV7Row(ticker, cached.t, cached.r, cached.m, cached.s, cached.g, cached.v, cached.g1, source.id, false);
+                else {
+                    row.querySelector('.name').value = ticker;
+                    if (Array.isArray(seedData)) {
+                        for (const [selector,key] of [['.trend','t'],['.rsi','r'],['.macd','m'],['.stop','s'],['.target','g'],['.target1','g1'],['.volume-ratio','v']]) row.querySelector(selector).value = cached[key];
+                    }
+                    calcV7(row.querySelector('.name'), false);
+                }
+                if (tBodyV7.rows[index] !== row) tBodyV7.insertBefore(row, tBodyV7.rows[index] || null);
             });
 
             saveLocalV7();
@@ -893,6 +924,8 @@ import { initializeIndexRadar } from './index-radar-controller.js';
             const missingCurrent = !Number.isFinite(c) || c <= 0;
             row.classList.toggle('is-current-missing',!missingStructure&&missingCurrent);
             if(currentInput){
+                // A retained row must also mirror a cleared canonical Current.
+                if (currentInput !== el) currentInput.value = Number.isFinite(c) ? String(c) : '';
                 currentInput.classList.toggle('is-required',!missingStructure&&missingCurrent);
                 if(!missingStructure&&missingCurrent)currentInput.setAttribute('aria-invalid','true');
                 else currentInput.removeAttribute('aria-invalid');
@@ -1037,7 +1070,7 @@ import { initializeIndexRadar } from './index-radar-controller.js';
             if (persist) saveLocalV7();
         }
 
-        function addV7Row(n='', t='sideways', r='', m='neutral', s='', g='', v='', g1='', instrumentId='') {
+        function addV7Row(n='', t='sideways', r='', m='neutral', s='', g='', v='', g1='', instrumentId='', persist=true) {
             const tr = document.createElement('tr');
             tr.dataset.instrumentId = instrumentId;
             tr.innerHTML = `
@@ -1065,7 +1098,8 @@ import { initializeIndexRadar } from './index-radar-controller.js';
                 input.addEventListener('input', recalcTarget);
                 input.addEventListener('change', recalcTarget);
             });
-            calcV7(tr.querySelector('.name'));
+            calcV7(tr.querySelector('.name'), persist);
+            return tr;
         }
 
         let pendingMacdSuggestion = null;
@@ -1413,7 +1447,7 @@ import { initializeIndexRadar } from './index-radar-controller.js';
                     if (data.instrumentPool?.items && Array.isArray(data.instrumentPool.items)) saveInstrumentPool(data.instrumentPool);
                     if (data.trendTracker && typeof data.trendTracker === 'object') localStorage.setItem('tv_trend_tracker_state_v1', JSON.stringify(data.trendTracker));
                     reconcileLegacyTrackerInputs(localStorage,loadInstrumentPool());
-                    location.reload();
+                    refreshTerminalWorkspace();
                 } catch (err) { alert("❌ Invalid backup file."); }
             };
             reader.readAsText(file);
@@ -1451,9 +1485,11 @@ import { initializeIndexRadar } from './index-radar-controller.js';
             if (['tv_lookfirst_data_v3','tv_thenleap_data_v3'].includes(event.key)) applySharedLiveStorageChange(event.key);
         });
 
-        window.onload = () => {
+        function refreshTerminalWorkspace() {
+            closeMacdSuggestion();
             renderHeaderMarquee();
-            initializeIndexRadar({ client:supabaseClient });
+            tBodyV6.replaceChildren();
+            tBodyV7.replaceChildren();
             let savedV6Data = readStoredRows('tv_lookfirst_data_v3');
             let savedV7Data = readStoredRows('tv_thenleap_data_v3');
             const migrated = migrateInstrumentIdentity(savedV6Data, savedV7Data);
@@ -1472,6 +1508,12 @@ import { initializeIndexRadar } from './index-radar-controller.js';
             syncV7withV6(true, savedV7Data);
             refreshAllAutoPreviousCloses();
             renderInstrumentPool();
+            applyMobileActiveInstrument();
+        }
+
+        window.onload = () => {
+            initializeIndexRadar({ client:supabaseClient });
+            refreshTerminalWorkspace();
             const savedTab = localStorage.getItem('tv_active_tab');
             const requestedTab = new URLSearchParams(window.location.search).get('tab');
             const navigationEntry = window.performance?.getEntriesByType?.('navigation')?.[0];

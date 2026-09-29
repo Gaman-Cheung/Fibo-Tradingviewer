@@ -124,6 +124,17 @@ The page stylesheet must not contain selectors beginning with `.fibo-header` or 
 - The single Market Context `fibo-help-button` changes its guide with the selected tab. Pulse group cards open latest official member detail in shared modal geometry; they never add per-card question icons.
 - The shared frame owns scope height; each active dashboard must fit it without an inner vertical scrollbar. Radar Leader/Memory geometry and Pulse card geometry remain independently owned, while flexible chart space absorbs the remaining height. Loading, empty and failed states occupy the same frame.
 
+## Market Insights view extension · approved 2026-09-29
+
+- The existing shared frame heights above remain the default **Pulse / 榜单** composition. The new **Radar** view is an explicitly approved, naturally sized extension: four complete quiet cards in a 2×2 grid on desktop, one column on phones. It has no inner vertical scrollbar; the page grows to keep charts legible. Switching its height is a short interruptible transition, not a new fixed-height requirement for the old scopes.
+- The 榜单 / Radar choices use `fibo-segmented-control` beside the left section title. Pulse hides these choices. No separate date picker, date sidebar, autoplay or continuously rotating scanner is added.
+- Radar reuses the existing four Memory-card visual patterns as window controls, not Memory calculations. Above 1100px they sit to the right; below that they move above the charts (two columns on phones). Original Leadership Memory behavior and mobile Scroll Snap remain unchanged in 榜单 mode.
+- A-share composite status uses a compact semantic color strip in the Pulse header and below the other scopes. It is always labeled A股综合状态, including in Cross Asset. Without independent data there is no pointer or numeric score; a Pulse score is never used as its placeholder.
+- The five original Leader cards use their content height rather than being stretched to the entire wide frame. Their shared surfaces, data, help and details are unchanged.
+- Each new radar and the composite strip use `fibo-help-button` and the existing shared help modal. Original Leader and Pulse cards do not acquire duplicate question icons.
+- Motion consumes the existing 180ms / 280ms tokens; segmented states transition centrally in `components.css`. View changes combine a 4px entrance with a smooth content-height adjustment; Market Context modal openings use a small fade/scale on desktop and fade-only on mobile, preserving touch geometry. Point movement occurs only for a stable Theme Group whose coordinates actually change, with no initial flight from the center. Reduced-motion preference disables these transitions, including in-flight animations.
+- The independent scan/regime source reads Insights v1 snapshots. Until the new table and first publication are deployed, the UI shows explicit waiting states; errors never substitute old Top5/Pulse scores. Test fixtures are confined to `tests/` and must not be imported by production modules.
+
 ## Trend Tracker chart forecast
 
 - Historical Close and MA series remain the chart's primary visual area. A forecast trading day uses one-third of a historical trading day's horizontal display interval, with no minimum tail width and a 15% total-width cap.

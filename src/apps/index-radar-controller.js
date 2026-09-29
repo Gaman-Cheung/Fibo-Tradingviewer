@@ -7,6 +7,8 @@ import { loadMarketRadar, MARKET_RADAR_SCOPES } from '../core/index-radar-reposi
 import { ETF_RADAR_GUIDE_HTML, INDEX_RADAR_GUIDE_HTML } from '../radar/radar-help.js';
 import { MARKET_PULSE_GUIDE_HTML,MARKET_PULSE_GUIDE_VERSION } from '../pulse/market-pulse-help.js';
 import { createMarketPulseController } from './market-pulse-controller.js';
+import { createMarketInsightsController } from './market-insights-controller.js';
+import { animateContext,transitionContext } from './market-context-motion.js';
 import {
   createMarketContextRefreshCoalescer,
   isMarketContextCacheStale,
@@ -90,6 +92,7 @@ const state = {
   returnFocus:null,
   pulseController:null,
   refreshCoalescer:null,
+  insights:null,
 };
 
 const byId = id => document.getElementById(id);
@@ -274,6 +277,10 @@ function openModal(backdrop,trigger) {
   state.returnFocus = trigger || document.activeElement;
   backdrop.classList.add('open');
   backdrop.setAttribute('aria-hidden','false');
+  const touchLayout=window.matchMedia('(max-width:768px)').matches;
+  animateContext(backdrop.querySelector('.fibo-modal'),touchLayout
+    ? [{opacity:0},{opacity:1}]
+    : [{opacity:0,transform:'scale(.98)'},{opacity:1,transform:'scale(1)'}]);
   byId('indexRadar')?.classList.add('is-paused');
   requestAnimationFrame(() => backdrop.querySelector('button')?.focus());
 }
@@ -498,6 +505,11 @@ async function load(scope=state.activeScope,{ force=false,background=false }={})
 
 function selectScope(scope,{ focus=false }={}) {
   if (!SCOPE_CONFIG[scope]) return;
+  const content=byId('indexRadar')?.querySelector('.market-context-content');
+  transitionContext(content,()=>applyScope(scope,{focus}));
+}
+
+function applyScope(scope,{focus=false}={}) {
   const previousScope=state.activeScope;
   if (previousScope===MARKET_RADAR_SCOPES.MARKET_PULSE && scope!==previousScope) {
     state.pulseController?.deactivate();
@@ -506,6 +518,7 @@ function selectScope(scope,{ focus=false }={}) {
   state.activeMemoryPeriod=null;
   state.expandedMemoryPeriod=null;
   renderScopeChrome();
+  state.insights?.selectScope(scope);
   const button=byId('indexRadarMode')?.querySelector('[data-market-radar-scope="'+scope+'"]');
   if (focus) button?.focus();
   if (scope===MARKET_RADAR_SCOPES.MARKET_PULSE) state.pulseController?.activate({ refreshIfStale:true });
@@ -518,6 +531,7 @@ function selectScope(scope,{ focus=false }={}) {
 }
 
 function refreshActiveScopeIfStale() {
+  state.insights?.refreshIfStale();
   if (state.activeScope===MARKET_RADAR_SCOPES.MARKET_PULSE) {
     state.pulseController?.refreshIfStale();
     return;
@@ -585,16 +599,31 @@ function bindEvents() {
     backdrop?.addEventListener('click',event => { if (event.target === backdrop) closeModal(backdrop); });
   }
   document.addEventListener('keydown',event => {
-    if (event.key !== 'Escape') return;
     const open = document.querySelector('.index-radar-modal-backdrop.open');
-    if (open) closeModal(open);
+    if (!open) return;
+    if (event.key==='Escape') closeModal(open);
+    if (event.key==='Tab') {
+      const focusable=[...open.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href]')].filter(node=>node.getClientRects().length);
+      const first=focusable[0],last=focusable.at(-1);
+      if (event.shiftKey&&document.activeElement===first) {event.preventDefault();last?.focus();}
+      else if (!event.shiftKey&&document.activeElement===last) {event.preventDefault();first?.focus();}
+    }
   });
 }
 
-export function initializeIndexRadar({ client }) {
+export function initializeIndexRadar({ client,insightsSource }) {
   if (!byId('indexRadar')) return;
   state.client = client;
   state.pulseController=createMarketPulseController({ client,setStatus,openModal });
+  state.insights=createMarketInsightsController({root:byId('indexRadar'),source:insightsSource,
+    openHelp(title,html,trigger) {
+      byId('indexRadarHelpTitle').textContent=title;
+      byId('indexRadarHelpVersion').textContent='Market Insights · Presentation v1 · Context only';
+      byId('indexRadarHelpContent').innerHTML=html;
+      openModal(byId('indexRadarHelpBackdrop'),trigger);
+    },
+  });
+  state.insights.selectScope(state.activeScope);
   bindEvents();
   renderScopeChrome();
   load(state.activeScope);

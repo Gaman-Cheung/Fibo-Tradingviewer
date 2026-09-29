@@ -2,6 +2,12 @@
 
 This document records current behavior; it is not investment advice. Changes require explicit authorization and golden-test updates.
 
+## Independent Market Insights · insights-v1 / Universe v2
+
+Approved 2026-09-29. New strength uses volatility-scaled tanh factors for 5D momentum (25%), 20D momentum (35%), MA60 position (25%) and MA20 slope (15%), mapped to 0–100. It requires 62 aligned closes, with sigma20 floored at 0.5%. Changes compare the same current theme members/ETF representative at 1/3/13/60 sessions; missing history stays excluded. No old score or bullish gate is inverted.
+
+A-share regime uses 60% unchanged matching Pulse v1, 30% reviewed small-cap/growth versus dividend style, 10% 13-session style change. CSI1000/2000 are small-cap proxies, not microcap; nonbank/securities/insurance are excluded from this regime basket. The exact normalized formulas, six reviewed proxy groups, eligibility and display boundaries are normative in `MARKET_INSIGHTS_GUIDE.md` and implemented solely in `scripts/market_insights.py`. Existing algorithms below remain unchanged.
+
 ## Look First / Fibonacci
 
 - Retracements: 23.6%, 38.2%, 50%, 61.8%, 78.6%, 88.6% from the entered High–Low range.
