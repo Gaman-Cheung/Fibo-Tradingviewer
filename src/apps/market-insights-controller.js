@@ -17,20 +17,18 @@ const waiting={not_configured:'待接入独立计算',loading:'正在读取独�
 
 function meterMarkup() {
   return `<section class="market-regime" aria-label="A股综合状态">
-    <div class="market-regime__heading"><strong>A股综合状态</strong><span data-regime-label>待计算</span><button type="button" class="fibo-help-button" data-insights-help="regime" aria-label="A股综合状态说明">?</button></div>
-    <div class="market-regime__scale" role="img" aria-label="偏熊至偏牛色带；尚未计算，无指针"><span></span><span></span><span></span><span></span><span></span><i class="market-regime__pointer" hidden></i></div>
-    <div class="market-regime__labels"><span>偏防御</span><span>中性 / 分化</span><span>偏进攻</span></div><small class="market-regime__source" data-regime-source>独立快照待发布 · 非 Pulse 分数</small>
+    <div class="market-regime__scale" role="img" aria-label="A股综合状态；左侧偏防御，右侧偏进攻；尚未计算，无指针"><span></span><span></span><span></span><span></span><span></span><i class="market-regime__pointer" hidden></i></div>
+    <span data-regime-label aria-live="polite">Pending</span><button type="button" class="fibo-help-button" data-insights-help="regime" aria-label="A股综合状态说明">?</button>
   </section>`;
 }
 function scanMarkup() {
   return `<div class="market-scan-dashboard">
     <div class="market-scan-main"><div class="market-scan-grid">${SCAN_PANELS.map(p=>`<article class="fibo-card market-scan-card" data-scan-panel="${p.id}" aria-label="${p.title}">
       <header><h3>${p.title}</h3><button type="button" class="fibo-help-button" data-insights-help="${p.id}" aria-label="${p.title}说明">?</button></header>
-      <div class="market-scan-plot"></div><footer>${p.center}</footer></article>`).join('')}</div>
+      <div class="market-scan-plot"></div></article>`).join('')}</div>
       <p class="market-scan-status" aria-live="polite"></p></div>
-    <aside class="market-scan-windows" aria-label="Radar 变化窗口"><span class="market-scan-eyebrow">RADAR · 变化窗口</span>
-      <div class="index-radar-memory-track">${SCAN_WINDOWS.map(w=>`<button type="button" class="fibo-card index-radar-memory-card" data-scan-window="${w.id}" aria-pressed="false"><span class="index-radar-memory-card__top"><strong>${w.label}</strong><small>${w.description}</small></span><span class="index-radar-memory-card__leaders" data-window-availability>待接入</span><span class="material-icons index-radar-memory-card__arrow" aria-hidden="true">chevron_right</span></button>`).join('')}</div>
-      <p>均截至最新收盘。窗口只改变“快速变强／变弱”；当下强弱口径保持一致。</p>
+    <aside class="market-scan-windows" aria-label="Radar change window">
+      <div class="market-scan-window-controls" role="group" aria-label="Change window">${SCAN_WINDOWS.map(w=>`<button type="button" class="fibo-button fibo-button--control" data-scan-window="${w.id}" aria-pressed="false">${w.label}</button>`).join('')}</div>
       <button type="button" class="fibo-button fibo-button--control" data-insights-retry hidden>重试读取</button>
     </aside></div>`;
 }
@@ -40,7 +38,7 @@ export function createMarketInsightsController({root,openHelp,source=readMarketI
   const oldViewport=root.querySelector('#indexRadarViewport');
   const scanViewport=root.querySelector('#marketScanViewport');
   const frame=root.querySelector('.market-context-content');
-  const headerSlot=root.querySelector('.market-regime-header-slot'),footerSlot=root.querySelector('.market-regime-footer-slot');
+  const headerSlot=root.querySelector('.market-regime-header-slot');
   const state={scope:pulse,view:'leaders',periods:new Map(),cache:new Map(),loading:new Set()};
   let destroyed=false,positions=new Map();
   scanViewport.innerHTML=scanMarkup();headerSlot.innerHTML=meterMarkup();
@@ -84,9 +82,10 @@ export function createMarketInsightsController({root,openHelp,source=readMarketI
     const pointer=meter.querySelector('.market-regime__pointer'),scale=meter.querySelector('.market-regime__scale');
     const old=pointer.hidden?null:Number(pointer.dataset.value);
     pointer.hidden=!data;
-    meter.querySelector('[data-regime-label]').textContent=data?data.label:status==='loading'?'读取中…':status==='error'?'暂不可用':'待计算';
-    meter.querySelector('[data-regime-source]').textContent=data?`${data.tradeDate} · ${data.coverageLabel}${entry().refreshError?' · 刷新失败，保留上次有效快照':''}`:'独立快照尚不可用 · 缺表、未发布或篮子历史不足';
-    scale.setAttribute('aria-label',data?`${data.tradeDate} A股综合状态：${data.label}，${data.value}/100`:'偏熊至偏牛色带；尚未计算，无指针');
+    const label=meter.querySelector('[data-regime-label]');
+    label.hidden=!!data&&!entry().refreshError;
+    label.textContent=data?'Stale':status==='loading'?'Loading…':['error','invalid'].includes(status)?'Unavailable':'Pending';
+    scale.setAttribute('aria-label',data?`${data.tradeDate} A股综合状态：${data.label}，${data.value}/100；左侧偏防御，右侧偏进攻`:'A股综合状态；左侧偏防御，右侧偏进攻；尚未计算，无指针');
     if(data) {
       pointer.style.left=data.value+'%';pointer.dataset.value=data.value;
       if(old!==null&&old!==data.value) animateContext(pointer,[{left:old+'%'},{left:data.value+'%'}],{slow:true});
@@ -99,15 +98,12 @@ export function createMarketInsightsController({root,openHelp,source=readMarketI
     root.querySelector('#indexRadarStatus').hidden=showScan; // Scan owns its own date; never borrow the Top 5 date.
     root.querySelector('#indexRadarHelpButton').hidden=showScan; // Each scan panel owns its guide; the old guide describes Top 5.
     viewButtons.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.insightsView===state.view)));
-    const slot=isPulse?headerSlot:footerSlot;
-    if(meter.parentElement!==slot) slot.append(meter);
-    headerSlot.hidden=!isPulse;footerSlot.hidden=isPulse;
     updateMeter(current.regime,current.status);
     const scan=current.scan,win=scan?.windows[period()];
     scanViewport.querySelectorAll('[data-scan-window]').forEach(b=>{
       b.setAttribute('aria-pressed',String(b.dataset.scanWindow===period()));
       const value=scan?.windows[b.dataset.scanWindow];
-      b.querySelector('[data-window-availability]').textContent=value?`${value.baselineDate} → ${scan.tradeDate}`:scan?'历史不足':waiting[current.status]||'待接入';
+      b.title=value?`${value.baselineDate} → ${scan.tradeDate}`:scan?'历史不足':waiting[current.status]||'待接入';
     });
     scanViewport.querySelector('[data-insights-retry]').hidden=!current.refreshError&&!['error','invalid'].includes(current.status);
     scanViewport.querySelector('.market-scan-status').textContent=scan
@@ -156,7 +152,8 @@ export function createMarketInsightsController({root,openHelp,source=readMarketI
       const data=key==='regime'?entry().regime:entry().scan;
       const provenance=data?`<p>数据日期：${esc(data.tradeDate)} · 算法版本：${esc(data.algorithmVersion)} · ${esc(data.coverageLabel)}</p>`:'<p>尚无可用独立快照：可能尚未部署新表／发布任务，或所需历史不足。不会用旧Top5或Pulse分数冒充新结果。</p>';
       const formula=key==='regime'?'':'<p>Insights v1：5日动量25% + 20日动量35% + MA60位置25% + MA20斜率15%，经20日波动率归一化（下限0.5%）和tanh映射为0–100强度；50为中性参照，不是原榜单入选分。最强仅为有效候选内相对较强，下跌市场也有第一名。</p><p>至少62个对齐收盘；60日变化需122日。指数主题全部成员有效才纳入；ETF取20日均成交额最高且达2,000万元的主题代表，变化始终比较同一当前代表。缺失不填补，不足窗口不缩短。变强／变弱只收正／负变化。水平图半径映射强度，变化图按本图最大变化归一化，不可跨图比较距离。</p>';
-      openHelp(title,`<div class="index-radar-detail"><p>${esc(explanation)}</p>${provenance}${formula}${key==='regime'&&data?`<p>${esc(data.explanation)}</p>`:''}<p>主题角度固定，只有径向位置表达该图指标；角度没有行业相关性含义。不改变原有榜单、Pulse 或 Composite Signal。</p></div>`,button);
+      const reading=key==='regime'?`<p>同一个 A 股市场综合状态，在四个页面保持同一含义；Cross Asset 页也不是跨境资产评分。色条左侧偏防御，中间中性／分化，右侧偏进攻。${data?`当前：${esc(data.label)} · ${data.value}/100。${esc(data.explanation)}`:'Pending 表示独立快照尚不可用：缺表、未发布或篮子历史不足；不显示中性占位分数。'}${entry().refreshError?' 刷新失败，保留上次有效快照（Stale）。':''}</p>`:'<p>主题角度固定，只有径向位置表达该图指标；角度没有行业相关性含义。</p>';
+      openHelp(title,`<div class="index-radar-detail"><p>${esc(explanation)}</p>${provenance}${formula}${reading}<p>不改变原有榜单、Pulse 或 Composite Signal。</p></div>`,button);
     }
   }
   function onKeydown(event) {

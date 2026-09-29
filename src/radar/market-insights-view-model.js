@@ -6,10 +6,10 @@ export const SCAN_WINDOWS=Object.freeze([
   { id:'60', label:'60D Regime', description:'近 60 个交易日' },
 ]);
 export const SCAN_PANELS=Object.freeze([
-  { id:'strong', title:'当下最强', center:'中心＝强度最高' },
-  { id:'strengthening', title:'快速变强', center:'中心＝提升最快' },
-  { id:'weak', title:'当下最弱', center:'中心＝强度最低' },
-  { id:'weakening', title:'快速变弱', center:'中心＝下降最快' },
+  { id:'strong', title:'Strongest', center:'中心＝强度最高' },
+  { id:'strengthening', title:'Strengthening', center:'中心＝提升最快' },
+  { id:'weak', title:'Weakest', center:'中心＝强度最低' },
+  { id:'weakening', title:'Weakening', center:'中心＝下降最快' },
 ]);
 const scopes=new Set(['SECTOR_INDEX','EQUITY_ETF','CROSS_ASSET']);
 const text=value=>typeof value==='string' && value.trim().length>0 && value.length<=200;
