@@ -77,9 +77,16 @@
         <section class="index-radar" id="indexRadar" aria-labelledby="indexRadarTitle">
             <div class="index-radar__header">
                 <div class="index-radar__identity">
+                    <div>
                     <span class="index-radar__eyebrow">MARKET CONTEXT</span>
                     <h2 id="indexRadarTitle">FIBO MARKET PULSE · MARKET BREADTH</h2>
+                    </div>
+                    <div class="fibo-segmented-control" id="marketInsightsView" role="group" aria-label="市场视图" hidden>
+                        <button type="button" data-insights-view="leaders" aria-pressed="true">榜单</button>
+                        <button type="button" data-insights-view="radar" aria-pressed="false">Radar</button>
+                    </div>
                 </div>
+                <div class="market-regime-header-slot"></div>
                 <div class="index-radar__tools">
                     <div class="fibo-segmented-control index-radar-mode" id="indexRadarMode" role="tablist" aria-label="Market Radar universe">
                         <button type="button" role="tab" class="is-active" aria-selected="true" aria-pressed="true" data-market-radar-scope="MARKET_PULSE">Market Pulse</button>
@@ -91,9 +98,13 @@
                     <button type="button" class="fibo-help-button" id="indexRadarHelpButton" title="Market Radar indicator guide" aria-label="Open Market Radar indicator guide">?</button>
                 </div>
             </div>
+            <div class="market-context-content">
             <div class="index-radar-viewport market-context-viewport" id="indexRadarViewport" aria-live="polite">
                 <div class="index-radar-message"><span class="material-icons" aria-hidden="true">monitor_heart</span><span><strong>Loading Market Pulse</strong><small>Reading the latest precomputed official-close breadth snapshot.</small></span></div>
             </div>
+            <div id="marketScanViewport" hidden></div>
+            </div>
+            <div class="market-regime-footer-slot" hidden></div>
         </section>
         <div class="table-card">
             <table>

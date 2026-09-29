@@ -1,5 +1,14 @@
 # Fibo Trading Viewer
 
+## Market Insights v1 release · 2026-09-29
+
+Four radars and the A-share regime now use an independent approved calculation/snapshot contract.
+**Replacing website files alone does not create its database table or publish data.**
+Follow [the deployment checklist](docs/DEPLOY_MARKET_INSIGHTS.md): additive SQL migration,
+Dashboard capacity verification, opt-in Actions Variables, then one `daily / all` run.
+Original Top5, Pulse, trading algorithms and 400/144-session raw history are unchanged.
+See [the algorithm guide](docs/MARKET_INSIGHTS_GUIDE.md) for missing-history exclusions and formulas.
+
 Static multi-page trading journal and Elliott Wave analysis system for GitHub Pages.
 
 ## Entrypoints

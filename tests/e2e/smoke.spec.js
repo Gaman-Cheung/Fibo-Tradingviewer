@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { insightsFixture,insightsWireFixture } from '../fixtures/market-insights.js';
 
 const supabaseMock = `
 window.supabase={createClient(){
@@ -100,6 +101,7 @@ window.supabase={createClient(){
      select(){return this},eq(column,value){filters[column]=value;return this},gt(column,value){filters[column]={op:'gt',value};return this},lt(column,value){filters[column]={op:'lt',value};return this},
      or(value){searchTerm=String(value).match(/name\.ilike\.%(.*?)%/)?.[1]||'';return this},limit(value){requestedLimit=value;return this},
       order(){
+        if(table==='market_insights_snapshot')return Promise.resolve(window.__insightsWireError?{data:null,error:{code:window.__insightsWireError}}:{data:window.__insightsWireRow?[window.__insightsWireRow]:[],error:null});
         if(table==='market_daily_bar')window.__marketDailyBarOrders=(window.__marketDailyBarOrders||0)+1;
         if(table==='market_pulse_member_snapshot')return this;
         if(table==='market_pulse_snapshot'){
@@ -173,6 +175,173 @@ test.beforeEach(async ({ page }) => {
       { id:'e2e-c', n:'E2E COPY', t:'sideways', r:'', m:'neutral', s:'', g:'', g1:'', v:'' }
     ]));
   });
+});
+
+test('Market Insights preserves original boards and exposes honest waiting states',async({page},testInfo)=>{
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('/Terminal.html?tab=v6');
+  await expect(page.locator('.market-regime-header-slot .market-regime')).toBeVisible();
+  await expect(page.locator('[data-regime-label]')).toHaveText('待计算');
+  await expect(page.locator('.market-regime__pointer')).toBeHidden();
+  await expect(page.locator('#marketInsightsView')).toBeHidden();
+  await page.locator('[data-market-radar-scope="SECTOR_INDEX"]').click();
+  await expect(page.locator('[data-index-radar-leader]')).toHaveCount(5);
+  await page.locator('[data-insights-view="radar"]').click();
+  await expect(page.locator('#indexRadarViewport')).toBeHidden();
+  await expect(page.locator('.market-scan-card')).toHaveCount(4);
+  await expect(page.locator('.market-scan-dot')).toHaveCount(0);
+  await expect(page.locator('.market-scan-status')).toContainText('尚无独立快照');
+  await expect(page.locator('#indexRadarMemoryBackdrop')).not.toHaveClass(/open/);
+  await page.locator('[data-scan-window="1"]').click();
+  await expect(page.locator('[data-scan-window="1"]')).toHaveAttribute('aria-pressed','true');
+  await page.locator('[data-scan-window="1"]').press('ArrowRight');
+  await expect(page.locator('[data-scan-window="3"]')).toBeFocused();
+  await expect(page.locator('[data-scan-window="3"]')).toHaveAttribute('aria-pressed','true');
+  await page.locator('[data-insights-help="weak"]').click();
+  await expect(page.locator('#indexRadarHelpContent')).toContainText('未进入原 Top 5 不代表最弱');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-insights-help="weak"]')).toBeFocused();
+  await page.locator('[data-insights-view="leaders"]').click();
+  await page.locator('[data-index-radar-memory="fast3"]').click();
+  await expect(page.locator('#indexRadarMemoryBackdrop')).toHaveClass(/open/);
+  await page.keyboard.press('Escape');
+  await page.locator('[data-insights-view="radar"]').click();
+  await page.screenshot({path:testInfo.outputPath('market-insights-waiting.png'),fullPage:true,animations:'disabled'});
+  const geometry=await page.locator('#indexRadar').evaluate(root=>({
+    overflow:document.documentElement.scrollWidth-innerWidth,
+    cards:[...root.querySelectorAll('.market-scan-card')].map(n=>({top:Math.round(n.getBoundingClientRect().top),width:n.getBoundingClientRect().width})),
+    minTarget:Math.min(...[...root.querySelectorAll('#marketInsightsView button,.market-scan-windows button:not([hidden]),.market-scan-card button')].map(n=>n.getBoundingClientRect().height)),
+  }));
+  expect(geometry.overflow).toBeLessThanOrEqual(1);
+  if(testInfo.project.name==='iphone') {expect(new Set(geometry.cards.map(c=>c.top)).size).toBe(4);expect(geometry.minTarget).toBeGreaterThanOrEqual(44);}
+  else expect(new Set(geometry.cards.map(c=>c.top)).size).toBe(2);
+  await page.locator('[data-market-radar-scope="MARKET_PULSE"]').click();
+  await expect(page.locator('[data-market-pulse-group]')).toHaveCount(4);
+  await expect(page.locator('#marketScanViewport')).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test('Market Insights production adapter reads an independent atomic bundle',async({page},testInfo)=>{
+  await page.addInitScript(row=>{window.__insightsWireRow=row;},insightsWireFixture());
+  await page.goto('/Terminal.html?tab=v6');
+  await expect(page.locator('[data-regime-label]')).toHaveText('测试状态');
+  await expect(page.locator('.market-regime__pointer')).toBeVisible();
+  await expect(page.locator('[data-market-pulse-group]')).toHaveCount(4);
+  await page.locator('[data-market-radar-scope="SECTOR_INDEX"]').click();
+  await expect(page.locator('[data-index-radar-leader]')).toHaveCount(5);
+  await page.locator('[data-insights-view="radar"]').click();
+  await expect(page.locator('.market-scan-dot')).toHaveCount(8);
+  await expect(page.locator('.market-scan-status')).toContainText('2026-09-28');
+  await page.locator('[data-insights-help="strong"]').click();
+  await expect(page.locator('#indexRadarHelpContent')).toContainText('5日动量25%');
+  await expect(page.locator('#indexRadarHelpContent')).toContainText('insights-v1');
+  await page.keyboard.press('Escape');
+  await page.locator('[data-scan-window="60"]').click();
+  await expect(page.locator('[data-scan-panel="strengthening"]')).toContainText('尚无此窗口数据');
+  await expect(page.locator('[data-scan-panel="strong"] .market-scan-dot')).toHaveCount(2);
+  await page.locator('[data-scan-window="3"]').click();
+  await page.screenshot({path:testInfo.outputPath('insights-connected.png'),fullPage:true,animations:'disabled'});
+  await page.evaluate(()=>{window.__insightsWireError='42501';const original=Date.now;Date.now=()=>original()+360000;window.dispatchEvent(new Event('focus'));});
+  await expect(page.locator('.market-scan-status')).toContainText('刷新失败，保留上次有效快照');
+  await expect(page.locator('.market-scan-dot')).toHaveCount(8);
+  await page.locator('[data-insights-view="leaders"]').click();
+  await expect(page.locator('[data-index-radar-leader]')).toHaveCount(5);
+});
+
+test('Market Insights animates only changing points, rejects gaps and respects reduced motion',async({page},testInfo)=>{
+  await page.route('**/src/core/market-insights-source.js',route=>route.fulfill({contentType:'application/javascript',body:`export async function readMarketInsights({scope}) {return (${insightsFixture.toString()})(scope);}`}));
+  await page.goto('/Terminal.html?tab=v6');
+  await expect(page.locator('[data-regime-label]')).toHaveText('测试状态');
+  await page.locator('[data-market-radar-scope="SECTOR_INDEX"]').click();
+  await page.locator('[data-insights-view="radar"]').click();
+  const strong=page.locator('[data-scan-panel="strong"] svg'),changing=page.locator('[data-scan-panel="strengthening"] [data-scan-dot="0"]');
+  await expect(changing).toBeVisible();
+  const fixed=await strong.innerHTML(),before=await changing.getAttribute('transform');
+  const motion=await page.locator('[data-scan-window="1"]').evaluate(button=>{button.click();return document.querySelector('[data-scan-panel="strengthening"] [data-scan-dot]').getAnimations().length;});
+  expect(motion).toBe(1);
+  expect(await strong.innerHTML()).toBe(fixed);
+  expect(await changing.getAttribute('transform')).not.toBe(before);
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.locator('[data-scan-window="3"]').click();
+  expect(await changing.evaluate(n=>n.getAnimations().length)).toBe(0);
+  await page.locator('[data-scan-window="60"]').click();
+  await expect(page.locator('[data-scan-panel="strengthening"]')).toContainText('尚无此窗口数据');
+  await expect(page.locator('[data-scan-panel="strong"] .market-scan-dot')).toHaveCount(2);
+  await page.locator('[data-scan-window="13"]').click();
+  await expect(page.locator('[data-scan-panel="strengthening"]')).toContainText('没有符合条件的主题');
+  await page.locator('[data-scan-window="1"]').click();
+  await page.screenshot({path:testInfo.outputPath('market-insights-fixture.png'),fullPage:true,animations:'disabled'});
+  await page.locator('[data-insights-view="leaders"]').click();
+  await page.locator('[data-insights-view="radar"]').click();
+  expect(await page.locator('.market-context-content').evaluate(n=>n.getAnimations({subtree:true}).length)).toBe(0);
+  await page.locator('[data-market-radar-scope="CROSS_ASSET"]').click();
+  await expect(page.locator('[data-scan-window="3"]')).toHaveAttribute('aria-pressed','true');
+  await page.locator('[data-market-radar-scope="SECTOR_INDEX"]').click();
+  await expect(page.locator('[data-scan-window="1"]')).toHaveAttribute('aria-pressed','true');
+  await page.locator('[data-insights-view="leaders"]').click();
+  await page.screenshot({path:testInfo.outputPath('market-insights-leaders.png'),fullPage:true,animations:'disabled'});
+});
+
+test('Market Insights isolates late responses, safely escapes labels and retains valid data on error',async({page})=>{
+  await page.route('**/src/core/market-insights-source.js',route=>route.fulfill({contentType:'application/javascript',body:`
+    export async function readMarketInsights({scope}) {
+      if(scope==='EQUITY_ETF'&&!window.__equityReleased) await new Promise(resolve=>window.__releaseEquity=()=>{window.__equityReleased=true;resolve();});
+      if(window.__insightsFail) throw new Error('fixture failure');
+      const result=(${insightsFixture.toString()})(scope);
+      if(result.scan) result.scan.levels.strong[0].label='<img src=x onerror=alert(1)>';
+      return result;
+    }`}));
+  await page.goto('/Terminal.html?tab=v6');
+  await page.locator('[data-market-radar-scope="SECTOR_INDEX"]').click();
+  await page.locator('[data-insights-view="radar"]').click();
+  await expect(page.locator('[data-scan-panel="strong"] .market-scan-dot')).toHaveCount(2);
+  await expect(page.locator('#marketScanViewport img')).toHaveCount(0);
+  await expect(page.locator('#indexRadarStatus')).toBeHidden();
+  await page.locator('[data-market-radar-scope="EQUITY_ETF"]').click();
+  await expect(page.locator('.market-scan-status')).toContainText('正在读取');
+  await page.locator('[data-market-radar-scope="CROSS_ASSET"]').click();
+  await expect(page.locator('.market-scan-status')).toContainText('2026-09-28');
+  await page.evaluate(()=>window.__releaseEquity());
+  await expect(page.locator('#indexRadarTitle')).toContainText('CROSS-ASSET');
+  await page.evaluate(()=>{window.__insightsFail=true;const now=Date.now();Date.now=()=>now+6*60*1000;window.dispatchEvent(new Event('focus'));});
+  await expect(page.locator('.market-scan-status')).toContainText('刷新失败');
+  await expect(page.locator('[data-scan-panel="strong"] .market-scan-dot')).toHaveCount(2);
+  await expect(page.locator('[data-insights-retry]')).toBeVisible();
+  await page.evaluate(()=>{window.__insightsFail=false;});
+  await page.locator('[data-insights-retry]').click();
+  await expect(page.locator('.market-scan-status')).not.toContainText('刷新失败');
+});
+
+test('late failing Pulse requests cannot overwrite a newly selected sector board',async({page})=>{
+  await page.route('https://cdn.jsdelivr.net/**',route=>route.fulfill({contentType:'application/javascript',body:supabaseMock.replace(
+    "marketContextMock.requests.MARKET_PULSE+=1;",
+    "marketContextMock.requests.MARKET_PULSE+=1;return new Promise(resolve=>{window.__latePulse=window.__latePulse||[];window.__latePulse.push(()=>resolve({data:null,error:{message:'late failure'}}));});"
+  )}));
+  await page.goto('/Terminal.html?tab=v6');
+  await page.locator('[data-market-radar-scope="SECTOR_INDEX"]').click();
+  await expect(page.locator('[data-index-radar-leader]')).toHaveCount(5);
+  await page.evaluate(()=>{window.__latePulse.forEach(resolve=>resolve());});
+  await expect(page.locator('#indexRadarTitle')).toContainText('SECTOR');
+  await expect(page.locator('#indexRadarStatus')).toContainText('Official Close');
+  await expect(page.locator('[data-index-radar-leader]')).toHaveCount(5);
+});
+
+test('Market Insights fits small phones and wide desktops without clipping its charts',async({page},testInfo)=>{
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.goto('/Terminal.html?tab=v6');
+  await page.locator('[data-market-radar-scope="SECTOR_INDEX"]').click();
+  await page.locator('[data-insights-view="radar"]').click();
+  for(const width of testInfo.project.name==='iphone'?[320,390,768]:[1024,1280,1920]) {
+    await page.setViewportSize({width,height:900});
+    const layout=await page.locator('#indexRadar').evaluate(root=>({
+      overflow:document.documentElement.scrollWidth-innerWidth,
+      clipped:[...root.querySelectorAll('.market-scan-card')].some(n=>n.scrollHeight>n.clientHeight+1||n.scrollWidth>n.clientWidth+1),
+      frame:root.querySelector('.market-context-content').getBoundingClientRect().bottom,
+      charts:Math.max(...[...root.querySelectorAll('.market-scan-card')].map(n=>n.getBoundingClientRect().bottom)),
+    }));
+    expect(layout.overflow).toBeLessThanOrEqual(1);expect(layout.clipped).toBe(false);expect(layout.frame).toBeGreaterThanOrEqual(layout.charts);
+  }
+  await page.screenshot({path:testInfo.outputPath('market-insights-responsive.png'),fullPage:true,animations:'disabled'});
 });
 
 test('authentication is a unified workspace with usable fields', async ({ page }, testInfo) => {
@@ -700,6 +869,9 @@ test('Radar desktop breakpoints never require horizontal navigation', async ({ p
   await expect(radar.locator('[data-index-radar-leader]')).toHaveCount(5);
   for(const width of [1024,1280,2048]){
     await page.setViewportSize({width,height:900});
+    await page.mouse.move(0,0);
+    await radar.evaluate(async node=>Promise.all(node.getAnimations({subtree:true})
+      .filter(a=>a.effect.getComputedTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{}))));
     const geometry=await radar.evaluate(node=>{
       const dashboard=node.querySelector('.index-radar-dashboard').getBoundingClientRect();
       const leaders=node.querySelector('.index-radar-leaders-viewport');
@@ -1405,6 +1577,7 @@ test('manual Pull restores the full workspace and Wave startup stays local-only'
   for(const system of systems){
     await page.goto(`/${system.url}`);
     await page.evaluate(({seed})=>{
+      window.__pullDocumentMarker='same-document';
       window.__workspaceCloudSeed=seed;
       const look=JSON.parse(localStorage.getItem('tv_lookfirst_data_v3')||'[]');
       if(look[0]){look[0].c='1';localStorage.setItem('tv_lookfirst_data_v3',JSON.stringify(look));}
@@ -1418,7 +1591,66 @@ test('manual Pull restores the full workspace and Wave startup stays local-only'
     await page.waitForFunction(()=>JSON.parse(localStorage.getItem('tv_lookfirst_data_v3')||'[]')[0]?.c==='88');
     expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('tv_thenleap_data_v3')||'[]')[0]?.v)).toBe('2.2');
     expect(await page.evaluate(()=>localStorage.getItem('tv_header_marquee_v1')||'')).toBe('cloud reminder');
+    if (system.url.startsWith('Terminal')) {
+      await page.waitForTimeout(1200); // Former reload was delayed by one second.
+      expect(await page.evaluate(()=>window.__pullDocumentMarker)).toBe('same-document');
+      await expect(page.locator('#tableBodyV6 tr[data-instrument-id="e2e-a"] .current')).toHaveValue('88');
+      await expect(page.locator('#tableBodyV7 tr[data-instrument-id="e2e-a"] .volume-ratio')).toHaveValue('2.2');
+    }
   }
+});
+
+test('Terminal local changes retain document, unrelated rows and market context', async ({page}) => {
+  const errors=[];page.on('pageerror',error=>errors.push(error.message));
+  page.on('dialog',dialog=>dialog.accept());
+  await page.goto('/Terminal.html?tab=v6');
+  await expect(page.locator('#tableBodyV6 tr')).toHaveCount(3);
+  await page.locator('#btn-v7').click();
+  const counts=await page.evaluate(()=>{
+    window.__localDocumentMarker='same-document';
+    window.__keptRow=document.querySelector('#tableBodyV7 tr[data-instrument-id="e2e-a"]');
+    return {...window.__marketContextMock.requests};
+  });
+  await page.locator('#btn-v6').click();
+  await page.locator('#btn-v7').click();
+  expect(await page.evaluate(()=>window.__keptRow===document.querySelector('#tableBodyV7 tr[data-instrument-id="e2e-a"]'))).toBe(true);
+  const invoke=async action=>page.evaluate(action=>{
+    const button=document.createElement('button');button.dataset.fiboClick=action;
+    document.body.append(button);button.click();button.remove();
+  },action);
+  await invoke("openInstrumentDialog('e2e-b')");
+  await page.locator('#instrumentTicker').fill('RENAMED');
+  await page.locator('[data-fibo-click="saveInstrumentDialog()"]' ).click();
+  await expect(page.locator('#tableBodyV6 tr[data-instrument-id="e2e-b"] .name')).toHaveValue('RENAMED');
+  await invoke("archiveInstrument('e2e-b')");
+  await expect(page.locator('#tableBodyV6 tr')).toHaveCount(2);
+  await invoke("restoreInstrument('e2e-b')");
+  await invoke("restoreInstrument('e2e-b')"); // A repeated restore must not duplicate permanent-ID rows.
+  await expect(page.locator('#tableBodyV6 tr')).toHaveCount(3);
+  await expect(page.locator('#tableBodyV6 tr[data-instrument-id="e2e-b"] .current')).toHaveValue('60');
+  await invoke("permanentlyDeleteInstrument('e2e-b')");
+  await expect(page.locator('#tableBodyV6 tr')).toHaveCount(2);
+  await expect(page.locator('#tableBodyV7 tr')).toHaveCount(2);
+  expect(await page.evaluate(()=>window.__localDocumentMarker)).toBe('same-document');
+  expect(await page.evaluate(()=>window.__keptRow===document.querySelector('#tableBodyV7 tr[data-instrument-id="e2e-a"]'))).toBe(true);
+  expect(await page.evaluate(()=>window.__marketContextMock.requests)).toEqual(counts);
+  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('tv_instrument_pool_v1')).tombstones.some(row=>row.id==='e2e-b'))).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('Terminal backup import rehydrates without restarting Market Context', async ({page}) => {
+  await page.goto('/Terminal.html?tab=v6');
+  await expect(page.locator('#tableBodyV6 tr')).toHaveCount(3);
+  await page.evaluate(()=>{window.__importDocumentMarker='same-document';});
+  await page.locator('#importFile').setInputFiles({name:'test-backup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({
+    v6:[{id:'e2e-a',n:'IMPORTED',h:'200',l:'50',c:'111',pm:'manual',p:'100'}],
+    v7:[{id:'e2e-a',n:'IMPORTED',r:'61',v:'2.5',t:'uptrend'}],
+    headerNotes:{marquee:'imported reminder',tips:'imported tips'}
+  }))});
+  await expect(page.locator('#tableBodyV6 tr[data-instrument-id="e2e-a"] .current')).toHaveValue('111');
+  await expect(page.locator('#tableBodyV7 tr[data-instrument-id="e2e-a"] .volume-ratio')).toHaveValue('2.5');
+  expect(await page.evaluate(()=>window.__importDocumentMarker)).toBe('same-document');
+  expect(await page.evaluate(()=>localStorage.getItem('tv_header_tips_v1'))).toBe('imported tips');
 });
 
 test('tracker MA Status and Scenario Lab share the read-only help modal', async ({ page }) => {

@@ -13,6 +13,7 @@ This file is mandatory reading before changing the project.
 7. ETF Radar is another global context scope, never a Pool feature. Sector Index Algorithm v1 remains unchanged. ETF Algorithm v1 keeps RS5/RS20, 144 sessions, the RMB 20 million 20D-average-Amount gate, strict one-Theme representative and Cross Asset two-per-category cap. Universe v2 classifications come only from the reviewed CSV manifests and generated Market+Code seeds. Unknown ETF codes stay raw-only and disabled until a reviewed universe update.
 8. FIBO Market Pulse is independent official-close breadth context. Pulse Algorithm v1 keeps four equal 25% groups, the 5%-floor Balance function, 62-close eligibility, Theme-equal Leadership and fixed 20/40/60/80 state boundaries. It must never read Pool/permanent IDs, Current Preview or ETF data, and never feed Composite Signal.
 9. Terminal, Wave and Trend Tracker manual cloud buttons are one full-workspace contract. They must call the shared `src/core/workspace-cloud-sync.js` service and synchronize `fibo_data`, `trend_tracker_state` and permanent-ID bindings together. A page must not silently perform a partial Push/Pull; Wave startup must not auto-Pull the workspace.
+10. Market Insights `insights-v1` is a separate approved algorithm and snapshot contract. Missing history stays excluded, with no expansion or price padding. Its weights, reviewed basket and exact coverage rules are in `docs/MARKET_INSIGHTS_GUIDE.md`. Never replace original Top5/Memory with its strongest five. New publication may write/prune only `market_insights_snapshot`; old checkpoints and algorithms remain unchanged.
 
 ## Module boundaries
 
@@ -22,6 +23,7 @@ This file is mandatory reading before changing the project.
 - `src/tracker`: pure MA, MACD, confirmation and scenario calculations. No DOM, storage or network access.
 - `src/radar`, `scripts/index_radar.py` and `scripts/etf_radar.py`: pure Radar view normalization and market ranking. No DOM, localStorage, Supabase client or permanent-ID access.
 - `src/pulse` and `scripts/market_pulse.py`: pure Pulse normalization, chart geometry and breadth calculations. No DOM, localStorage, Supabase access, Pool identity or Terminal scoring.
+- `scripts/market_insights.py`: pure independent Insights v1. Frozen proxy codes live in `market_insights_basket.py`; the GET-only loader and separately gated publisher own I/O, not this engine.
 - `src/apps`: page controllers and rendering adapters. They may access the DOM and call core services.
 - `assets/css`: tokens, common components and page-specific presentation.
 
