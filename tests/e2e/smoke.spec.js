@@ -181,7 +181,7 @@ test('Market Insights preserves original boards and exposes honest waiting state
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('/Terminal.html?tab=v6');
   await expect(page.locator('.market-regime-header-slot .market-regime')).toBeVisible();
-  await expect(page.locator('[data-regime-label]')).toHaveText('待计算');
+  await expect(page.locator('[data-regime-label]')).toHaveText('Pending');
   await expect(page.locator('.market-regime__pointer')).toBeHidden();
   await expect(page.locator('#marketInsightsView')).toBeHidden();
   await page.locator('[data-market-radar-scope="SECTOR_INDEX"]').click();
@@ -224,7 +224,8 @@ test('Market Insights preserves original boards and exposes honest waiting state
 test('Market Insights production adapter reads an independent atomic bundle',async({page},testInfo)=>{
   await page.addInitScript(row=>{window.__insightsWireRow=row;},insightsWireFixture());
   await page.goto('/Terminal.html?tab=v6');
-  await expect(page.locator('[data-regime-label]')).toHaveText('测试状态');
+  await expect(page.locator('[data-regime-label]')).toBeHidden();
+  await expect(page.locator('.market-regime__scale')).toHaveAttribute('aria-label',/测试状态/);
   await expect(page.locator('.market-regime__pointer')).toBeVisible();
   await expect(page.locator('[data-market-pulse-group]')).toHaveCount(4);
   await page.locator('[data-market-radar-scope="SECTOR_INDEX"]').click();
@@ -251,7 +252,8 @@ test('Market Insights production adapter reads an independent atomic bundle',asy
 test('Market Insights animates only changing points, rejects gaps and respects reduced motion',async({page},testInfo)=>{
   await page.route('**/src/core/market-insights-source.js',route=>route.fulfill({contentType:'application/javascript',body:`export async function readMarketInsights({scope}) {return (${insightsFixture.toString()})(scope);}`}));
   await page.goto('/Terminal.html?tab=v6');
-  await expect(page.locator('[data-regime-label]')).toHaveText('测试状态');
+  await expect(page.locator('[data-regime-label]')).toBeHidden();
+  await expect(page.locator('.market-regime__scale')).toHaveAttribute('aria-label',/测试状态/);
   await page.locator('[data-market-radar-scope="SECTOR_INDEX"]').click();
   await page.locator('[data-insights-view="radar"]').click();
   const strong=page.locator('[data-scan-panel="strong"] svg'),changing=page.locator('[data-scan-panel="strengthening"] [data-scan-dot="0"]');
@@ -328,19 +330,46 @@ test('late failing Pulse requests cannot overwrite a newly selected sector board
 
 test('Market Insights fits small phones and wide desktops without clipping its charts',async({page},testInfo)=>{
   await page.emulateMedia({reducedMotion:'reduce'});
+  await page.route('**/src/core/market-insights-source.js',route=>route.fulfill({contentType:'application/javascript',body:`
+    export async function readMarketInsights({scope}) {
+      const result=(${insightsFixture.toString()})(scope);
+      const points=Array.from({length:8},(_,i)=>({themeKey:'theme-'+i,label:'主题名称测试'+i,radius:(i+1)/9}));
+      if(result.scan) {result.scan.levels={strong:points,weak:points};result.scan.windows['3'].strengthening=points;result.scan.windows['3'].weakening=points;}
+      return result;
+    }`}));
   await page.goto('/Terminal.html?tab=v6');
   await page.locator('[data-market-radar-scope="SECTOR_INDEX"]').click();
+  await expect(page.locator('[data-insights-view="leaders"]')).toHaveText('Ranking');
   await page.locator('[data-insights-view="radar"]').click();
-  for(const width of testInfo.project.name==='iphone'?[320,390,768]:[1024,1280,1920]) {
+  await expect(page.locator('.market-scan-dot')).toHaveCount(32);
+  await expect(page.locator('.market-scan-card h3')).toHaveText(['Strongest','Strengthening','Weakest','Weakening']);
+  for(const width of testInfo.project.name==='iphone'?[320,390,768]:[1024,1280,1440,1920,2560]) {
     await page.setViewportSize({width,height:900});
     const layout=await page.locator('#indexRadar').evaluate(root=>({
       overflow:document.documentElement.scrollWidth-innerWidth,
       clipped:[...root.querySelectorAll('.market-scan-card')].some(n=>n.scrollHeight>n.clientHeight+1||n.scrollWidth>n.clientWidth+1),
       frame:root.querySelector('.market-context-content').getBoundingClientRect().bottom,
       charts:Math.max(...[...root.querySelectorAll('.market-scan-card')].map(n=>n.getBoundingClientRect().bottom)),
+      rows:new Set([...root.querySelectorAll('.market-scan-card')].map(n=>Math.round(n.getBoundingClientRect().top))).size,
+      card:root.querySelector('.market-scan-card').getBoundingClientRect().toJSON(),
+      windows:root.querySelector('.market-scan-windows').getBoundingClientRect().toJSON(),
+      header:root.querySelector('.index-radar__header').getBoundingClientRect().toJSON(),
     }));
     expect(layout.overflow).toBeLessThanOrEqual(1);expect(layout.clipped).toBe(false);expect(layout.frame).toBeGreaterThanOrEqual(layout.charts);
+    expect(layout.rows).toBe(width>=1330?1:width>768?2:4);
+    if(width>=1330) {expect(layout.windows.width).toBeLessThan(layout.card.width);expect(layout.card.height).toBeLessThan(270);}
+    if(width>=1920) expect(layout.header.height).toBeLessThan(55);
+    await page.screenshot({path:testInfo.outputPath(`market-insights-${width}.png`),fullPage:true,animations:'disabled'});
   }
+  for(const scope of ['MARKET_PULSE','SECTOR_INDEX','EQUITY_ETF','CROSS_ASSET']) {
+    await page.locator(`[data-market-radar-scope="${scope}"]`).click();
+    await expect(page.locator('.market-regime-header-slot .market-regime')).toBeVisible();
+    await expect(page.locator('.market-regime__pointer')).toBeVisible();
+  }
+  await page.locator('[data-insights-help="regime"]').click();
+  await expect(page.locator('#indexRadarHelpContent')).toContainText('不是跨境资产评分');
+  await expect(page.locator('#indexRadarHelpContent')).toContainText('62/100');
+  await page.keyboard.press('Escape');
   await page.screenshot({path:testInfo.outputPath('market-insights-responsive.png'),fullPage:true,animations:'disabled'});
 });
 
