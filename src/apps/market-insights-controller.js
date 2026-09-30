@@ -1,6 +1,6 @@
 /** New presentation only. Top 5/Pulse and their repositories remain independent. */
 import { readMarketInsights } from '../core/market-insights-source.js';
-import { normalizeScan,normalizeRegime,SCAN_WINDOWS,SCAN_PANELS,scanPanelPoints,scanGeometry } from '../radar/market-insights-view-model.js';
+import { normalizeScan,normalizeRegime,SCAN_WINDOWS,SCAN_PANELS,scanPanelPoints,scanGeometry,themeDisplay } from '../radar/market-insights-view-model.js';
 import { escapeRadarHtml as esc } from '../radar/radar-view-model.js';
 import { animateContext,transitionContext } from './market-context-motion.js';
 import { isMarketContextCacheStale,marketContextCacheStamp } from './market-context-cache.js';
@@ -46,6 +46,12 @@ export function createMarketInsightsController({root,openHelp,source=readMarketI
   const period=()=>state.periods.get(state.scope)||'3';
   const entry=()=>state.cache.get(state.scope)||{status:'not_configured',scan:null,regime:null};
 
+  function setHighlight(plot,themeKey) {
+    plot.querySelectorAll('[data-scan-theme]').forEach(node=>{
+      const active=!!themeKey&&node.dataset.scanTheme===themeKey;
+      node.classList.toggle('is-active',active);node.classList.toggle('is-dimmed',!!themeKey&&!active);
+    });
+  }
   function draw({move=false}={}) {
     if(scanViewport.hidden) return;
     const current=entry(),nextPositions=new Map();
@@ -62,7 +68,8 @@ export function createMarketInsightsController({root,openHelp,source=readMarketI
       if(empty) svg+=`<text x="${cx}" y="${cy}" text-anchor="middle" class="market-scan-empty">${esc(empty)}</text>`;
       nodes.forEach((p,i)=>{
         const labelX=p.side==='right'?width-8:8;
-        svg+=`<path d="M ${p.x} ${p.y} L ${p.side==='right'?labelX-8:labelX+8} ${p.labelY}" class="market-scan-leader-line"/><g data-scan-dot="${i}" transform="translate(${p.x} ${p.y})"><circle r="4" class="market-scan-dot"/><title>${esc(p.label)}</title></g><text x="${labelX}" y="${p.labelY-4}" text-anchor="${p.side==='right'?'end':'start'}"><title>${esc(p.label)}</title>${esc([...p.label].length>10?[...p.label].slice(0,9).join('')+'…':p.label)}</text>`;
+        const display=themeDisplay(p),name=`${display.chinese} / ${display.english}`,theme=esc(p.themeKey);
+        svg+=`<path data-scan-theme="${theme}" d="M ${p.x} ${p.y} L ${p.side==='right'?labelX-8:labelX+8} ${p.labelY}" class="market-scan-leader-line"/><g data-scan-dot="${i}" data-scan-theme="${theme}" tabindex="0" role="button" aria-label="${esc(name)}" transform="translate(${p.x} ${p.y})"><circle r="4" class="market-scan-dot"/><title>${esc(name)}</title></g><text data-scan-theme="${theme}" x="${labelX}" y="${p.labelY-8}" text-anchor="${p.side==='right'?'end':'start'}"><title>${esc(name)}</title><tspan class="market-scan-label-zh">${esc(display.chinese)}</tspan><tspan class="market-scan-label-en" x="${labelX}" dy="13">${esc(display.english)}</tspan></text>`;
         nextPositions.set(`${state.scope}:${panel.id}:${p.themeKey}`,{x:p.x,y:p.y,width,height});
       });
       const markup=svg+'</svg>';
@@ -78,6 +85,16 @@ export function createMarketInsightsController({root,openHelp,source=readMarketI
     }
     positions=nextPositions;
   }
+  function onPlotPointer(event) {
+    const item=event.target.closest?.('[data-scan-theme]'),plot=item?.closest('.market-scan-plot');
+    if(plot&&scanViewport.contains(plot)) setHighlight(plot,item.dataset.scanTheme);
+  }
+  function onPlotLeave(event) {
+    const plot=event.target.closest?.('.market-scan-plot');
+    if(plot&&!plot.contains(event.relatedTarget)) setHighlight(plot,null);
+  }
+  function onPlotFocus(event) { const plot=event.target.closest?.('.market-scan-plot'),item=event.target.closest?.('[data-scan-theme]'); if(plot&&item) setHighlight(plot,item.dataset.scanTheme); }
+  function onPlotBlur(event) { const plot=event.target.closest?.('.market-scan-plot'); if(plot&&!plot.contains(event.relatedTarget)) setHighlight(plot,null); }
   function updateMeter(data,status) {
     const pointer=meter.querySelector('.market-regime__pointer'),scale=meter.querySelector('.market-regime__scale');
     const old=pointer.hidden?null:Number(pointer.dataset.value);
@@ -167,11 +184,13 @@ export function createMarketInsightsController({root,openHelp,source=readMarketI
     buttons[next].focus();buttons[next].click();
   }
   root.addEventListener('click',onClick);root.addEventListener('keydown',onKeydown);
+  scanViewport.addEventListener('mouseover',onPlotPointer);scanViewport.addEventListener('mouseout',onPlotLeave);
+  scanViewport.addEventListener('focusin',onPlotFocus);scanViewport.addEventListener('focusout',onPlotBlur);
   const resize=new ResizeObserver(()=>draw());resize.observe(scanViewport);
   render();
   return {
     selectScope(scope) {state.scope=scope;positions=new Map();render();load();},
     refreshIfStale() {load();},
-    destroy() {destroyed=true;resize.disconnect();root.removeEventListener('click',onClick);root.removeEventListener('keydown',onKeydown);},
+    destroy() {destroyed=true;resize.disconnect();root.removeEventListener('click',onClick);root.removeEventListener('keydown',onKeydown);scanViewport.removeEventListener('mouseover',onPlotPointer);scanViewport.removeEventListener('mouseout',onPlotLeave);scanViewport.removeEventListener('focusin',onPlotFocus);scanViewport.removeEventListener('focusout',onPlotBlur);},
   };
 }

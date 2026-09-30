@@ -323,6 +323,27 @@ test('Market Insights animates only changing points, rejects gaps and respects r
   await page.screenshot({path:testInfo.outputPath('market-insights-leaders.png'),fullPage:true,animations:'disabled'});
 });
 
+test('Market Insights radar labels are bilingual and highlight one theme as a group',async({page})=>{
+  await page.route('**/src/core/market-insights-source.js',route=>route.fulfill({contentType:'application/javascript',body:`export async function readMarketInsights({scope}) {return (${insightsFixture.toString()})(scope);}`}));
+  await page.goto('/Terminal.html?tab=v6');
+  await page.locator('[data-market-radar-scope="SECTOR_INDEX"]').click();
+  await page.locator('[data-insights-view="radar"]').click();
+  const plot=page.locator('[data-scan-panel="strong"] .market-scan-plot');
+  const first=plot.locator('[data-scan-dot="0"]');
+  await expect(plot.locator('.market-scan-label-zh')).toHaveCount(2);
+  await expect(plot.locator('.market-scan-label-en')).toHaveCount(2);
+  await expect(first).toHaveAttribute('aria-label',/\/ /);
+  await first.hover();
+  await expect(plot.locator('[data-scan-theme].is-active')).toHaveCount(3);
+  await expect(plot.locator('[data-scan-theme].is-dimmed')).toHaveCount(3);
+  await page.locator('[data-scan-panel="strong"] header').hover();
+  await expect(plot.locator('[data-scan-theme].is-active')).toHaveCount(0);
+  await first.focus();
+  await expect(plot.locator('[data-scan-theme].is-active')).toHaveCount(3);
+  await page.locator('[data-scan-panel="strong"] header button').focus();
+  await expect(plot.locator('[data-scan-theme].is-active')).toHaveCount(0);
+});
+
 test('Market Insights isolates late responses, safely escapes labels and retains valid data on error',async({page})=>{
   await page.route('**/src/core/market-insights-source.js',route=>route.fulfill({contentType:'application/javascript',body:`
     export async function readMarketInsights({scope}) {

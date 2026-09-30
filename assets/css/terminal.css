@@ -133,9 +133,15 @@
         .market-scan-plot { height:192px; min-width:0; }
         .market-scan-plot svg { display:block; width:100%; height:100%; overflow:visible; }
         .market-scan-plot text { fill:var(--color-text); font:var(--font-size-xs) var(--font-family-sans); }
+        .market-scan-label-en { fill:var(--color-text-tertiary); font-size:var(--font-size-2xs); }
         .market-scan-ring { fill:none; stroke:var(--color-border-subtle); stroke-width:1; }
         .market-scan-leader-line { fill:none; stroke:var(--color-border); stroke-width:1; }
         .market-scan-dot { fill:var(--color-primary); }
+        .market-scan-plot [data-scan-theme] { transition:opacity var(--duration-base) var(--ease-standard),stroke var(--duration-base) var(--ease-standard),fill var(--duration-base) var(--ease-standard); }
+        .market-scan-plot [data-scan-theme].is-dimmed { opacity:.18; }
+        .market-scan-plot g[data-scan-theme].is-active .market-scan-dot { r:6; fill:var(--color-primary-strong); stroke:var(--color-surface); stroke-width:2; }
+        .market-scan-plot path[data-scan-theme].is-active { stroke:var(--color-primary-strong); stroke-width:2; }
+        .market-scan-plot text[data-scan-theme].is-active { font-weight:var(--font-weight-bold); }
         .market-scan-plot .market-scan-empty { fill:var(--color-text-secondary); paint-order:stroke; stroke:var(--color-surface); stroke-width:var(--space-2); stroke-linejoin:round; }
         .market-scan-status { margin:var(--space-2) 0 0; color:var(--color-text-secondary); font-size:var(--font-size-xs); line-height:var(--line-height-relaxed); }
         .market-scan-windows { min-width:0; }

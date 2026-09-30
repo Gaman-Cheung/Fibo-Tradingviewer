@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {normalizeScan,normalizeRegime,scanPanelPoints,scanGeometry,themeAngle,officialDate} from '../../src/radar/market-insights-view-model.js';
+import {normalizeScan,normalizeRegime,scanPanelPoints,scanGeometry,themeAngle,themeDisplay,officialDate} from '../../src/radar/market-insights-view-model.js';
 import {readMarketInsights} from '../../src/core/market-insights-source.js';
 import {insightsFixture} from '../fixtures/market-insights.js';
 
@@ -78,4 +78,10 @@ test('theme angles stay stable and labels fit both phone and desktop geometry',(
       for(let i=1;i<labels.length;i++) assert.ok(labels[i].labelY-labels[i-1].labelY>=22-1e-9);
     }
   }
+});
+test('theme display pairs reviewed English labels with Chinese names',()=>{
+  assert.deepEqual(themeDisplay({themeKey:'ai_computing',label:'AI & Computing'}),{chinese:'人工智能与算力',english:'AI & Computing'});
+  assert.deepEqual(themeDisplay({themeKey:'exposure_demo',label:'中证海外互联网'}),{chinese:'中证海外互联网',english:'Theme Exposure'});
+  assert.deepEqual(themeDisplay({themeKey:'ai_computing',label:'人工智能与算力'}),{chinese:'人工智能与算力',english:'AI & Computing'});
+  assert.deepEqual(themeDisplay({themeKey:'technology',label:'Technology'}),{chinese:'科技',english:'Technology'});
 });
