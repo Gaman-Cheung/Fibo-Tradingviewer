@@ -165,7 +165,9 @@
         .reverse-pickup-field small { color:var(--color-text-tertiary); font-weight:var(--font-weight-regular); }
         .reverse-pickup-fields-row { display:grid; grid-template-columns:1fr 1fr; gap:var(--space-3); }
         .reverse-pickup-input-wrap { position:relative; }
-        .reverse-pickup-input-wrap input { padding-right:var(--space-3); }
+        .reverse-pickup-input-wrap input { box-sizing:border-box; display:block; width:100%; min-width:0; min-height:var(--control-height-sm); padding:9px 12px; border:1px solid var(--color-border); border-radius:var(--radius-sm); background:var(--color-surface); color:var(--color-text); font:var(--font-weight-regular) var(--font-size-sm)/1.35 var(--font-family-mono); text-align:left; }
+        .reverse-pickup-input-wrap input::placeholder { color:var(--color-text-tertiary); opacity:1; }
+        .reverse-pickup-input-wrap input:focus { border-color:var(--color-primary); outline:2px solid var(--color-primary-soft-strong); outline-offset:0; }
         .reverse-pickup-anchor-toggle { display:flex; gap:2px; width:max-content; max-width:100%; margin-bottom:var(--space-2); padding:2px; border:1px solid var(--color-border); border-radius:var(--radius-pill); background:var(--color-surface-subtle); }
         .reverse-pickup-anchor-toggle label { display:flex; min-width:0; cursor:pointer; }
         .reverse-pickup-anchor-toggle input { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }

@@ -28,7 +28,7 @@ const format=value=>Number.isFinite(value)?Number(value).toFixed(2):'—';
 const clamp=(value,min,max)=>Math.min(max,Math.max(min,value));
 
 function markup() {
-  return `<button class="reverse-pickup-launcher" type="button" aria-expanded="false" aria-controls="reversePickupPanel" title="打开倒车接人计算器"><span class="material-icons" aria-hidden="true">calculate</span><span class="sr-only">倒车接人计算器</span></button>
+  return `<button class="reverse-pickup-launcher" type="button" aria-expanded="false" aria-controls="reversePickupPanel" aria-label="打开倒车接人计算器" title="打开倒车接人计算器"><span class="material-icons" aria-hidden="true">calculate</span></button>
   <section class="reverse-pickup-panel fibo-card" id="reversePickupPanel" role="dialog" aria-modal="false" aria-labelledby="reversePickupTitle" hidden>
     <header class="reverse-pickup-panel__header" data-reverse-pickup-drag-handle>
       <div><span class="reverse-pickup-panel__eyebrow">TEMPORARY TOOL</span><h2 id="reversePickupTitle">倒车接人计算器</h2></div>
