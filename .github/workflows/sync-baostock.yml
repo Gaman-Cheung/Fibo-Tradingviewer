@@ -64,10 +64,8 @@ jobs:
           fi
           python scripts/sync_baostock.py "${ARGS[@]}"
       - name: Publish independent Market Insights v1
-        if: ${{ success() && vars.INSIGHTS_ENABLED == 'true' && (github.event_name == 'schedule' || (github.event.inputs.mode == 'daily' && github.event.inputs.dataset == 'all')) }}
+        if: ${{ success() && (github.event_name == 'schedule' || (github.event.inputs.mode == 'daily' && github.event.inputs.dataset == 'all')) }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          INSIGHTS_HEADROOM_MB: ${{ vars.INSIGHTS_HEADROOM_MB }}
-          INSIGHTS_CAPACITY_CHECKED_ON: ${{ vars.INSIGHTS_CAPACITY_CHECKED_ON }}
         run: python scripts/publish_market_insights.py --publish
