@@ -143,9 +143,9 @@
 
         /* Temporary Reverse Pickup tool. Fixed positioning keeps it out of every page layout flow. */
         .reverse-pickup-widget { position:fixed; right:18px; bottom:18px; z-index:var(--z-overlay); width:50px; height:50px; pointer-events:none; }
-        .reverse-pickup-launcher { pointer-events:auto; width:50px; height:50px; display:grid; place-items:center; padding:0; border:1px solid var(--color-primary); border-radius:50%; background:var(--color-primary-action); color:var(--color-on-primary); box-shadow:var(--shadow-raised); cursor:pointer; transition:transform var(--duration-base) var(--ease-standard),box-shadow var(--duration-base) var(--ease-standard); }
-        .reverse-pickup-launcher:hover { transform:translateY(-2px); box-shadow:var(--shadow-card); }
-        .reverse-pickup-launcher .material-icons { font-size:22px; }
+        .reverse-pickup-launcher { pointer-events:auto; width:46px; height:46px; display:grid; place-items:center; padding:0; border:1px solid var(--color-border); border-radius:50%; background:var(--color-surface); color:var(--color-primary); box-shadow:var(--shadow-low); cursor:pointer; transition:transform var(--duration-base) var(--ease-standard),box-shadow var(--duration-base) var(--ease-standard),border-color var(--duration-base) var(--ease-standard); }
+        .reverse-pickup-launcher:hover { transform:translateY(-2px); border-color:var(--color-primary); box-shadow:var(--shadow-raised); }
+        .reverse-pickup-launcher .material-icons { font-size:21px; }
         .reverse-pickup-panel { position:fixed; left:auto; top:auto; right:18px; bottom:78px; z-index:var(--z-overlay); width:min(390px,calc(100vw - 24px)); max-height:min(760px,calc(100vh - 110px)); overflow:auto; padding:0; pointer-events:auto; box-shadow:var(--shadow-card); }
         .reverse-pickup-panel__header { display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); padding:var(--space-4) var(--space-5); border-bottom:1px solid var(--color-border-subtle); cursor:grab; touch-action:none; user-select:none; }
         .reverse-pickup-widget.is-dragging .reverse-pickup-panel__header { cursor:grabbing; }
@@ -154,13 +154,18 @@
         .reverse-pickup-panel__close { width:32px; height:32px; display:grid; place-items:center; padding:0; border:1px solid var(--color-border); border-radius:50%; background:var(--color-surface); color:var(--color-text-secondary); cursor:pointer; }
         .reverse-pickup-panel__close:hover { border-color:var(--color-primary); color:var(--color-primary); }
         .reverse-pickup-form,.reverse-pickup-readout { padding:var(--space-4) var(--space-5); }
+        .reverse-pickup-rules { display:grid; gap:var(--space-2); margin:0 0 var(--space-4); padding:var(--space-3); border:1px solid var(--color-border-subtle); border-radius:var(--radius-sm); background:var(--color-surface-subtle); }
+        .reverse-pickup-rules article { display:grid; grid-template-columns:26px minmax(0,1fr); gap:var(--space-2); align-items:start; }
+        .reverse-pickup-rules article + article { padding-top:var(--space-2); border-top:1px solid var(--color-border-subtle); }
+        .reverse-pickup-rules b { display:grid; place-items:center; width:22px; height:22px; border-radius:50%; background:var(--color-primary-soft); color:var(--color-primary); font:var(--font-weight-bold) var(--font-size-2xs) var(--font-family-mono); }
+        .reverse-pickup-rules p { margin:0; color:var(--color-text-tertiary); font-size:var(--font-size-2xs); line-height:var(--line-height-base); }
+        .reverse-pickup-rules strong { display:block; margin-bottom:1px; color:var(--color-text); font-size:var(--font-size-xs); }
         .reverse-pickup-field { display:block; min-width:0; margin:0 0 var(--space-3); padding:0; border:0; }
         .reverse-pickup-field > span,.reverse-pickup-field legend { display:block; margin-bottom:var(--space-2); color:var(--color-text-secondary); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }
         .reverse-pickup-field small { color:var(--color-text-tertiary); font-weight:var(--font-weight-regular); }
         .reverse-pickup-fields-row { display:grid; grid-template-columns:1fr 1fr; gap:var(--space-3); }
         .reverse-pickup-input-wrap { position:relative; }
-        .reverse-pickup-input-wrap input { padding-right:34px; }
-        .reverse-pickup-input-wrap > span { position:absolute; top:50%; right:var(--space-3); transform:translateY(-50%); color:var(--color-text-tertiary); font-size:var(--font-size-xs); pointer-events:none; }
+        .reverse-pickup-input-wrap input { padding-right:var(--space-3); }
         .reverse-pickup-anchor-toggle { display:flex; gap:2px; width:max-content; max-width:100%; margin-bottom:var(--space-2); padding:2px; border:1px solid var(--color-border); border-radius:var(--radius-pill); background:var(--color-surface-subtle); }
         .reverse-pickup-anchor-toggle label { display:flex; min-width:0; cursor:pointer; }
         .reverse-pickup-anchor-toggle input { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
@@ -405,7 +410,7 @@
             .reverse-pickup-panel { right:12px; bottom:calc(132px + env(safe-area-inset-bottom)); width:calc(100vw - 24px); max-height:calc(100dvh - 150px); }
             .reverse-pickup-form,.reverse-pickup-readout { padding-inline:var(--space-4); }
             .reverse-pickup-panel__header { padding-inline:var(--space-4); }
-            .reverse-pickup-launcher { width:48px; height:48px; }
+            .reverse-pickup-launcher { width:44px; height:44px; }
             .market-regime-header-slot { flex:1 1 100%; }
             .market-scan-grid { grid-template-columns:1fr; }
             .market-scan-window-controls { grid-template-columns:repeat(2,minmax(0,1fr)); }
