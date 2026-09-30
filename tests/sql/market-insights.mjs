@@ -21,9 +21,9 @@ async function input(day){
     scans:Object.fromEntries(scopes.map(scope=>[scope,{scope,tradeDate:day,algorithmVersion:'insights-v1',levels:{strong:[{themeKey:'a'}]}}])),regime:null,
     theme_scores:{},coverage:{},source_checkpoints:cps,pulse_calculation_id:'pulse-'+day};
 }
-async function publish(row,headroom=100){
+async function publish(row){
   await db.exec('set role service_role');
-  try{return await db.query('select public.publish_market_insights($1::jsonb,$2::numeric) as id',[JSON.stringify(row),headroom]);}
+  try{return await db.query('select public.publish_market_insights($1::jsonb) as id',[JSON.stringify(row)]);}
   finally{await db.exec('reset role');}
 }
 let row=await input('2026-07-01');
@@ -31,7 +31,7 @@ await publish(row);await publish(row);
 assert.equal((await db.query('select count(*)::int n from market_insights_snapshot')).rows[0].n,1);
 for(const role of ['anon','authenticated']){
   await db.exec('set role '+role);
-  await assert.rejects(db.query('select public.publish_market_insights($1::jsonb,100)',[JSON.stringify(row)]));
+  await assert.rejects(db.query('select public.publish_market_insights($1::jsonb)',[JSON.stringify(row)]));
   await assert.rejects(db.query('delete from market_insights_snapshot'));
   if(role==='anon')await assert.rejects(db.query('select * from market_insights_snapshot'));
   else assert.equal((await db.query('select * from market_insights_snapshot')).rows.length,1);
@@ -40,7 +40,6 @@ for(const role of ['anon','authenticated']){
 for(const mutate of [r=>r.source_checkpoints.CN_ETF.last_status='error',r=>r.source_checkpoints.CN_INDEX.synced_at='2000-01-01T00:00:00Z',r=>delete r.scans.CROSS_ASSET,r=>r.pulse_calculation_id='wrong',r=>r.scans.EQUITY_ETF.tradeDate='2000-01-01',r=>r.algorithm_version='draft']){
   const bad=structuredClone(row);mutate(bad);await assert.rejects(publish(bad));
 }
-await assert.rejects(publish(row,74));await assert.rejects(publish(row,null));
 for(let i=1;i<62;i++){
   const day=new Date(Date.UTC(2026,6,1+i)).toISOString().slice(0,10);
   row=await input(day);await publish(row);

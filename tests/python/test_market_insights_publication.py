@@ -1,11 +1,10 @@
 import copy
-from datetime import date
 import os
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
-from scripts.publish_market_insights import capacity_guard, snapshot_from, publish
+from scripts.publish_market_insights import snapshot_from, publish
 from scripts.market_insights import SCOPES, basket_symbols
 from scripts.market_insights_trial import run_trial
 try:
@@ -45,24 +44,18 @@ class PublicationTests(unittest.TestCase):
         data=publication_data();data['etf_catalog'][-1]['radar_enabled']=False
         with self.assertRaises(ValueError): snapshot_from(data)
 
-    def test_capacity_guard(self):
-        today=date(2026,9,29)
-        self.assertEqual(capacity_guard('75','2026-09-22',today),75)
-        for value in ('74.99',None,'NaN','Infinity'):
-            with self.assertRaises(ValueError): capacity_guard(value,'2026-09-29',today)
-        for day in ('2026-09-21','2026-09-30','',None):
-            with self.assertRaises(ValueError): capacity_guard('100',day,today)
-
     def test_one_rpc_no_other_writes(self):
         snapshot=snapshot_from(publication_data());calls=[]
         def request(url,**kwargs):
             calls.append((url,kwargs));return SimpleNamespace(status_code=200,json=lambda:snapshot['calculation_id'])
         with patch.dict(os.environ,SUPABASE_URL='https://example.invalid',SUPABASE_SERVICE_ROLE_KEY='test-only'):
-            publish(snapshot,100,request)
+            publish(snapshot,request)
             self.assertEqual(len(calls),1)
             self.assertTrue(calls[0][0].endswith('/rpc/publish_market_insights'))
-            with self.assertRaises(RuntimeError): publish(snapshot,100,lambda *a,**k:SimpleNamespace(status_code=500))
-            with self.assertRaises(RuntimeError): publish(snapshot,100,lambda *a,**k:SimpleNamespace(status_code=200,json=lambda:'wrong'))
+            self.assertEqual(calls[0][1]['json'],{'p_snapshot':snapshot})
+            with self.assertRaisesRegex(RuntimeError,'database storage is full'):
+                publish(snapshot,lambda *a,**k:SimpleNamespace(status_code=500,json=lambda:{'code':'53100','message':'disk full'}))
+            with self.assertRaises(RuntimeError): publish(snapshot,lambda *a,**k:SimpleNamespace(status_code=200,json=lambda:'wrong'))
 
     def test_basket_matches_reviewed_manifest_and_excludes_financials(self):
         import csv
@@ -84,8 +77,11 @@ class PublicationTests(unittest.TestCase):
         self.assertIn('limit 60',sql)
         self.assertNotIn('delete from public.market_daily_bar',sql)
         self.assertNotIn('update public.market_sync_checkpoint',sql)
+        self.assertIn('create or replace function public.publish_market_insights(p_snapshot jsonb)',sql)
+        self.assertNotIn('p_headroom_mb',sql)
         workflow=(root/'.github/workflows/sync-baostock.yml').read_text()
-        self.assertIn("vars.INSIGHTS_ENABLED == 'true'",workflow)
+        self.assertNotIn('INSIGHTS_ENABLED',workflow)
+        self.assertNotIn('INSIGHTS_HEADROOM_MB',workflow)
         self.assertLess(workflow.index('python scripts/sync_baostock.py'),workflow.index('python scripts/publish_market_insights.py'))
 
 

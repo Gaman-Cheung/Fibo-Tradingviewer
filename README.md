@@ -5,7 +5,8 @@
 Four radars and the A-share regime now use an independent approved calculation/snapshot contract.
 **Replacing website files alone does not create its database table or publish data.**
 Follow [the deployment checklist](docs/DEPLOY_MARKET_INSIGHTS.md): additive SQL migration,
-Dashboard capacity verification, opt-in Actions Variables, then one `daily / all` run.
+then one `daily / all` run. Publication runs automatically after the existing freshness audit;
+no new GitHub Actions Variables are needed. A full database rejects only the new atomic snapshot.
 Original Top5, Pulse, trading algorithms and 400/144-session raw history are unchanged.
 See [the algorithm guide](docs/MARKET_INSIGHTS_GUIDE.md) for missing-history exclusions and formulas.
 
@@ -28,7 +29,7 @@ Static multi-page trading journal and Elliott Wave analysis system for GitHub Pa
 5. Validate the reviewed Universe v2 with `npm run audit:radar`; use `npm run audit:radar:dry-run` before publication, then run `daily / indices` followed by `daily / etfs` so version changes rebuild snapshots from stored history.
 6. Run `smoke / pulse` then `backfill / pulse`, verify Pulse/member rows and capacity, then leave the schedule on `daily / all` at 19:00 Asia/Shanghai on weekdays.
 
-Pulse adds fewer than 1MB of aggregate history plus roughly 8,000–9,000 rows for the latest two member sets. Expected member storage is about 4–12MB, with 20MB as the conservative indexed-growth ceiling. Record Supabase Dashboard Database Size before and after Backfill; stop further expansion if net growth exceeds 20MB or remaining headroom falls below 75MB. The synchronizer never shortens existing A-share, index or ETF retention to make this check pass.
+Pulse adds fewer than 1MB of aggregate history plus roughly 8,000–9,000 rows for the latest two member sets. Expected member storage is about 4–12MB, with 20MB as the conservative indexed-growth ceiling. Record Supabase Dashboard Database Size before and after a history backfill; stop further backfill expansion if net growth exceeds 20MB or remaining headroom falls below 75MB. Daily bounded Insights snapshots are attempted normally and fail atomically if the database is full. The synchronizer never shortens existing A-share, index or ETF retention to make this check pass.
 
 The database stores 400 sessions for SH/SZ A-shares and indices, and 144 sessions for ETFs. ETF cleanup is Market+Code scoped and cannot shorten the existing 400-session store. Tracker matches shared history by explicit Market + six-digit Code; Pool and permanent IDs never own or duplicate prices.
 

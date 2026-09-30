@@ -26,16 +26,17 @@ create policy market_insights_read_authenticated on public.market_insights_snaps
 
 -- One atomic publication of every scope + regime, followed by this table's own
 -- bounded retention. A failure rolls both back; source tables are only read.
-create or replace function public.publish_market_insights(p_snapshot jsonb, p_headroom_mb numeric)
+-- PostgreSQL/Supabase reports storage exhaustion as an RPC failure; the Action
+-- surfaces that error without touching old tables or checkpoints.
+drop function if exists public.publish_market_insights(jsonb, numeric);
+drop function if exists public.publish_market_insights(jsonb);
+create or replace function public.publish_market_insights(p_snapshot jsonb)
 returns text language plpgsql security invoker set search_path = pg_catalog, public as $$
 declare
   day date := (p_snapshot->>'trade_date')::date;
   scope_name text;
   checkpoint public.market_sync_checkpoint%rowtype;
 begin
-  if p_headroom_mb is null or not (p_headroom_mb >= 75 and p_headroom_mb < 1000000000) then
-    raise exception 'Dashboard headroom must be verified and at least 75 MB';
-  end if;
   if day is null or p_snapshot->>'provider' is distinct from 'baostock'
     or p_snapshot->>'algorithm_version' is distinct from 'insights-v1'
     or p_snapshot->>'universe_version' is distinct from '2'
@@ -89,7 +90,7 @@ begin
   return p_snapshot->>'calculation_id';
 end;
 $$;
-revoke all on function public.publish_market_insights(jsonb,numeric) from public, anon, authenticated;
-grant execute on function public.publish_market_insights(jsonb,numeric) to service_role;
+revoke all on function public.publish_market_insights(jsonb) from public, anon, authenticated;
+grant execute on function public.publish_market_insights(jsonb) to service_role;
 comment on table public.market_insights_snapshot is 'Independent Insights v1, max 60 published sessions. Not old Top5/Memory.';
 commit;
