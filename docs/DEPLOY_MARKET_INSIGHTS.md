@@ -23,25 +23,15 @@
 现有 market_daily_bar、目录、检查点、Pulse 表应已存在；无需重跑旧迁移。
 先确认 SQL 成功，再启用 GitHub 任务。未部署表时新 UI 会显示待接入，旧页面照常。
 
-## 3. 确认容量并设置 GitHub Actions Variables
+## 3. 不需要额外 Variables
 
-在 Supabase Dashboard 查看实际数据库容量，确认剩余空间不少于 **75 MB**。
-本次试算的 JSON 60 期约 8.33 MiB，不包含行/索引/TOAST 等；正式发布还带覆盖诊断，
-以实际用量为准。不要为此删除或缩短旧行情历史。
-
-在仓库 Settings → Secrets and variables → Actions → **Variables** 设置：
-
-| Variable | 值 |
-|---|---|
-| `INSIGHTS_ENABLED` | `true`（迁移及容量确认之后再设） |
-| `INSIGHTS_HEADROOM_MB` | Dashboard 中核对的剩余 MB 数，>=75；不是固定填 75 |
-| `INSIGHTS_CAPACITY_CHECKED_ON` | 核对当天的 UTC 日期，`YYYY-MM-DD` |
-
-容量确认有效期为 7 天；过期或不足会让**新发布步骤**失败并保留旧快照，不回滚
-已完成的旧行情同步。每周复核后更新日期和数值。关闭新发布只需把
-`INSIGHTS_ENABLED` 改为 `false`；页面会继续展示有日期的最后有效结果。
-
+新发布步骤随工作日定时任务或手动 `daily / all` 自动执行，不需要
+`INSIGHTS_ENABLED`、`INSIGHTS_HEADROOM_MB` 或容量日期 Variables。
 继续使用原有 **Secrets** `SUPABASE_URL` 与 `SUPABASE_SERVICE_ROLE_KEY`。
+
+发布只写入新表最近 60 期。若 Supabase 空间不足，RPC 会拒绝本次原子写入，
+GitHub Action 会明确失败并提示容量问题；旧行情同步、旧快照、检查点和上一期
+Insights 快照不被删除或回滚。不要为了发布删除或缩短旧行情历史。
 新 publisher 不需要新密钥；Service Role 不得放在 Variables、HTML 或浏览器脚本中。
 
 ## 4. 手动运行一次
@@ -79,15 +69,14 @@ from public.market_insights_snapshot order by trade_date desc limit 3;
 - 401/403：检查 Actions Secrets、用户登录与新表权限；不要关闭 RLS。
 - 来源检查点不一致：先检查旧同步日志并完成 daily/all，新任务不能伪造成功日期。
 - 主题历史不足：本版明确排除，不扩库，不补价格；以后另行评估。
-- 新发布失败：原子事务保留上次有效新快照，旧算法/表不受影响。
-- 回退：关闭 `INSIGHTS_ENABLED`，按原 GitHub 提交历史回退前端/新任务即可。
-  无需删除新表，更不应重置旧数据库。
+- 新发布失败：原子事务保留上次有效新快照，旧算法/表不受影响；检查 Action 日志中的容量或来源错误。
+- 回退：按原 GitHub 提交历史回退前端/新任务即可，无需删除新表，更不应重置旧数据库。
 
 ## 本地验证与手动发布（可选）
 
 安装原项目依赖后：`npm test`、`npm run test:sync`、`npm run test:e2e`。
 只读检查：`python scripts/publish_market_insights.py --env-file PATH_TO_EXISTING_ENV`。
-显式发布需先设置上述两项容量环境变量，再增加 `--publish`。
+显式发布只需提供原有 `.env.local`，再增加 `--publish`。
 不要和旧同步/repair同时手动运行；现有同步不提供跨全库读事务。
 
 SQL 集成测试位于 `tests/sql/market-insights.mjs`，可在独立临时目录安装

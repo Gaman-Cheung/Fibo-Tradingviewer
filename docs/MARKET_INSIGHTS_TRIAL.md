@@ -108,14 +108,15 @@ determines a bull/bear conclusion. These weights/labels need user review.
 The report measures the UTF-8 uncompressed candidate JSON size, then projects
 60 equal-size snapshots. This is **not** a PostgreSQL size measurement: row and
 index overhead, TOAST/compression and variable future theme counts are excluded.
-Supabase Dashboard database size/headroom remains authoritative; less than75MB
-remaining stops expansion. No existing history is shortened to fit.
+Supabase Dashboard database size remains useful operational information. Publication
+does not require a separate headroom Variable: if the database cannot accept the
+new row, the atomic RPC fails and no existing history is shortened to fit.
 
 Prefer independent snapshots if small. If storage is later unified, preserve
 the old algorithm's separately computed Top5 and compatible Memory history.
 The new strength's first five are not a replacement for old Top5 semantics.
 
-Before release: inspect live dates/coverage/checkpoints and actual headroom;
+Before release: inspect live dates/coverage/checkpoints and actual database size;
 review trial ranking and regime results; approve weights, memberships, missing
 coverage behavior and history policy; then implement additive idempotent schema,
 independent publication/failure tests and authenticated read adapter. Publication

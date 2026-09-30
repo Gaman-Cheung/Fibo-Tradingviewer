@@ -1,32 +1,21 @@
 """Publish approved Insights v1 from stored bars only; old synchronizer untouched.
 
-Default is read-only validation. --publish requires Dashboard headroom evidence.
-Only the new atomic publish_market_insights RPC can write/prune data.
+Default is read-only validation. --publish calls only the new atomic RPC.
+Database capacity errors fail this step with a clear warning; old systems are unaffected.
 """
 import argparse
-from datetime import date, datetime, timezone
 import hashlib
 import json
 import os
 
 try:
-    from .market_insights import calculate_insights, VERSION, SCOPES, number
+    from .market_insights import calculate_insights, VERSION, SCOPES
     from .market_insights_trial import live_input
 except ImportError:
-    from market_insights import calculate_insights, VERSION, SCOPES, number
+    from market_insights import calculate_insights, VERSION, SCOPES
     from market_insights_trial import live_input
 
 CHECKPOINTS = ('CN_A', 'CN_INDEX', 'CN_PULSE', 'CN_ETF')
-
-
-def capacity_guard(headroom, checked_on, today=None):
-    value = number(headroom)
-    if value is None or value < 75 or value >= 1_000_000_000:
-        raise ValueError('Verify Supabase Dashboard headroom >=75 MB before publishing')
-    age = ((today or datetime.now(timezone.utc).date())-date.fromisoformat(checked_on or '')).days
-    if not 0 <= age <= 7:
-        raise ValueError('Dashboard capacity confirmation must be within the last 7 days')
-    return value
 
 
 def snapshot_from(data):
@@ -57,17 +46,27 @@ def snapshot_from(data):
     return snapshot
 
 
-def publish(snapshot, headroom, request=None):
+def publish(snapshot, request=None):
     if request is None:
         import requests
         request = requests.post
     key = os.environ['SUPABASE_SERVICE_ROLE_KEY']
     response = request(os.environ['SUPABASE_URL'].rstrip('/')+'/rest/v1/rpc/publish_market_insights',
                        headers={'apikey':key,'Authorization':'Bearer '+key,'Content-Type':'application/json'},
-                       json={'p_snapshot':snapshot,'p_headroom_mb':headroom}, timeout=(10,90))
+                       json={'p_snapshot':snapshot}, timeout=(10,90))
     # Never dump credentials, headers or server payloads to Action logs.
     if not 200 <= response.status_code < 300:
-        raise RuntimeError('Insights publication failed, HTTP '+str(response.status_code)+'; old systems unaffected')
+        detail=''
+        code=''
+        try:
+            error=response.json()
+            code=str(error.get('code') or '')
+            detail=': '+str(error.get('message') or error.get('hint') or '')[:240]
+        except Exception:
+            pass
+        if code=='53100':
+            detail=': Supabase database storage is full; free database capacity before retrying'
+        raise RuntimeError('Insights publication failed, HTTP '+str(response.status_code)+detail+'; only this new snapshot failed, old systems are unaffected')
     if response.json() != snapshot['calculation_id']:
         raise RuntimeError('Publication acknowledgement mismatch; verify new snapshot before retry')
 
@@ -77,10 +76,9 @@ def main():
     parser.add_argument('--publish', action='store_true')
     parser.add_argument('--env-file')
     args = parser.parse_args()
-    headroom = capacity_guard(os.environ.get('INSIGHTS_HEADROOM_MB'), os.environ.get('INSIGHTS_CAPACITY_CHECKED_ON')) if args.publish else None
     snapshot = snapshot_from(live_input(args.env_file))
     if args.publish:
-        publish(snapshot, headroom)
+        publish(snapshot)
     print(json.dumps({'status':'published' if args.publish else 'validated_read_only',
                       'trade_date':snapshot['trade_date'], 'algorithm_version':VERSION,
                       'calculation_id':snapshot['calculation_id'],
