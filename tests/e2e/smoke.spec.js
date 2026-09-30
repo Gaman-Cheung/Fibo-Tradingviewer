@@ -229,6 +229,11 @@ test('Reverse Pickup is a temporary draggable calculator outside the page layout
   const initial=await page.locator('#indexRadar').evaluate(node=>({bottom:node.getBoundingClientRect().bottom,height:node.getBoundingClientRect().height}));
   await launcher.click();
   await expect(panel).toBeVisible();
+  await expect(panel.locator('.reverse-pickup-rules article')).toHaveCount(3);
+  await expect(panel.locator('input[name="symbol"]')).toHaveCount(0);
+  await expect(panel.locator('input[name="anchor"]')).toHaveAttribute('type','text');
+  await expect(panel.locator('input[name="close"]')).toHaveAttribute('type','text');
+  await expect(panel.locator('.reverse-pickup-input-wrap > span')).toHaveCount(0);
   await panel.locator('input[name="anchor"]').fill('80');
   await panel.locator('input[name="close"]').fill('100');
   await panel.locator('input[name="current"]').fill('90');
