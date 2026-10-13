@@ -192,14 +192,21 @@
         .reverse-pickup-badge.is-success { border-color:var(--color-success); background:var(--color-success-soft); color:var(--color-success-text); }
         .reverse-pickup-badge.is-warning { border-color:var(--color-warning); background:var(--color-warning-soft); color:var(--color-warning-text); }
         .reverse-pickup-badge.is-danger { border-color:var(--color-danger); background:var(--color-danger-soft); color:var(--color-danger-text); }
-        .reverse-pickup-rail { position:relative; height:78px; margin:var(--space-5) 4px var(--space-3); }
+        .reverse-pickup-rail { position:relative; height:96px; margin:var(--space-5) 4px var(--space-3); }
         .reverse-pickup-rail__track { position:absolute; top:24px; left:0; right:0; height:8px; border:1px solid var(--color-border-subtle); border-radius:var(--radius-pill); background:linear-gradient(90deg,var(--color-danger-soft),var(--color-warning-soft) 50%,var(--color-success-soft)); }
         .reverse-pickup-rail i,.reverse-pickup-rail b { position:absolute; top:14px; width:2px; height:28px; transform:translateX(-1px); background:var(--color-border); color:var(--color-text-tertiary); }
         .reverse-pickup-rail i::after,.reverse-pickup-rail b::after { content:attr(data-label); position:absolute; top:30px; left:50%; transform:translateX(-50%); color:currentColor; font:var(--font-weight-semibold) var(--font-size-2xs) var(--font-family-sans); white-space:nowrap; }
         .reverse-pickup-rail i[data-marker="382"] { background:var(--color-warning); color:var(--color-warning-text); height:34px; top:11px; }
-        .reverse-pickup-rail i[data-marker="current"] { background:var(--color-primary); color:var(--color-primary); height:40px; top:7px; }
-        .reverse-pickup-rail b[data-marker="close"] { background:var(--color-primary); color:var(--color-primary); height:40px; top:7px; }
+        .reverse-pickup-rail i[data-marker="current"] { z-index:2; background:var(--color-primary); color:var(--color-primary); height:40px; top:7px; }
+        .reverse-pickup-rail i[data-marker="current"]::before { content:""; position:absolute; left:50%; top:-5px; width:8px; height:8px; border-radius:50%; background:var(--color-primary); transform:translateX(-50%); }
+        .reverse-pickup-rail b[data-marker="close"] { z-index:1; background:var(--color-text-tertiary); color:var(--color-text-tertiary); height:34px; top:10px; }
         .reverse-pickup-rail__ends { position:absolute; top:58px; left:0; right:0; display:flex; justify-content:space-between; color:var(--color-text-tertiary); font:var(--font-size-2xs) var(--font-family-mono); }
+        .reverse-pickup-rail__position { position:absolute; top:76px; left:50%; transform:translateX(-50%); color:var(--color-primary); font:var(--font-weight-semibold) var(--font-size-2xs) var(--font-family-mono); white-space:nowrap; }
+        .reverse-pickup-rail[data-current-state="above"] .reverse-pickup-rail__position { left:100%; transform:translateX(-100%); }
+        .reverse-pickup-rail[data-current-state="below"] .reverse-pickup-rail__position { left:0; transform:none; }
+        .reverse-pickup-rail[data-current-state="above"] [data-marker="current"]::after,.reverse-pickup-rail[data-current-state="below"] [data-marker="current"]::after { top:-19px; }
+        .reverse-pickup-rail[data-current-state="above"] [data-marker="current"]::after { content:"↑"; }
+        .reverse-pickup-rail[data-current-state="below"] [data-marker="current"]::after { content:"↓"; }
         .reverse-pickup-levels { border-top:1px solid var(--color-border-subtle); }
         .reverse-pickup-levels > div { display:grid; grid-template-columns:68px minmax(0,1fr) auto; gap:var(--space-2); align-items:center; padding:var(--space-2) 0; border-bottom:1px solid var(--color-border-subtle); }
         .reverse-pickup-levels span { color:var(--color-text-secondary); font-size:var(--font-size-2xs); }
