@@ -246,6 +246,17 @@ test('Reverse Pickup is a temporary draggable calculator outside the page layout
   await expect(panel.locator('[data-reverse-pickup-primary]')).toHaveText('92.36');
   await expect(panel.locator('[data-reverse-pickup-level="level500"]')).toHaveText('90.00');
   await expect(panel.locator('[data-reverse-pickup-badge]')).toContainText('接近主计划价');
+  await expect(panel.locator('.reverse-pickup-rail')).toHaveAttribute('data-current-state','inside');
+  expect(await panel.locator('.reverse-pickup-rail').evaluate(rail=>{const marker=rail.querySelector('[data-marker="current"]');return Math.round(parseFloat(getComputedStyle(marker).left)/rail.clientWidth*100);})).toBe(50);
+  const markerColors=await panel.locator('.reverse-pickup-rail').evaluate(rail=>[getComputedStyle(rail.querySelector('[data-marker="current"]')).backgroundColor,getComputedStyle(rail.querySelector('[data-marker="close"]')).backgroundColor]);
+  expect(markerColors[0]).not.toBe(markerColors[1]);
+  await panel.locator('input[name="anchor"]').fill('30.91');
+  await panel.locator('input[name="close"]').fill('31.83');
+  await panel.locator('input[name="current"]').fill('48');
+  await panel.locator('form').press('Enter');
+  await expect(panel.locator('.reverse-pickup-rail')).toHaveAttribute('data-current-state','above');
+  await expect(panel.locator('[data-reverse-pickup-position]')).toHaveText('当前 48.00 · 高于收盘');
+  expect(await panel.locator('.reverse-pickup-rail').evaluate(rail=>{const marker=rail.querySelector('[data-marker="current"]');return Math.round(parseFloat(getComputedStyle(marker).left)/rail.clientWidth*100);})).toBe(100);
   const beforeDrag=await panel.boundingBox();
   const handle=panel.locator('[data-reverse-pickup-drag-handle]');
   const handleBox=await handle.boundingBox();
