@@ -27,6 +27,16 @@ export function calculateReversePickup({ anchor, close, current = null } = {}) {
 const format=value=>Number.isFinite(value)?Number(value).toFixed(2):'—';
 const clamp=(value,min,max)=>Math.min(max,Math.max(min,value));
 
+/** Maps the optional current price onto the fixed anchor-to-close reference rail. */
+export function reversePickupRailPosition({ anchor, close, current } = {}) {
+  const low=Number(anchor),high=Number(close),now=Number(current),span=high-low;
+  if(!Number.isFinite(low)||!Number.isFinite(high)||!Number.isFinite(now)||span<=0) return null;
+  const percent=(now-low)/span*100;
+  if(percent<0) return { percent:0, rawPercent:percent, state:'below', label:'低于下沿' };
+  if(percent>100) return { percent:100, rawPercent:percent, state:'above', label:'高于收盘' };
+  return { percent, rawPercent:percent, state:'inside', label:'区间内' };
+}
+
 function markup() {
   return `<button class="reverse-pickup-launcher" type="button" aria-expanded="false" aria-controls="reversePickupPanel" aria-label="打开倒车接人计算器" title="打开倒车接人计算器"><span class="material-icons" aria-hidden="true">calculate</span></button>
   <section class="reverse-pickup-panel fibo-card" id="reversePickupPanel" role="dialog" aria-modal="false" aria-labelledby="reversePickupTitle" hidden>
@@ -43,7 +53,7 @@ function markup() {
     </form>
     <div class="reverse-pickup-readout" data-reverse-pickup-readout hidden>
       <div class="reverse-pickup-readout__top"><div><span class="reverse-pickup-panel__eyebrow">OBSERVATION READOUT</span><div class="reverse-pickup-readout__label">38.2% 主观察位</div><strong data-reverse-pickup-primary>—</strong></div><span class="reverse-pickup-badge" data-reverse-pickup-badge>等待输入</span></div>
-      <div class="reverse-pickup-rail" role="img" aria-label="回撤价位轨道"><div class="reverse-pickup-rail__track"></div><i data-marker="618"></i><i data-marker="500"></i><i data-marker="382"></i><i data-marker="current" hidden></i><b data-marker="close"></b><div class="reverse-pickup-rail__ends"><span data-reverse-pickup-low>下沿 —</span><span data-reverse-pickup-high>收盘 —</span></div></div>
+      <div class="reverse-pickup-rail" role="img" aria-label="回撤价位轨道"><div class="reverse-pickup-rail__track"></div><i data-marker="618"></i><i data-marker="500"></i><i data-marker="382"></i><i data-marker="current" hidden></i><b data-marker="close"></b><div class="reverse-pickup-rail__ends"><span data-reverse-pickup-low>下沿 —</span><span data-reverse-pickup-high>收盘 —</span></div><div class="reverse-pickup-rail__position" data-reverse-pickup-position hidden></div></div>
       <div class="reverse-pickup-levels">${LEVELS.map(level=>`<div><span><strong>${level.label}</strong>${level.ratio*100}%</span><small>${level.description}</small><b data-reverse-pickup-level="${level.key}">—</b></div>`).join('')}</div>
       <div class="reverse-pickup-reading"><span aria-hidden="true">i</span><p><strong data-reverse-pickup-reading-title>先输入上涨日数据。</strong> <span data-reverse-pickup-reading-detail>生成结果后，这里会显示当前价格所处区间。</span></p></div>
     </div>
@@ -68,7 +78,14 @@ export function initializeReversePickupWidget({ root = document.body } = {}) {
     badge.className='reverse-pickup-badge '+(result.zone?'is-'+result.zone.kind:'');badge.textContent=result.zone?.label||'已生成观察位';readingTitle.textContent=result.zone?.title||'已生成分层价位。';readingDetail.textContent=result.zone?.detail||'先看 38.2% 附近的承接，再核对环境状态。';
     const span=result.close-result.anchor,set=(key,percent,label)=>{const marker=host.querySelector(`[data-marker="${key}"]`);marker.style.left=clamp(percent,0,100)+'%';marker.dataset.label=label;marker.hidden=false;};
     set('618',38.2,'61.8%');set('500',50,'50%');set('382',61.8,'38.2%');set('close',100,'收盘');
-    const current=host.querySelector('[data-marker="current"]');if(Number.isFinite(result.current)){set('current',((result.close-result.current)/span)*100,'当前');}else current.hidden=true;
+    const rail=host.querySelector('.reverse-pickup-rail'),current=host.querySelector('[data-marker="current"]'),position=host.querySelector('[data-reverse-pickup-position]');
+    rail.removeAttribute('data-current-state');
+    if(Number.isFinite(result.current)) {
+      const currentPosition=reversePickupRailPosition(result);
+      set('current',currentPosition.percent,'当前');rail.dataset.currentState=currentPosition.state;
+      position.hidden=false;position.textContent=`当前 ${format(result.current)} · ${currentPosition.label}`;
+      rail.setAttribute('aria-label',`回撤价位轨道；当前价 ${format(result.current)}，${currentPosition.label}；收盘价 ${format(result.close)}`);
+    } else { current.hidden=true;position.hidden=true;rail.setAttribute('aria-label','回撤价位轨道；未提供当前价格'); }
   };
   form.addEventListener('submit',event=>{event.preventDefault();error.textContent='';const result=calculateReversePickup({anchor:inputs.anchor.value,close:inputs.close.value,current:inputs.current.value});if(!result){error.textContent='请填写有效价格，并确保上涨日收盘价高于下沿锚点。';return;}render(result);});
   host.querySelector('[data-reverse-pickup-clear]').addEventListener('click',clear);host.querySelector('[data-reverse-pickup-close]').addEventListener('click',()=>setOpen(false));launcher.addEventListener('click',()=>setOpen(panel.hidden));
